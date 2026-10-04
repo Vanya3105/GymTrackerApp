@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Permissions for Rest Notifications, Background Alarms & Haptics -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Long-Press Home Screen Widget Settings Activity (Dark/Light & Opacity) -->
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Background Rest Timer Alarm Receiver (Fires Notification When Rest Ends) -->
+        <receiver
+            android:name=".RestAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Home Screen Widget Receiver with Interactive Button Actions -->
+        <receiver
+            android:name=".GymWidgetProvider"
+            android:exported="true"
+            android:label="Gym Tracker">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.gymtracker.ACTION_WEIGHT_MINUS" />
+                <action android:name="com.example.gymtracker.ACTION_WEIGHT_PLUS" />
+                <action android:name="com.example.gymtracker.ACTION_REPS_MINUS" />
+                <action android:name="com.example.gymtracker.ACTION_REPS_PLUS" />
+                <action android:name="com.example.gymtracker.ACTION_COMPLETE_SET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gym_widget_info" />
+        </receiver>
+
+    </application>
+
+</manifest>
