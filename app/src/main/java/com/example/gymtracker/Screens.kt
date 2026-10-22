@@ -3,11 +3,7 @@ package com.example.gymtracker
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,22 +11,23 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -38,1574 +35,632 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-// --- Clean, Simple Homepage ---
+// ============================================================================
+// 1. ONBOARDING & PROFILE SCREEN
+// ============================================================================
+
+@Composable
+fun OnboardingScreen(
+    initialProfile: UserProfile,
+    onHaptic: () -> Unit,
+    onSaveProfile: (UserProfile) -> Unit
+) {
+    val P = LocalPalette.current
+    var draftProgram by remember { mutableStateOf(initialProfile.splitProgram) }
+    var draftAge by remember { mutableStateOf(if (initialProfile.age > 0) initialProfile.age.toString() else "") }
+    var draftWeight by remember { mutableStateOf(if (initialProfile.currentWeightKg > 0f) formatKgClean(initialProfile.currentWeightKg) else "") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = "WELCOME • ATHLETE SETUP",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 2.sp,
+            color = P.accentPrimary,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            text = "BUILD YOUR PROFILE",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Black,
+            color = P.textPrimary,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Text(
+            text = "Enter your age, current body weight, and select your training split.",
+            fontSize = 13.sp,
+            color = P.textSecondary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.weight(1f),
+                color = P.bgCard,
+                border = BorderStroke(1.5.dp, if (draftAge.isNotBlank()) P.accentPrimary else P.borderStrong),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("YOUR AGE", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = P.textSecondary)
+                    BasicTextField(
+                        value = draftAge,
+                        onValueChange = { draftAge = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black, color = P.textPrimary),
+                        cursorBrush = SolidColor(P.accentPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 40.dp)
+                            .padding(top = 8.dp),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (draftAge.isEmpty()) Text("Age", color = P.textSecondary, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                                inner()
+                            }
+                        }
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.weight(1f),
+                color = P.bgCard,
+                border = BorderStroke(1.5.dp, if (draftWeight.isNotBlank()) P.accentPrimary else P.borderStrong),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("WEIGHT (KG)", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = P.textSecondary)
+                    BasicTextField(
+                        value = draftWeight,
+                        onValueChange = { draftWeight = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black, color = P.accentPrimary),
+                        cursorBrush = SolidColor(P.accentPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 40.dp)
+                            .padding(top = 8.dp),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (draftWeight.isEmpty()) Text("Kg", color = P.textSecondary, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                                inner()
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "WHAT SPLIT DO YOU RUN?",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.2.sp,
+            color = P.textSecondary,
+            modifier = Modifier.padding(top = 24.dp, bottom = 10.dp)
+        )
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(SPLIT_PROGRAMS.keys.toList()) { progKey ->
+                val prog = SPLIT_PROGRAMS[progKey]!!
+                val isSelected = draftProgram == progKey
+                SpringButton(
+                    scaleTo = 0.97f,
+                    onClick = {
+                        onHaptic()
+                        draftProgram = progKey
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = P.bgCard,
+                        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) P.accentPrimary else P.borderSubtle),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(prog.name, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
+                                Surface(
+                                    color = if (isSelected) P.accentPrimary else P.bgControl,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "${prog.weeklyGoal} DAYS / WK",
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isSelected) P.onAccentPrimary else P.textSecondary
+                                    )
+                                }
+                            }
+                            Text(prog.tagline, fontSize = 12.sp, color = P.textSecondary, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                }
+            }
+            item {
+                SpringButton(
+                    scaleTo = 0.96f,
+                    onClick = {
+                        val age = draftAge.toIntOrNull() ?: 0
+                        val weight = draftWeight.toFloatOrNull() ?: 0f
+                        if (age <= 0 || weight <= 0f) return@SpringButton
+                        onHaptic()
+                        onSaveProfile(
+                            UserProfile(
+                                hasCompletedOnboarding = true,
+                                age = age,
+                                currentWeightKg = weight,
+                                splitProgram = draftProgram
+                            )
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        color = P.accentPrimary,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("SAVE & START TRAINING ⚡", fontSize = 16.sp, fontWeight = FontWeight.Black, color = P.onAccentPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 2. HOME SCREEN (Includes Spotlight Tutorial + AI Muscle Fatigue + Share)
+// ============================================================================
+
 @Composable
 fun HomeScreen(
     splits: List<WorkoutSplit>,
     currentWeek: WeekSummaryData,
-    settings: AppSettings,
+    userProfile: UserProfile,
+    activeProgramName: String,
     onSelectWorkout: (WorkoutSplit) -> Unit,
+    onOpenWeightTracker: () -> Unit,
     onOpenWeeklySummary: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val P = LocalPalette.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Workouts",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = P.textPrimary
-                )
-                Text(
-                    text = "${currentWeek.completedCoreSplits.size} of 3 weekly sessions completed",
-                    fontSize = 14.sp,
-                    color = P.textSecondary
-                )
-            }
-
-            Surface(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .clickable { onOpenSettings() },
-                color = P.bgCard,
-                shape = CircleShape
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text("⚙", fontSize = 18.sp, color = P.textSecondary)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(
-                items = splits,
-                key = { it.title },
-                contentType = { "split_card" }
-            ) { split ->
-                val isRecommended = split.title == currentWeek.recommendedSplit
-                val wasDoneThisWeek = currentWeek.workouts.any { it.splitTitle == split.title }
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .clickable { onSelectWorkout(split) },
-                    color = P.bgCard,
-                    border = if (isRecommended) BorderStroke(1.5.dp, P.accentPrimary) else null,
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = split.title,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = P.textPrimary
-                                )
-                                if (isRecommended) {
-                                    Surface(
-                                        color = P.accentPrimary.copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = "Recommended",
-                                            color = P.accentPrimary,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        )
-                                    }
-                                }
-                                if (wasDoneThisWeek) {
-                                    Surface(
-                                        color = P.successSurface,
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = "✓ Done",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = P.successText,
-                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = split.subtitle,
-                                fontSize = 13.sp,
-                                color = P.textSecondary
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (isRecommended) P.accentPrimary else P.bgControl),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "›",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isRecommended) P.onAccentPrimary else P.textSecondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .clickable { onOpenWeeklySummary() },
-            color = P.bgCard,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Weekly Summary & History",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = P.textPrimary
-                )
-                Text(
-                    text = "›",
-                    fontSize = 20.sp,
-                    color = P.textSecondary
-                )
-            }
-        }
-    }
-}
-
-// --- Isolated Elapsed Clock ---
-@Composable
-fun ElapsedWorkoutClock(startTimeMillis: Long) {
-    val P = LocalPalette.current
-    var elapsedSec by remember {
-        mutableLongStateOf(((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L))
-    }
-
-    LaunchedEffect(startTimeMillis) {
-        while (true) {
-            delay(1000L)
-            elapsedSec = ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
-        }
-    }
-
-    val mins = elapsedSec / 60
-    val secs = elapsedSec % 60
-    Text(
-        text = String.format(Locale.US, "%d:%02d • 6–8 rep target", mins, secs),
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Medium,
-        color = P.textSecondary
-    )
-}
-
-@Composable
-fun RestTimerChip(
-    triggerToken: Long,
-    durationSeconds: Int,
-    soundEnabled: Boolean,
-    onHaptic: () -> Unit
-) {
-    val P = LocalPalette.current
     val context = LocalContext.current
-    var remaining by remember { mutableIntStateOf(0) }
+    val allHistory = remember(currentWeek) { LocalStorage.loadHistory(context) }
+    val targetCount = currentWeek.weeklyGoal
+    val weeklyProgress = (currentWeek.completedCoreSplits.size.toFloat() / targetCount).coerceIn(0f, 1f)
+    val sessionsLeft = maxOf(0, targetCount - currentWeek.completedCoreSplits.size)
 
-    // Start new rest timer when user checks off a set in-app
-    LaunchedEffect(triggerToken) {
-        if (triggerToken > 0L && durationSeconds > 0) {
-            val endTime = System.currentTimeMillis() + (durationSeconds * 1000L)
-            LocalStorage.setRestEndTimeMillis(context, endTime)
-            remaining = durationSeconds
-        }
+    val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
+    var showHomeTutorial by remember(TutorialPrefs.replayGeneration) {
+        mutableStateOf(!TutorialPrefs.hasSeenHomeTutorial(context))
+    }
+    var tutorialStepIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
+
+    val homeTutorialSteps = remember {
+        listOf(
+            TutorialStepInfo(
+                key = "HOME_HEADER",
+                title = "Body Weight & Custom Settings",
+                description = "Tap your Body Weight pill anytime to log daily weigh-ins and track your trendline. Tap ⚙ to switch themes, weight increments, or replay this tutorial."
+            ),
+            TutorialStepInfo(
+                key = "HOME_WEEKLY",
+                title = "Weekly Microcycle & Story Share",
+                description = "Tracks your weekly split goal automatically. Once you log a session, tap '📤 Share' here to export a Strava-style workout card with your pump photo!"
+            ),
+            TutorialStepInfo(
+                key = "HOME_FATIGUE",
+                title = "AI Muscle Recovery & MAV Volume",
+                description = "Models 72-hour muscle recovery and counts your weekly working sets per muscle group (aiming for the 6–16 set Optimal Hypertrophy Zone)."
+            ),
+            TutorialStepInfo(
+                key = "HOME_SPLIT_FIRST",
+                title = "Start Your Next Split",
+                description = "The 'UP NEXT' badge highlights your recommended workout for today. Tap any split card to launch a live workout with AI weight targets!"
+            )
+        )
     }
 
-    // Keep UI countdown synced with LocalStorage (even if started from the Home Screen Widget!)
-    LaunchedEffect(Unit) {
-        while (true) {
-            val endMillis = LocalStorage.getRestEndTimeMillis(context)
-            val leftSec = ((endMillis - System.currentTimeMillis()) / 1000L).toInt()
-            if (leftSec > 0) {
-                remaining = leftSec
-            } else if (remaining > 0) {
-                remaining = 0
-                onHaptic()
-                RestAlarmScheduler.triggerRestFinishedAlert(context)
-            }
-            delay(500L)
-        }
-    }
-
-    AnimatedVisibility(visible = remaining > 0) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(9.dp))
-                    .clickable {
-                        onHaptic()
-                        val newRemaining = remaining + 15
-                        remaining = newRemaining
-                        LocalStorage.setRestEndTimeMillis(
-                            context,
-                            System.currentTimeMillis() + (newRemaining * 1000L)
-                        )
-                    },
-                color = P.bgControl,
-                shape = RoundedCornerShape(9.dp)
-            ) {
-                Text(
-                    text = "+15s",
-                    color = P.textPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
-                )
-            }
-
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(9.dp))
-                    .clickable {
-                        remaining = 0
-                        LocalStorage.setRestEndTimeMillis(context, 0L)
-                    },
-                color = P.accentPrimary,
-                shape = RoundedCornerShape(9.dp)
-            ) {
-                val mins = remaining / 60
-                val secs = remaining % 60
-                Text(
-                    text = String.format(Locale.US, "Rest %d:%02d ✕", mins, secs),
-                    color = P.onAccentPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp)
-                )
-            }
-        }
-    }
-}
-//--- Visual Progression Mini-Chart (5-Session Trend Line) ---
-@Composable
-fun ExerciseProgressionMiniChart(points: List<Pair<String, Float>>) {
-    val P = LocalPalette.current
-    if (points.size < 2) return
-
-    val maxW = points.maxOf { it.second }.coerceAtLeast(1f)
-    val minW = points.minOf { it.second }
-    val range = (maxW - minW).takeIf { it > 0f } ?: 10f
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = P.bgControl,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Weight Progression",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = P.textSecondary
-                )
-                Text(
-                    text = "${points.first().second}kg → ${points.last().second}kg",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = P.accentPrimary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                val stepX = size.width / (points.size - 1).coerceAtLeast(1)
-                val path = Path()
-                val coords = points.mapIndexed { idx, pair ->
-                    val x = idx * stepX
-                    val normY = (pair.second - minW) / range
-                    val y = size.height - (normY * size.height)
-                    Offset(x, y)
-                }
-
-                coords.forEachIndexed { idx, pt ->
-                    if (idx == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
-                }
-
-                drawPath(
-                    path = path,
-                    color = P.accentPrimary,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                coords.forEach { pt ->
-                    drawCircle(
-                        color = P.accentPrimary,
-                        radius = 4.5.dp.toPx(),
-                        center = pt
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                points.forEach { (dateLbl, wVal) ->
-                    val wTxt = if (wVal % 1f == 0f) "${wVal.toInt()}" else "$wVal"
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "${wTxt}kg",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = P.textPrimary
-                        )
-                        Text(
-                            text = dateLbl,
-                            fontSize = 9.sp,
-                            color = P.textSecondary
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// --- Clean Active Workout Screen ---
-@Composable
-fun ActiveWorkoutScreen(
-    split: WorkoutSplit,
-    exercises: List<ExerciseEntry>,
-    history: List<CompletedWorkout>,
-    settings: AppSettings,
-    isEditingPastWorkout: Boolean = false,
-    initialPhotoPath: String? = null,
-    onHaptic: () -> Unit,
-    onUpdateExercises: (List<ExerciseEntry>) -> Unit,
-    onReorderExercises: (Int, Int) -> Unit,
-    onAddCustomExercise: (String) -> Unit,
-    onRemoveExercisePermanently: (String) -> Unit,
-    onCancelWorkout: () -> Unit,
-    onFinishWorkout: (Long, String?) -> Unit
-) {
-    val P = LocalPalette.current
-    val context = LocalContext.current
-
-    val startTimeMillis = remember { LocalStorage.getActiveSessionStartTime(context) }
-    var showAddExerciseDialog by remember { mutableStateOf(false) }
-    var newExerciseName by remember { mutableStateOf("") }
-
-    var inspectedExerciseIndex by remember { mutableStateOf<Int?>(null) }
-    var confirmRemoveExerciseName by remember { mutableStateOf<String?>(null) }
-    var noteDraftText by remember { mutableStateOf("") }
-    var noteRefreshTrigger by remember { mutableIntStateOf(0) }
-
-    // Post-Workout Completion Receipt Modal State
-    var showCompletionSheet by remember { mutableStateOf(false) }
-    var finalDurationSeconds by remember { mutableLongStateOf(0L) }
-    var attachedPhotoPath by remember { mutableStateOf(initialPhotoPath) }
-
-    // Camera & Gallery Launchers for Bonus Workout Photo
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            val savedPath = PhotoStorage.saveBitmapToInternalStorage(context, bitmap)
-            if (savedPath != null) attachedPhotoPath = savedPath
-        }
-    }
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            val savedPath = PhotoStorage.copyUriToInternalStorage(context, uri)
-            if (savedPath != null) attachedPhotoPath = savedPath
-        }
-    }
-
-    var restTimerTriggerToken by remember { mutableLongStateOf(0L) }
-
-    // Smooth Animated Set Completion Progress Bar
-    val totalSetsCount = remember(exercises) { exercises.sumOf { it.sets.size }.coerceAtLeast(1) }
-    val completedSetsCount = remember(exercises) { exercises.sumOf { ex -> ex.sets.count { it.isCompleted } } }
-    val animatedProgress by animateFloatAsState(
-        targetValue = completedSetsCount.toFloat() / totalSetsCount.toFloat(),
-        animationSpec = tween(durationMillis = 300),
-        label = "workout_progress"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = if (isEditingPastWorkout) "Edit ${split.title}" else split.title,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = P.textPrimary
-                )
-                if (!isEditingPastWorkout) {
-                    ElapsedWorkoutClock(startTimeMillis = startTimeMillis)
-                } else {
-                    Text(
-                        text = "Editing past workout log",
-                        fontSize = 12.sp,
-                        color = P.accentPrimary
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                RestTimerChip(
-                    triggerToken = restTimerTriggerToken,
-                    durationSeconds = settings.restTimerSeconds,
-                    soundEnabled = settings.restSoundEnabled,
-                    onHaptic = onHaptic
-                )
-
-                TextButton(onClick = onCancelWorkout) {
-                    Text(
-                        text = "Cancel",
-                        color = P.dangerText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-
-        // Smooth Animated Progress Bar Strip
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp)
+                .padding(top = 18.dp, bottom = 14.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "$completedSetsCount of $totalSetsCount sets completed",
-                    fontSize = 11.sp,
-                    color = P.textSecondary
-                )
-                Text(
-                    text = "${(animatedProgress * 100).toInt()}%",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = P.accentPrimary
-                )
-            }
-            Spacer(modifier = Modifier.height(5.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(P.bgControl)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .background(P.accentPrimary)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed(
-                items = exercises,
-                key = { _, item -> item.name },
-                contentType = { _, _ -> "exercise_card" }
-            ) { exIndex, exercise ->
-                val aiAdvice = remember(split.title, exercise, history, settings.weightStepKg) {
-                    evaluateSplitIsolatedAi(split.title, exercise, history, settings.weightStepKg)
-                }
-                val records = remember(exercise.name, history) {
-                    computeExerciseRecords(exercise.name, history)
-                }
-                val pinnedNote = remember(exercise.name, noteRefreshTrigger) {
-                    LocalStorage.getExerciseNote(context, exercise.name)
-                }
-
-                ExerciseCard(
-                    exercise = exercise,
-                    pinnedNote = pinnedNote,
-                    records = records,
-                    weightStepKg = settings.weightStepKg,
-                    aiAdvice = aiAdvice,
-                    onHaptic = onHaptic,
-                    onSetChecked = { checkedNow ->
-                        if (checkedNow && settings.restTimerSeconds > 0) {
-                            restTimerTriggerToken = System.currentTimeMillis()
-                        }
-                    },
-                    onUpdateExercise = { updated ->
-                        val list = exercises.toMutableList()
-                        list[exIndex] = updated
-                        onUpdateExercises(list)
-                    },
-                    onOpenDetailsAndHistory = {
-                        onHaptic()
-                        noteDraftText = pinnedNote
-                        inspectedExerciseIndex = exIndex
-                    }
-                )
-            }
-
-            item(key = "add_exercise_btn", contentType = "footer_btn") {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable {
-                            onHaptic()
-                            showAddExerciseDialog = true
-                        },
-                    color = P.bgCard,
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "+ Add Exercise",
-                            color = P.accentPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(P.bgPrimary)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        ) {
-            Button(
-                onClick = {
-                    onHaptic()
-                    finalDurationSeconds = ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
-                    showCompletionSheet = true
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = P.accentPrimary)
-            ) {
-                Text(
-                    text = if (isEditingPastWorkout) "Save Changes" else "Finish Workout",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = P.onAccentPrimary
-                )
-            }
-        }
-    }
-
-    // --- Post-Workout Completion Receipt & Optional Photo Dialog ---
-    if (showCompletionSheet) {
-        val workSetsDone = exercises.sumOf { ex ->
-            ex.sets.count { !it.isWarmup && (it.reps.toIntOrNull() ?: 0) > 0 }
-        }
-        val totalVol = exercises.sumOf { ex ->
-            ex.sets.filter { !it.isWarmup }.sumOf { s ->
-                (s.weight.toDoubleOrNull() ?: 0.0) * (s.reps.toIntOrNull() ?: 0)
-            }
-        }.toInt()
-        val prCount = exercises.sumOf { ex ->
-            val rec = computeExerciseRecords(ex.name, history)
-            ex.sets.count { isSetPersonalRecord(it, rec) }
-        }
-        val mins = finalDurationSeconds / 60
-
-        AlertDialog(
-            onDismissRequest = { showCompletionSheet = false },
-            containerColor = P.bgCard,
-            titleContentColor = P.textPrimary,
-            title = {
-                Column {
-                    Text(
-                        text = if (isEditingPastWorkout) "Update Workout" else "Workout Complete 🎉",
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = P.textPrimary
-                    )
-                    Text(
-                        text = split.title,
-                        fontSize = 14.sp,
-                        color = P.accentPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(
-                            "${mins}m" to "Duration",
-                            "$workSetsDone" to "Work Sets",
-                            "${totalVol}kg" to "Volume",
-                            "🏆 $prCount" to "New PRs"
-                        ).forEach { (valTxt, lblTxt) ->
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                color = P.bgControl,
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 2.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(valTxt, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                                    Text(lblTxt, fontSize = 10.sp, color = P.textSecondary)
-                                }
-                            }
-                        }
-                    }
-
-                    // Photo Preview if Attached
-                    val previewBitmap = remember(attachedPhotoPath) {
-                        PhotoStorage.loadImageBitmap(attachedPhotoPath)
-                    }
-                    if (previewBitmap != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        ) {
-                            Image(
-                                bitmap = previewBitmap,
-                                contentDescription = "Workout Photo",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Surface(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                                    .clip(CircleShape)
-                                    .clickable { attachedPhotoPath = null },
-                                color = Color.Black.copy(alpha = 0.65f),
-                                shape = CircleShape
-                            ) {
-                                Text(
-                                    text = "✕",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Camera & Gallery Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { cameraLauncher.launch(null) },
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("📷 Take Photo", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = P.textPrimary)
-                            }
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { galleryLauncher.launch("image/*") },
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("🖼 From Gallery", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = P.textPrimary)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showCompletionSheet = false
-                        onFinishWorkout(finalDurationSeconds, attachedPhotoPath)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = P.accentPrimary),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Save to History", color = P.onAccentPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCompletionSheet = false }) {
-                    Text("Back", color = P.textSecondary)
-                }
-            }
-        )
-    }
-
-    // --- Full Exercise History, Mini-Chart, Reorder, Setup Note & Remove Dialog ---
-    if (inspectedExerciseIndex != null && inspectedExerciseIndex!! in exercises.indices) {
-        val exIdx = inspectedExerciseIndex!!
-        val targetEx = exercises[exIdx]
-        val rec = remember(targetEx.name, history) {
-            computeExerciseRecords(targetEx.name, history)
-        }
-        AlertDialog(
-            onDismissRequest = { inspectedExerciseIndex = null },
-            containerColor = P.bgCard,
-            titleContentColor = P.textPrimary,
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = targetEx.name,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = P.textPrimary
-                        )
-                        if (targetEx.targetMuscle.isNotBlank()) {
-                            Text(
-                                text = targetEx.targetMuscle,
-                                fontSize = 12.sp,
-                                color = P.textSecondary
-                            )
-                        }
-                    }
-
-                    // Up / Down Exercise Reorder Buttons
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Surface(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable(enabled = exIdx > 0) {
-                                    onHaptic()
-                                    onReorderExercises(exIdx, exIdx - 1)
-                                    inspectedExerciseIndex = exIdx - 1
-                                },
-                            color = if (exIdx > 0) P.bgControl else P.bgControl.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("↑", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                            }
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable(enabled = exIdx < exercises.lastIndex) {
-                                    onHaptic()
-                                    onReorderExercises(exIdx, exIdx + 1)
-                                    inspectedExerciseIndex = exIdx + 1
-                                },
-                            color = if (exIdx < exercises.lastIndex) P.bgControl else P.bgControl.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("↓", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                            }
-                        }
-                    }
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val maxWFormatted = if (rec.maxWeightKg % 1f == 0f) {
-                            "${rec.maxWeightKg.toInt()}kg"
-                        } else {
-                            "${rec.maxWeightKg}kg"
-                        }
-                        listOf(
-                            "${rec.bestEstimated1Rm}kg" to "Est. 1RM",
-                            maxWFormatted to "Max Weight",
-                            rec.bestSetText to "Best Set"
-                        ).forEach { (statVal, statLabel) ->
-                            Surface(
-                                modifier = Modifier.weight(1f),
-                                color = P.bgControl,
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(statVal, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                                    Text(statLabel, fontSize = 10.sp, color = P.textSecondary)
-                                }
-                            }
-                        }
-                    }
-
-                    // Visual Progression Mini-Chart
-                    if (rec.chartPoints.size >= 2) {
-                        ExerciseProgressionMiniChart(points = rec.chartPoints)
-                    }
-
-                    OutlinedTextField(
-                        value = noteDraftText,
-                        onValueChange = { noteDraftText = it },
-                        label = { Text("Pinned Setup Note (seat, cable pin)", color = P.textSecondary) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = P.accentPrimary,
-                            unfocusedBorderColor = P.borderStrong,
-                            focusedTextColor = P.textPrimary,
-                            unfocusedTextColor = P.textPrimary
-                        )
-                    )
-
-                    Text(
-                        text = "Recent History",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = P.textPrimary
-                    )
-
-                    if (rec.recentHistory.isEmpty()) {
-                        Text(
-                            text = "No previous sessions logged yet.",
-                            fontSize = 12.sp,
-                            color = P.textSecondary
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            rec.recentHistory.take(4).forEach { (dateLabel, setsLine) ->
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = P.bgControl,
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(8.dp)) {
-                                        Text(dateLabel, fontSize = 10.sp, color = P.textSecondary)
-                                        Text(setsLine, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = P.textPrimary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    TextButton(
-                        onClick = {
-                            onHaptic()
-                            val nameToDelete = targetEx.name
-                            inspectedExerciseIndex = null
-                            confirmRemoveExerciseName = nameToDelete
-                        },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = "Remove from ${split.title}",
-                            color = P.dangerText,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onHaptic()
-                        LocalStorage.saveExerciseNote(context, targetEx.name, noteDraftText)
-                        noteRefreshTrigger += 1
-                        inspectedExerciseIndex = null
-                    }
-                ) {
-                    Text("Save & Close", color = P.accentPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { inspectedExerciseIndex = null }) {
-                    Text("Cancel", color = P.textSecondary)
-                }
-            }
-        )
-    }
-
-    if (confirmRemoveExerciseName != null) {
-        AlertDialog(
-            onDismissRequest = { confirmRemoveExerciseName = null },
-            containerColor = P.bgCard,
-            titleContentColor = P.textPrimary,
-            title = { Text("Remove Exercise?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    text = "Remove \"${confirmRemoveExerciseName}\" from ${split.title}? It won't appear on future ${split.title} sessions unless you add it back.",
-                    color = P.textSecondary,
-                    fontSize = 14.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onHaptic()
-                        onRemoveExercisePermanently(confirmRemoveExerciseName!!)
-                        confirmRemoveExerciseName = null
-                    }
-                ) {
-                    Text("Remove", color = P.dangerText, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmRemoveExerciseName = null }) {
-                    Text("Cancel", color = P.textSecondary)
-                }
-            }
-        )
-    }
-
-    if (showAddExerciseDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddExerciseDialog = false },
-            containerColor = P.bgCard,
-            titleContentColor = P.textPrimary,
-            title = { Text("Add Exercise", fontWeight = FontWeight.Bold) },
-            text = {
-                OutlinedTextField(
-                    value = newExerciseName,
-                    onValueChange = { newExerciseName = it },
-                    placeholder = { Text("Exercise name", color = P.textSecondary) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = P.accentPrimary,
-                        unfocusedBorderColor = P.borderStrong,
-                        focusedTextColor = P.textPrimary,
-                        unfocusedTextColor = P.textPrimary
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newExerciseName.isNotBlank()) {
-                            onHaptic()
-                            val trimmed = newExerciseName.trim()
-                            onAddCustomExercise(trimmed)
-                            onUpdateExercises(
-                                exercises + ExerciseEntry(
-                                    name = trimmed,
-                                    targetMuscle = "Custom"
-                                )
-                            )
-                            newExerciseName = ""
-                            showAddExerciseDialog = false
-                        }
-                    }
-                ) {
-                    Text("Add", color = P.accentPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddExerciseDialog = false }) {
-                    Text("Cancel", color = P.textSecondary)
-                }
-            }
-        )
-    }
-}
-
-// --- Clean Exercise Card ---
-@Composable
-fun ExerciseCard(
-    exercise: ExerciseEntry,
-    pinnedNote: String,
-    records: ExerciseRecords,
-    weightStepKg: Float,
-    aiAdvice: AiAdvice?,
-    onHaptic: () -> Unit,
-    onSetChecked: (Boolean) -> Unit,
-    onUpdateExercise: (ExerciseEntry) -> Unit,
-    onOpenDetailsAndHistory: () -> Unit
-) {
-    val P = LocalPalette.current
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = P.bgCard,
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onOpenDetailsAndHistory() }
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = exercise.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = P.textPrimary
+                        text = "${activeProgramName.uppercase()} • $targetCount DAYS/WK",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.8.sp,
+                        color = P.accentPrimary
                     )
-                    val bestText = if (records.bestSetText != "—") {
-                        " • Best: ${records.bestSetText}"
-                    } else ""
-                    Text(
-                        text = "${exercise.targetMuscle.ifBlank { "Exercise" }}$bestText • Tap for history",
-                        fontSize = 12.sp,
-                        color = P.textSecondary
-                    )
+                    Text("WORKOUTS", fontSize = 30.sp, fontWeight = FontWeight.Black, color = P.textPrimary)
                 }
-
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable { onOpenDetailsAndHistory() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "⋯",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = P.textSecondary
-                    )
-                }
-            }
-
-            if (pinnedNote.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onOpenDetailsAndHistory() },
-                    color = P.bgControl,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "📌 $pinnedNote",
-                        fontSize = 12.sp,
-                        color = P.textPrimary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            if (aiAdvice != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                val (bgCol, txtCol) = when {
-                    aiAdvice.isPositive -> P.successSurface to P.successText
-                    aiAdvice.isWarning -> P.warningSurface to P.warningText
-                    else -> P.bgControl to P.accentPrimary
-                }
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = bgCol,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = aiAdvice.message,
-                        color = txtCol,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Set",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = P.textSecondary,
-                    modifier = Modifier.width(38.dp)
-                )
-                Text(
-                    text = "kg",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = P.textSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1.15f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Reps",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = P.textSecondary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(42.dp))
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            var workSetCounter = 0
-            exercise.sets.forEachIndexed { index, setEntry ->
-                if (!setEntry.isWarmup) workSetCounter++
-                val isPrSet = remember(setEntry, records) {
-                    isSetPersonalRecord(setEntry, records)
-                }
-                val displayLabel = when {
-                    setEntry.isWarmup -> "W"
-                    isPrSet -> "🏆"
-                    else -> "$workSetCounter"
-                }
-                val rowBg = if (setEntry.isCompleted) P.successSurface else Color.Transparent
-
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(rowBg)
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        tutorialBounds["HOME_HEADER"] = coords.boundsInRoot()
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier.width(38.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(
-                                    if (setEntry.isWarmup) P.warningSurface else P.bgControl
-                                )
-                                .clickable {
-                                    onHaptic()
-                                    val updated = exercise.sets.toMutableList()
-                                    updated[index] = setEntry.copy(isWarmup = !setEntry.isWarmup)
-                                    onUpdateExercise(exercise.copy(sets = updated))
-                                },
-                            contentAlignment = Alignment.Center
+                    SpringButton(scaleTo = 0.93f, onClick = onOpenWeightTracker) {
+                        Surface(
+                            color = P.bgCard,
+                            border = BorderStroke(1.dp, P.accentSecondary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(44.dp)
                         ) {
-                            Text(
-                                text = displayLabel,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (setEntry.isWarmup) P.warningText else P.textPrimary
-                            )
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("BODY WEIGHT", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = P.textSecondary)
+                                Text("⚖️ ${formatKgClean(userProfile.currentWeightKg)} kg", fontSize = 14.sp, fontWeight = FontWeight.Black, color = P.accentSecondary)
+                            }
                         }
                     }
-
-                    StepperControl(
-                        value = setEntry.weight,
-                        allowKeyboardTyping = true,
-                        onValueChange = { newW ->
-                            val updated = exercise.sets.toMutableList()
-                            updated[index] = setEntry.copy(weight = newW)
-                            onUpdateExercise(exercise.copy(sets = updated))
-                        },
-                        onStepDown = {
-                            onHaptic()
-                            val cur = setEntry.weight.toFloatOrNull() ?: 20f
-                            val next = (cur - weightStepKg).coerceAtLeast(0f)
-                            val formatted = if (next % 1f == 0f) "${next.toInt()}" else "$next"
-                            val updated = exercise.sets.toMutableList()
-                            updated[index] = setEntry.copy(weight = formatted)
-                            onUpdateExercise(exercise.copy(sets = updated))
-                        },
-                        onStepUp = {
-                            onHaptic()
-                            val cur = setEntry.weight.toFloatOrNull() ?: 20f
-                            val next = cur + weightStepKg
-                            val formatted = if (next % 1f == 0f) "${next.toInt()}" else "$next"
-                            val updated = exercise.sets.toMutableList()
-                            updated[index] = setEntry.copy(weight = formatted)
-                            onUpdateExercise(exercise.copy(sets = updated))
-                        },
-                        modifier = Modifier.weight(1.15f)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    StepperControl(
-                        value = setEntry.reps,
-                        allowKeyboardTyping = false,
-                        onValueChange = {},
-                        onStepDown = {
-                            onHaptic()
-                            val cur = setEntry.reps.toIntOrNull() ?: 8
-                            val next = (cur - 1).coerceAtLeast(0)
-                            val updated = exercise.sets.toMutableList()
-                            updated[index] = setEntry.copy(reps = "$next")
-                            onUpdateExercise(exercise.copy(sets = updated))
-                        },
-                        onStepUp = {
-                            onHaptic()
-                            val cur = setEntry.reps.toIntOrNull() ?: 7
-                            val next = cur + 1
-                            val updated = exercise.sets.toMutableList()
-                            updated[index] = setEntry.copy(reps = "$next")
-                            onUpdateExercise(exercise.copy(sets = updated))
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Box(
-                        modifier = Modifier.width(38.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(
-                                    if (setEntry.isCompleted) P.successText else P.bgControl
-                                )
-                                .clickable {
-                                    onHaptic()
-                                    val nextState = !setEntry.isCompleted
-                                    val updated = exercise.sets.toMutableList()
-                                    updated[index] = setEntry.copy(isCompleted = nextState)
-                                    onUpdateExercise(exercise.copy(sets = updated))
-                                    onSetChecked(nextState)
-                                },
-                            contentAlignment = Alignment.Center
+                    SpringButton(onClick = onOpenSettings) {
+                        Surface(
+                            color = P.bgCard,
+                            border = BorderStroke(1.dp, P.borderSubtle),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.size(44.dp)
                         ) {
-                            Text(
-                                text = "✓",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (setEntry.isCompleted) Color.White else P.textSecondary
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("⚙", fontSize = 18.sp, color = P.textPrimary)
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .clickable {
-                            onHaptic()
-                            val nextNum = exercise.sets.size + 1
-                            val lastSet = exercise.sets.lastOrNull()
-                            onUpdateExercise(
-                                exercise.copy(
-                                    sets = exercise.sets + SetEntry(
-                                        setNumber = nextNum,
-                                        weight = lastSet?.weight ?: "40",
-                                        reps = lastSet?.reps ?: "8",
-                                        isWarmup = false,
-                                        isCompleted = false
-                                    )
-                                )
-                            )
-                        },
-                    color = P.bgControl,
-                    shape = RoundedCornerShape(9.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "+ Set",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = P.textPrimary
-                        )
-                    }
-                }
-
-                if (exercise.sets.size > 1) {
+                item {
                     Surface(
                         modifier = Modifier
-                            .width(72.dp)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .clickable {
-                                onHaptic()
-                                onUpdateExercise(
-                                    exercise.copy(sets = exercise.sets.dropLast(1))
-                                )
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coords ->
+                                tutorialBounds["HOME_WEEKLY"] = coords.boundsInRoot()
                             },
-                        color = P.bgControl,
-                        shape = RoundedCornerShape(9.dp)
+                        color = P.bgCard,
+                        border = BorderStroke(1.dp, P.borderSubtle),
+                        shape = RoundedCornerShape(18.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "− Set",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = P.textSecondary
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "WEEKLY MICROCYCLE TARGET",
+                                        color = P.textSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.4.sp
+                                    )
+                                    Text(
+                                        text = if (weeklyProgress >= 1f) "Weekly Goal Crushed ⚡" else "Keep the Momentum",
+                                        color = P.textPrimary,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (currentWeek.workouts.isNotEmpty()) {
+                                        SpringButton(
+                                            scaleTo = 0.92f,
+                                            onClick = {
+                                                val latest = currentWeek.workouts.first()
+                                                shareAiWorkoutReport(
+                                                    context = context,
+                                                    splitTitle = latest.splitTitle,
+                                                    durationSeconds = latest.durationSeconds,
+                                                    exercises = latest.exercises,
+                                                    history = allHistory,
+                                                    bodyWeightKg = userProfile.currentWeightKg,
+                                                    photoPath = latest.photoPath
+                                                )
+                                            }
+                                        ) {
+                                            Surface(
+                                                color = P.bgControl,
+                                                border = BorderStroke(1.dp, P.accentSecondary),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text(
+                                                    text = "📤 Share",
+                                                    color = P.accentSecondary,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Surface(color = P.accentPrimary, shape = RoundedCornerShape(10.dp)) {
+                                        Text(
+                                            text = "${currentWeek.completedCoreSplits.size} / $targetCount",
+                                            color = P.onAccentPrimary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Black,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            AnimatedProgressBar(
+                                progress = weeklyProgress,
+                                height = 8.dp,
+                                bgColor = P.bgControl,
+                                fillColor = P.accentPrimary,
+                                modifier = Modifier.padding(vertical = 14.dp)
                             )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (weeklyProgress >= 1f) "Bonus session unlocked" else "$sessionsLeft session${if (sessionsLeft == 1) "" else "s"} remaining this week",
+                                    color = P.textSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "NEXT: ${currentWeek.recommendedSplit.uppercase()}",
+                                    color = P.accentSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    AiMuscleFatigueCard(
+                        history = allHistory,
+                        P = P,
+                        modifier = Modifier.onGloballyPositioned { coords ->
+                            tutorialBounds["HOME_FATIGUE"] = coords.boundsInRoot()
+                        }
+                    )
+                }
+
+                itemsIndexed(splits) { idx, split ->
+                    val isRecommended = split.title == currentWeek.recommendedSplit
+                    val wasDoneThisWeek = currentWeek.workouts.any { it.splitTitle == split.title }
+
+                    SpringButton(
+                        scaleTo = 0.96f,
+                        onClick = { onSelectWorkout(split) },
+                        modifier = if (idx == 0) {
+                            Modifier.onGloballyPositioned { coords ->
+                                tutorialBounds["HOME_SPLIT_FIRST"] = coords.boundsInRoot()
+                            }
+                        } else Modifier
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = P.bgCard,
+                            border = BorderStroke(if (isRecommended) 1.5.dp else 1.dp, if (isRecommended) P.accentPrimary else P.borderSubtle),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    color = if (isRecommended) P.accentPrimary else P.bgControl,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.size(42.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = split.code,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (isRecommended) P.onAccentPrimary else P.textSecondary
+                                        )
+                                    }
+                                }
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(split.title, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
+                                        if (isRecommended) {
+                                            Surface(
+                                                color = P.bgControl,
+                                                border = BorderStroke(1.dp, P.accentPrimary),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "UP NEXT",
+                                                    color = P.accentPrimary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (wasDoneThisWeek) {
+                                            Surface(color = P.successSurface, shape = RoundedCornerShape(6.dp)) {
+                                                Text(
+                                                    text = "✓ LOGGED",
+                                                    color = P.successText,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = split.subtitle,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp,
+                                        color = P.textSecondary,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "→",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isRecommended) P.accentPrimary else P.textSecondary
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun StepperControl(
-    value: String,
-    allowKeyboardTyping: Boolean,
-    onValueChange: (String) -> Unit,
-    onStepDown: () -> Unit,
-    onStepUp: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val P = LocalPalette.current
-    Row(
-        modifier = modifier
-            .height(36.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(P.bgControl),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .width(32.dp)
-                .fillMaxHeight()
-                .clickable { onStepDown() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "−",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = P.textSecondary
-            )
-        }
-
-        if (allowKeyboardTyping) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                textStyle = TextStyle(
-                    color = P.textPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                cursorBrush = SolidColor(P.accentPrimary),
-                modifier = Modifier.weight(1f),
-                decorationBox = { innerTextField ->
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        if (value.isEmpty()) {
-                            Text(
-                                text = "0",
-                                color = P.textSecondary.copy(alpha = 0.4f),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            )
-        } else {
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = value.ifEmpty { "0" },
-                    color = P.textPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
+                SpringButton(scaleTo = 0.96f, onClick = onOpenWeightTracker) {
+                    Surface(
+                        color = P.bgCard,
+                        border = BorderStroke(1.dp, P.borderSubtle),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.height(52.dp)
+                    ) {
+                        Box(modifier = Modifier.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                            Text("⚖️ LOG WEIGHT", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = P.accentSecondary)
+                        }
+                    }
+                }
+                SpringButton(scaleTo = 0.97f, onClick = onOpenWeeklySummary, modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = P.bgCard,
+                        border = BorderStroke(1.dp, P.borderSubtle),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("WEEKLY SUMMARY & LOGS", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
+                            Text("→", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = P.accentPrimary)
+                        }
+                    }
+                }
             }
         }
 
-        Box(
-            modifier = Modifier
-                .width(32.dp)
-                .fillMaxHeight()
-                .clickable { onStepUp() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "+",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = P.textPrimary
+        if (showHomeTutorial) {
+            SpotlightTutorialOverlay(
+                steps = homeTutorialSteps,
+                currentStepIndex = tutorialStepIndex,
+                targetBounds = tutorialBounds,
+                P = P,
+                onNext = {
+                    if (tutorialStepIndex < homeTutorialSteps.lastIndex) {
+                        tutorialStepIndex++
+                    } else {
+                        TutorialPrefs.markHomeTutorialSeen(context)
+                        showHomeTutorial = false
+                    }
+                },
+                onPrev = {
+                    if (tutorialStepIndex > 0) tutorialStepIndex--
+                },
+                onSkip = {
+                    TutorialPrefs.markHomeTutorialSeen(context)
+                    showHomeTutorial = false
+                }
             )
         }
     }
 }
 
-// --- Clean Settings Screen (With Keep Screen Awake, Rest Alert Sound & Backup/Restore) ---
+// ============================================================================
+// 3. DAILY BODY WEIGHT TRACKER SCREEN
+// ============================================================================
+
 @Composable
-fun SettingsScreen(
-    settings: AppSettings,
-    onUpdateSettings: (AppSettings) -> Unit,
-    onDataRestored: () -> Unit,
+fun WeightTrackerScreen(
+    userProfile: UserProfile,
+    weightHistory: List<WeightLogEntry>,
+    onHaptic: () -> Unit,
+    onLogWeight: (Float) -> Unit,
+    onDeleteWeight: (Long) -> Unit,
     onBack: () -> Unit
 ) {
     val P = LocalPalette.current
-    val context = LocalContext.current
+    var todayWeightInput by remember { mutableStateOf(if (userProfile.currentWeightKg > 0) formatKgClean(userProfile.currentWeightKg) else "") }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val json = LocalStorage.exportJsonBackupString(context)
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(json.toByteArray())
-                }
-                Toast.makeText(context, "Backup saved successfully", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Failed to save backup", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
-                if (LocalStorage.importJsonBackupString(context, content)) {
-                    onDataRestored()
-                    Toast.makeText(context, "Workout history restored!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Invalid backup file", Toast.LENGTH_SHORT).show()
-                }
-            } catch (_: Exception) {
-                Toast.makeText(context, "Failed to restore backup", Toast.LENGTH_SHORT).show()
-            }
-        }
+    val chartPoints = weightHistory.take(6).reversed().map {
+        it.displayDate.substringBefore(",") to it.weightKg
     }
 
     Column(
@@ -1613,241 +668,162 @@ fun SettingsScreen(
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) {
-                Text("← Back", color = P.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            SpringButton(onClick = { onHaptic(); onBack() }) {
+                Text("← HOME", color = P.accentPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
             }
-            Text(
-                text = "Settings",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = P.textPrimary
-            )
-            Spacer(modifier = Modifier.width(64.dp))
+            Text("BODY WEIGHT LOG", fontSize = 18.sp, fontWeight = FontWeight.Black, color = P.textPrimary)
+            Spacer(modifier = Modifier.width(56.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.weight(1f)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            color = P.bgCard,
+            border = BorderStroke(1.5.dp, P.accentPrimary),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            item {
-                SettingGroupCard(title = "Theme") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOptionButton(
-                            label = "Dark",
-                            selected = settings.isDarkMode,
-                            onClick = { onUpdateSettings(settings.copy(isDarkMode = true)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SegmentedOptionButton(
-                            label = "Light",
-                            selected = !settings.isDarkMode,
-                            onClick = { onUpdateSettings(settings.copy(isDarkMode = false)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-            item {
-                SettingGroupCard(title = "Home Screen Widget") {
-                    SegmentedOptionButton(
-                        label = "+ Add Widget to Home Screen",
-                        selected = true,
-                        onClick = { GymWidgetProvider.requestPinWidgetToHomeScreen(context) },
-                        modifier = Modifier.fillMaxWidth()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("REGISTER TODAY'S WEIGH-IN", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = P.accentPrimary, letterSpacing = 1.2.sp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StepperControl(
+                        value = todayWeightInput,
+                        allowKeyboardTyping = true,
+                        onValueChange = { todayWeightInput = it },
+                        onStepDown = {
+                            onHaptic()
+                            val cur = todayWeightInput.toFloatOrNull() ?: userProfile.currentWeightKg
+                            todayWeightInput = formatKgClean(cur - 0.5f)
+                        },
+                        onStepUp = {
+                            onHaptic()
+                            val cur = todayWeightInput.toFloatOrNull() ?: userProfile.currentWeightKg
+                            todayWeightInput = formatKgClean(cur + 0.5f)
+                        },
+                        P = P,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-            }
-
-            item {
-                SettingGroupCard(title = "Display Refresh Rate") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOptionButton(
-                            label = "120 Hz",
-                            selected = settings.targetFps == 120,
-                            onClick = { onUpdateSettings(settings.copy(targetFps = 120)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SegmentedOptionButton(
-                            label = "60 Hz",
-                            selected = settings.targetFps == 60,
-                            onClick = { onUpdateSettings(settings.copy(targetFps = 60)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingGroupCard(title = "Weight Increment (+ / −)") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1.25f, 2.5f, 5.0f).forEach { step ->
-                            val label = if (step % 1f == 0f) "${step.toInt()} kg" else "$step kg"
-                            SegmentedOptionButton(
-                                label = label,
-                                selected = settings.weightStepKg == step,
-                                onClick = { onUpdateSettings(settings.copy(weightStepKg = step)) },
-                                modifier = Modifier.weight(1f)
-                            )
+                    SpringButton(
+                        scaleTo = 0.94f,
+                        onClick = {
+                            val v = todayWeightInput.toFloatOrNull()
+                            if (v != null && v > 0f) onLogWeight(v)
                         }
-                    }
-                }
-            }
-
-            item {
-                SettingGroupCard(title = "Rest Timer & Alert Sound") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(0 to "Off", 60 to "60s", 90 to "90s", 120 to "2m", 180 to "3m").forEach { (sec, label) ->
-                                SegmentedOptionButton(
-                                    label = label,
-                                    selected = settings.restTimerSeconds == sec,
-                                    onClick = { onUpdateSettings(settings.copy(restTimerSeconds = sec)) },
-                                    modifier = Modifier.weight(1f)
-                                )
+                    ) {
+                        Surface(
+                            color = P.accentPrimary,
+                            shape = RoundedCornerShape(9.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Box(modifier = Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                                Text("SAVE KG", color = P.onAccentPrimary, fontWeight = FontWeight.Black, fontSize = 13.sp)
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SegmentedOptionButton(
-                                label = "Music-Safe Beep On",
-                                selected = settings.restSoundEnabled,
-                                onClick = { onUpdateSettings(settings.copy(restSoundEnabled = true)) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            SegmentedOptionButton(
-                                label = "Silent",
-                                selected = !settings.restSoundEnabled,
-                                onClick = { onUpdateSettings(settings.copy(restSoundEnabled = false)) },
-                                modifier = Modifier.weight(1f)
-                            )
+                    }
+                }
+            }
+        }
+
+        if (chartPoints.size >= 2) {
+            Spacer(modifier = Modifier.height(14.dp))
+            TrendLineMiniChart("BODY WEIGHT TREND (LAST 6 LOGS)", chartPoints, P)
+        }
+
+        Text(
+            text = "WEIGH-IN HISTORY",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = P.textSecondary,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(top = 18.dp, bottom = 8.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (weightHistory.isEmpty()) {
+                item {
+                    Text(
+                        text = "No weight logs recorded yet. Log today's weight above!",
+                        color = P.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 32.dp)
+                    )
+                }
+            } else {
+                itemsIndexed(weightHistory) { idx, entry ->
+                    val prevEntry = weightHistory.getOrNull(idx + 1)
+                    val diff = if (prevEntry != null) (Math.round((entry.weightKg - prevEntry.weightKg) * 10f) / 10f) else 0f
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = P.bgCard,
+                        border = BorderStroke(1.dp, P.borderSubtle),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("${formatKgClean(entry.weightKg)} kg", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
+                                Text(entry.displayDate, fontSize = 11.sp, color = P.textSecondary, modifier = Modifier.padding(top = 2.dp))
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                if (prevEntry != null) {
+                                    Surface(color = P.bgControl, shape = RoundedCornerShape(6.dp)) {
+                                        val diffColor = if (diff > 0f) P.accentPrimary else if (diff < 0f) P.accentSecondary else P.textSecondary
+                                        val diffStr = if (diff > 0f) "+${diff}kg" else if (diff < 0f) "${diff}kg" else "0.0kg"
+                                        Text(
+                                            text = diffStr,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = diffColor,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                                SpringButton(scaleTo = 0.9f, onClick = { onHaptic(); onDeleteWeight(entry.id) }) {
+                                    Text("✕", color = P.dangerText, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
                         }
                     }
                 }
             }
-
-            item {
-                SettingGroupCard(title = "Keep Screen On During Workout") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOptionButton(
-                            label = "Keep Awake",
-                            selected = settings.keepScreenAwake,
-                            onClick = { onUpdateSettings(settings.copy(keepScreenAwake = true)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SegmentedOptionButton(
-                            label = "Normal Timeout",
-                            selected = !settings.keepScreenAwake,
-                            onClick = { onUpdateSettings(settings.copy(keepScreenAwake = false)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingGroupCard(title = "Vibration Feedback") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOptionButton(
-                            label = "On",
-                            selected = settings.hapticsEnabled,
-                            onClick = { onUpdateSettings(settings.copy(hapticsEnabled = true)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SegmentedOptionButton(
-                            label = "Off",
-                            selected = !settings.hapticsEnabled,
-                            onClick = { onUpdateSettings(settings.copy(hapticsEnabled = false)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingGroupCard(title = "Backup & Restore Data") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SegmentedOptionButton(
-                            label = "Export Backup",
-                            selected = false,
-                            onClick = { exportLauncher.launch("gym_tracker_backup.json") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SegmentedOptionButton(
-                            label = "Restore Backup",
-                            selected = false,
-                            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
-@Composable
-fun SettingGroupCard(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    val P = LocalPalette.current
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = P.bgCard,
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = P.textPrimary
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            content()
-        }
-    }
-}
+// ============================================================================
+// 4. WEEKLY SUMMARY & HISTORY SCREEN
+// ============================================================================
 
-@Composable
-fun SegmentedOptionButton(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val P = LocalPalette.current
-    Surface(
-        modifier = modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() },
-        color = if (selected) P.accentPrimary else P.bgControl,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selected) P.onAccentPrimary else P.textPrimary
-            )
-        }
-    }
-}
-
-// --- Clean Weekly Summary Screen (With Edit, Delete & Photo Viewer) ---
 @Composable
 fun WeeklySummaryScreen(
     history: List<CompletedWorkout>,
+    userProfile: UserProfile,
     onEditWorkout: (CompletedWorkout) -> Unit,
     onDeleteWorkout: (Long) -> Unit,
     onBackHome: () -> Unit,
@@ -1855,28 +831,36 @@ fun WeeklySummaryScreen(
 ) {
     val P = LocalPalette.current
     var weekOffset by remember { mutableIntStateOf(0) }
-    val weekData = remember(history, weekOffset) { computeWeekSummary(history, weekOffset) }
+    val weekData = remember(history, weekOffset, userProfile.splitProgram) {
+        computeWeekSummary(history, weekOffset, userProfile.splitProgram)
+    }
     var workoutPendingDelete by remember { mutableStateOf<CompletedWorkout?>(null) }
     var fullScreenPhotoPath by remember { mutableStateOf<String?>(null) }
 
     val totalWorkSets = remember(weekData) {
-        weekData.workouts.sumOf { w ->
-            w.exercises.sumOf { ex ->
-                ex.sets.count { !it.isWarmup && (it.reps.toIntOrNull() ?: 0) > 0 }
+        var count = 0
+        for (w in weekData.workouts) {
+            for (ex in w.exercises) {
+                count += ex.sets.count { !it.isWarmup && it.intensityType != "WARMUP" && parseRepsClean(it.reps, 0) > 0 }
             }
         }
+        count
     }
 
     val totalVolumeKg = remember(weekData) {
-        weekData.workouts.sumOf { w ->
-            w.exercises.sumOf { ex ->
-                ex.sets.filter { !it.isWarmup }.sumOf { s ->
-                    val kg = s.weight.toDoubleOrNull() ?: 0.0
-                    val reps = s.reps.toIntOrNull() ?: 0
-                    kg * reps
+        var vol = 0.0f
+        for (w in weekData.workouts) {
+            for (ex in w.exercises) {
+                for (s in ex.sets) {
+                    if (!s.isWarmup && s.intensityType != "WARMUP") {
+                        val kg = parseWeightClean(s.weight, 0f)
+                        val reps = parseRepsClean(s.reps, 0)
+                        vol += (kg * reps)
+                    }
                 }
             }
-        }.toInt()
+        }
+        vol.toInt()
     }
 
     Column(
@@ -1993,7 +977,8 @@ fun WeeklySummaryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Push", "Pull", "Arms & Shoulders").forEach { coreSplit ->
+                    val programInfo = SPLIT_PROGRAMS[userProfile.splitProgram] ?: SPLIT_PROGRAMS["PPL_ARNOLD"]!!
+                    programInfo.splits.map { it.title }.take(3).forEach { coreSplit ->
                         val isDone = coreSplit in weekData.completedCoreSplits
                         Surface(
                             modifier = Modifier.weight(1f),
@@ -2024,7 +1009,11 @@ fun WeeklySummaryScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AiMuscleFatigueCard(history = history, P = P, compact = true)
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Box(modifier = Modifier.weight(1f)) {
             if (weekData.workouts.isEmpty()) {
@@ -2050,9 +1039,11 @@ fun WeeklySummaryScreen(
                     ) { workout ->
                         WorkoutHistoryCard(
                             workout = workout,
+                            allHistory = history,
                             onEdit = { onEditWorkout(workout) },
                             onRequestDelete = { workoutPendingDelete = workout },
                             onViewPhoto = { path -> fullScreenPhotoPath = path }
+
                         )
                     }
                 }
@@ -2122,26 +1113,35 @@ fun WeeklySummaryScreen(
 @Composable
 fun WorkoutHistoryCard(
     workout: CompletedWorkout,
+    allHistory: List<CompletedWorkout> = emptyList(),
     onEdit: () -> Unit,
     onRequestDelete: () -> Unit,
     onViewPhoto: (String) -> Unit
 ) {
     val P = LocalPalette.current
+    val context = LocalContext.current
     val photoBitmap = remember(workout.photoPath) {
         PhotoStorage.loadImageBitmap(workout.photoPath)
     }
 
-    // Count exercises that have at least 1 logged set, plus total sets & duration
     val exerciseCount = remember(workout.exercises) {
-        workout.exercises.count { ex ->
-            ex.sets.any { it.weight.isNotBlank() || it.reps.isNotBlank() }
-        }.coerceAtLeast(workout.exercises.size)
-    }
-    val totalSetsCount = remember(workout.exercises) {
-        workout.exercises.sumOf { ex ->
-            ex.sets.count { !it.isWarmup && (it.reps.toIntOrNull() ?: 0) > 0 }
+        var count = 0
+        for (ex in workout.exercises) {
+            if (ex.sets.any { it.weight.isNotBlank() || it.reps.isNotBlank() }) {
+                count++
+            }
         }
+        count.coerceAtLeast(workout.exercises.size)
     }
+
+    val totalSetsCount = remember(workout.exercises) {
+        var count = 0
+        for (ex in workout.exercises) {
+            count += ex.sets.count { !it.isWarmup && it.intensityType != "WARMUP" && parseRepsClean(it.reps, 0) > 0 }
+        }
+        count
+    }
+
     val durationLabel = remember(workout.durationSeconds) {
         val mins = (workout.durationSeconds / 60L).toInt()
         when {
@@ -2187,6 +1187,32 @@ fun WorkoutHistoryCard(
                     Surface(
                         modifier = Modifier
                             .clip(RoundedCornerShape(9.dp))
+                            .clickable {
+                                shareAiWorkoutReport(
+                                    context = context,
+                                    splitTitle = workout.splitTitle,
+                                    durationSeconds = workout.durationSeconds,
+                                    exercises = workout.exercises,
+                                    history = allHistory,
+                                    bodyWeightKg = workout.bodyWeightKg,
+                                    photoPath = workout.photoPath
+                                )
+                            },
+                        color = P.accentSecondary.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(9.dp)
+                    ) {
+                        Text(
+                            text = "Share ↗",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = P.accentSecondary,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(9.dp))
                             .clickable { onEdit() },
                         color = P.accentPrimary.copy(alpha = 0.14f),
                         shape = RoundedCornerShape(9.dp)
@@ -2220,7 +1246,6 @@ fun WorkoutHistoryCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Clean 3-Pill Summary: Exercises • Work Sets • Duration
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2248,6 +1273,16 @@ fun WorkoutHistoryCard(
                         }
                     }
                 }
+            }
+
+            if (workout.skippedExercises.isNotEmpty()) {
+                Text(
+                    text = "⏭ Skipped: ${workout.skippedExercises.joinToString(", ")}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = P.warningText,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
 
             if (photoBitmap != null && workout.photoPath != null) {
@@ -2300,7 +1335,10 @@ fun FullScreenPhotoDialog(
     )
 }
 
-// --- Clean Monthly Calendar View ---
+// ============================================================================
+// 5. MONTHLY CALENDAR SCREEN
+// ============================================================================
+
 @Composable
 fun HistoryCalendarScreen(
     history: List<CompletedWorkout>,
@@ -2501,7 +1539,11 @@ fun HistoryCalendarScreen(
                                     }
                                 }
                             } else {
-                                Spacer(modifier = Modifier.weight(1f).height(40.dp))
+                                Spacer(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp)
+                                )
                             }
                         }
                     }
@@ -2538,6 +1580,7 @@ fun HistoryCalendarScreen(
                 ) { workout ->
                     WorkoutHistoryCard(
                         workout = workout,
+                        allHistory = history,
                         onEdit = { onEditWorkout(workout) },
                         onRequestDelete = { workoutPendingDelete = workout },
                         onViewPhoto = { path -> fullScreenPhotoPath = path }
@@ -2582,5 +1625,494 @@ fun HistoryCalendarScreen(
                 }
             }
         )
+    }
+}
+
+// ============================================================================
+// 6. SETTINGS SCREEN (Optimized with Reusable Section Card)
+// ============================================================================
+
+@Composable
+private fun SettingsSectionCard(
+    title: String,
+    P: GymPalette,
+    titleColor: Color = P.textPrimary,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = P.bgCard,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.8.sp,
+                color = titleColor
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(
+    settings: AppSettings,
+    userProfile: UserProfile,
+    onUpdateSettings: (AppSettings) -> Unit,
+    onUpdateProfile: (UserProfile) -> Unit,
+    onOpenOnboarding: () -> Unit,
+    onDataRestored: () -> Unit,
+    onBack: () -> Unit
+) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            try {
+                val json = LocalStorage.exportJsonBackupString(context)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                Toast.makeText(context, "Backup exported successfully", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {}
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
+                if (LocalStorage.importJsonBackupString(context, content)) {
+                    onDataRestored()
+                    Toast.makeText(context, "Backup restored!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SpringButton(onClick = onBack) {
+                Text("← BACK", color = P.accentPrimary, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Text("SETTINGS & PROFILE", fontSize = 18.sp, fontWeight = FontWeight.Black, color = P.textPrimary)
+            Spacer(modifier = Modifier.width(56.dp))
+        }
+
+        val scrollState = rememberScrollState()
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = 16.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // REPLAY INTERACTIVE TUTORIAL BUTTON
+            SpringButton(
+                scaleTo = 0.96f,
+                onClick = {
+                    TutorialPrefs.resetAllTutorials(context)
+                    Toast.makeText(context, "Interactive Tutorial reset! Launching guide...", Toast.LENGTH_SHORT).show()
+                    onBack()
+                }
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = P.bgCard,
+                    border = BorderStroke(1.5.dp, P.accentSecondary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Box(modifier = Modifier.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "🎯 REPLAY INTERACTIVE APP TUTORIAL",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            color = P.accentSecondary
+                        )
+                    }
+                }
+            }
+
+            SpringButton(scaleTo = 0.96f, onClick = onOpenOnboarding) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = P.bgCard,
+                    border = BorderStroke(1.5.dp, P.accentPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Box(modifier = Modifier.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                        Text("⚡ RE-OPEN STARTING SETUP SCREEN", fontSize = 13.sp, fontWeight = FontWeight.Black, color = P.accentPrimary)
+                    }
+                }
+            }
+
+            SettingsSectionCard(
+                title = "ATHLETE PROFILE & TRAINING SPLIT",
+                P = P,
+                titleColor = P.accentPrimary
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("AGE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = P.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                        StepperControl(
+                            value = userProfile.age.toString(),
+                            allowKeyboardTyping = true,
+                            onValueChange = { onUpdateProfile(userProfile.copy(age = it.toIntOrNull() ?: 0)) },
+                            onStepDown = { onUpdateProfile(userProfile.copy(age = maxOf(10, userProfile.age - 1))) },
+                            onStepUp = { onUpdateProfile(userProfile.copy(age = userProfile.age + 1)) },
+                            P = P
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("BODY WEIGHT (KG)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = P.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                        StepperControl(
+                            value = formatKgClean(userProfile.currentWeightKg),
+                            allowKeyboardTyping = true,
+                            onValueChange = { onUpdateProfile(userProfile.copy(currentWeightKg = it.toFloatOrNull() ?: 0f)) },
+                            onStepDown = { onUpdateProfile(userProfile.copy(currentWeightKg = maxOf(20f, userProfile.currentWeightKg - 0.5f))) },
+                            onStepUp = { onUpdateProfile(userProfile.copy(currentWeightKg = userProfile.currentWeightKg + 0.5f)) },
+                            P = P
+                        )
+                    }
+                }
+                Text("ACTIVE SPLIT PROGRAM", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = P.textSecondary, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SPLIT_PROGRAMS.keys.forEach { progKey ->
+                        val prog = SPLIT_PROGRAMS[progKey]!!
+                        val isSelected = userProfile.splitProgram == progKey
+                        SpringButton(scaleTo = 0.97f, onClick = { onUpdateProfile(userProfile.copy(splitProgram = progKey)) }) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (isSelected) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(prog.name, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (isSelected) P.onAccentPrimary else P.textPrimary)
+                                    Text("${prog.weeklyGoal}d / wk", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = if (isSelected) P.onAccentPrimary else P.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "THEME PALETTE", P = P) {
+                Spacer(modifier = Modifier.height(10.dp))
+                val themeOptions = listOf(
+                    listOf("OBSIDIAN" to "Obsidian Volt", "ARCTIC" to "Arctic Light"),
+                    listOf("CYBERPUNK" to "Cyberpunk Neon", "OLED" to "Midnight OLED")
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    themeOptions.forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { (themeKey, label) ->
+                                val selected = settings.themeChoice == themeKey
+                                SpringButton(
+                                    scaleTo = 0.95f,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        onUpdateSettings(
+                                            settings.copy(
+                                                isDarkMode = themeKey != "ARCTIC",
+                                                themeChoice = themeKey
+                                            )
+                                        )
+                                    }
+                                ) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(40.dp),
+                                        color = if (selected) P.accentPrimary else P.bgControl,
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (selected) P.onAccentPrimary else P.textPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "DISPLAY REFRESH RATE", P = P) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(120, 60).forEach { fps ->
+                        SpringButton(
+                            scaleTo = 0.95f,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onUpdateSettings(settings.copy(targetFps = fps)) }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                color = if (settings.targetFps == fps) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("$fps Hz", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.targetFps == fps) P.onAccentPrimary else P.textPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "MACHINE & DUMBBELL WEIGHT INCREMENTS (+ / −)", P = P) {
+                val stepPresets = listOf(0.5f, 1.0f, 1.25f, 2.0f, 2.5f, 5.0f)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        stepPresets.take(3).forEach { step ->
+                            SpringButton(
+                                scaleTo = 0.94f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 4.dp),
+                                onClick = { onUpdateSettings(settings.copy(weightStepKg = step)) }
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    color = if (settings.weightStepKg == step) P.accentPrimary else P.bgControl,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("${step}kg", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.weightStepKg == step) P.onAccentPrimary else P.textPrimary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        stepPresets.takeLast(3).forEach { step ->
+                            SpringButton(
+                                scaleTo = 0.94f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp),
+                                onClick = { onUpdateSettings(settings.copy(weightStepKg = step)) }
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    color = if (settings.weightStepKg == step) P.accentPrimary else P.bgControl,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("${step}kg", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.weightStepKg == step) P.onAccentPrimary else P.textPrimary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "REST TIMER & ALERT SOUND", P = P) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(0 to "Off", 60 to "60s", 90 to "90s", 120 to "2m", 180 to "3m").forEach { (sec, lbl) ->
+                        SpringButton(
+                            scaleTo = 0.94f,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onUpdateSettings(settings.copy(restTimerSeconds = sec)) }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                color = if (settings.restTimerSeconds == sec) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(lbl, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.restTimerSeconds == sec) P.onAccentPrimary else P.textPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(true to "Music-Safe Alert On", false to "Silent").forEach { (valOn, label) ->
+                        SpringButton(
+                            scaleTo = 0.95f,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onUpdateSettings(settings.copy(restSoundEnabled = valOn)) }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                color = if (settings.restSoundEnabled == valOn) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.restSoundEnabled == valOn) P.onAccentPrimary else P.textPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "KEEP SCREEN ON DURING WORKOUT", P = P) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(true to "Keep Awake", false to "Normal Timeout").forEach { (valOn, label) ->
+                        SpringButton(
+                            scaleTo = 0.95f,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onUpdateSettings(settings.copy(keepScreenAwake = valOn)) }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                color = if (settings.keepScreenAwake == valOn) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.keepScreenAwake == valOn) P.onAccentPrimary else P.textPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "VIBRATION FEEDBACK (HAPTICS)", P = P) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(true to "On", false to "Off").forEach { (valOn, label) ->
+                        SpringButton(
+                            scaleTo = 0.95f,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onUpdateSettings(settings.copy(hapticsEnabled = valOn)) }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                color = if (settings.hapticsEnabled == valOn) P.accentPrimary else P.bgControl,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = if (settings.hapticsEnabled == valOn) P.onAccentPrimary else P.textPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionCard(title = "BACKUP & RESTORE DATA", P = P) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SpringButton(
+                        scaleTo = 0.95f,
+                        modifier = Modifier.weight(1f),
+                        onClick = { exportLauncher.launch("gym_tracker_backup.json") }
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            color = P.bgControl,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("Export Backup", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = P.accentPrimary)
+                            }
+                        }
+                    }
+                    SpringButton(
+                        scaleTo = 0.95f,
+                        modifier = Modifier.weight(1f),
+                        onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            color = P.bgControl,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("Restore Backup", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = P.accentSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }

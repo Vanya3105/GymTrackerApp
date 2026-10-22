@@ -5,64 +5,21 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 @Immutable
-data class GymPalette(
-    val isDark: Boolean,
-    val bgPrimary: Color,
-    val bgCard: Color,
-    val bgControl: Color,
-    val borderSubtle: Color,
-    val borderStrong: Color,
-    val textPrimary: Color,
-    val textSecondary: Color,
-    val accentPrimary: Color,
-    val onAccentPrimary: Color,
-    val successText: Color,
-    val successSurface: Color,
-    val warningText: Color,
-    val warningSurface: Color,
-    val dangerText: Color,
-    val dangerSurface: Color
+data class UserProfile(
+    val hasCompletedOnboarding: Boolean = false,
+    val age: Int = 0,
+    val currentWeightKg: Float = 0f,
+    val splitProgram: String = "PPL_ARNOLD",
+    val currentStreakWeeks: Int = 0 // Added for consistency streak tracking
 )
 
-val DarkLuxuryPalette = GymPalette(
-    isDark = true,
-    bgPrimary = Color(0xFF0F1115),
-    bgCard = Color(0xFF181B22),
-    bgControl = Color(0xFF222630),
-    borderSubtle = Color(0xFF262B36),
-    borderStrong = Color(0xFF343B4A),
-    textPrimary = Color(0xFFF3F4F6),
-    textSecondary = Color(0xFF8E95A5),
-    accentPrimary = Color(0xFF3B82F6),
-    onAccentPrimary = Color(0xFFFFFFFF),
-    successText = Color(0xFF10B981),
-    successSurface = Color(0x1F10B981),
-    warningText = Color(0xFFF59E0B),
-    warningSurface = Color(0x1FF59E0B),
-    dangerText = Color(0xFFEF4444),
-    dangerSurface = Color(0x1FEF4444)
+@Immutable
+data class WeightLogEntry(
+    val id: Long,
+    val dateKey: String,
+    val displayDate: String,
+    val weightKg: Float
 )
-
-val LightEditorialPalette = GymPalette(
-    isDark = false,
-    bgPrimary = Color(0xFFF5F7FA),
-    bgCard = Color(0xFFFFFFFF),
-    bgControl = Color(0xFFEEF1F6),
-    borderSubtle = Color(0xFFE5E9F0),
-    borderStrong = Color(0xFFD0D7E2),
-    textPrimary = Color(0xFF111827),
-    textSecondary = Color(0xFF6B7280),
-    accentPrimary = Color(0xFF2563EB),
-    onAccentPrimary = Color(0xFFFFFFFF),
-    successText = Color(0xFF059669),
-    successSurface = Color(0x1A059669),
-    warningText = Color(0xFFD97706),
-    warningSurface = Color(0x1AD97706),
-    dangerText = Color(0xFFDC2626),
-    dangerSurface = Color(0x1ADC2626)
-)
-
-val LocalPalette = staticCompositionLocalOf { DarkLuxuryPalette }
 
 @Immutable
 data class AppSettings(
@@ -72,27 +29,44 @@ data class AppSettings(
     val weightStepKg: Float = 2.5f,
     val restTimerSeconds: Int = 90,
     val keepScreenAwake: Boolean = true,
-    val restSoundEnabled: Boolean = true
+    val restSoundEnabled: Boolean = true,
+    val themeChoice: String = "OBSIDIAN"
 )
 
 @Immutable
-data class SetEntry(
-    val setNumber: Int,
-    val weight: String = "20",
-    val reps: String = "8",
-    val isWarmup: Boolean = false,
-    val isCompleted: Boolean = false
+data class CompletedWorkout(
+    val id: Long,
+    val splitTitle: String,
+    val dateKey: String,
+    val displayDate: String,
+    val durationSeconds: Long,
+    val bodyWeightKg: Float,
+    val photoPath: String?,
+    val skippedExercises: List<String>,
+    val exercises: List<ExerciseEntry>,
+    val totalVolumeKg: Int = 0, // Added for advanced analytics
+    val prsHit: Int = 0         // Added for advanced analytics
 )
 
 @Immutable
 data class ExerciseEntry(
     val name: String,
     val targetMuscle: String = "",
-    val sets: List<SetEntry> = listOf(
-        SetEntry(1, weight = "20", reps = "8", isWarmup = true),
-        SetEntry(2, weight = "40", reps = "8", isWarmup = false),
-        SetEntry(3, weight = "40", reps = "8", isWarmup = false)
-    )
+    val restSeconds: Int = 90,
+    val isSkipped: Boolean = false,
+    val sets: List<SetEntry> = emptyList(),
+    val isSuperset: Boolean = false // Added for future superset grouping
+)
+
+@Immutable
+data class SetEntry(
+    val setNumber: Int,
+    val weight: String,
+    val reps: String,
+    val isWarmup: Boolean = false,
+    val intensityType: String = "NORMAL", // NORMAL, WARMUP, DROP, REST_PAUSE
+    val isCompleted: Boolean = false,
+    val restSeconds: Int = 90
 )
 
 @Immutable
@@ -103,22 +77,12 @@ data class WorkoutSplit(
 )
 
 @Immutable
-data class CompletedWorkout(
-    val id: Long,
-    val splitTitle: String,
-    val dateKey: String,
-    val displayDate: String,
-    val durationSeconds: Long = 0L,
-    val photoPath: String? = null,
-    val exercises: List<ExerciseEntry>
-)
-
-@Immutable
-data class AiAdvice(
-    val message: String,
-    val isPositive: Boolean,
-    val isWarning: Boolean,
-    val suggestedWeight: String = ""
+data class SplitProgramInfo(
+    val id: String,
+    val name: String,
+    val tagline: String,
+    val weeklyGoal: Int,
+    val splits: List<WorkoutSplit>
 )
 
 @Immutable
@@ -129,5 +93,118 @@ data class WeekSummaryData(
     val workouts: List<CompletedWorkout>,
     val completedCoreSplits: Set<String>,
     val recommendedSplit: String,
-    val reasonText: String
+    val reasonText: String,
+    val weeklyGoal: Int,
+    val fatiguedMuscles: List<String> = emptyList() // Added for muscle recovery tracking
 )
+
+@Immutable
+data class AiAdvice(
+    val message: String,
+    val isPositive: Boolean,
+    val isWarning: Boolean,
+    val suggestedWeight: String
+)
+
+@Immutable
+data class GymPalette(
+    val isDark: Boolean,
+    val bgPrimary: Color,
+    val bgCard: Color,
+    val bgControl: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val borderSubtle: Color,
+    val borderStrong: Color,
+    val accentPrimary: Color,
+    val onAccentPrimary: Color,
+    val accentSecondary: Color,
+    val successSurface: Color,
+    val successText: Color,
+    val warningSurface: Color,
+    val warningText: Color,
+    val dangerSurface: Color,
+    val dangerText: Color
+)
+
+val DarkLuxuryPalette = GymPalette(
+    isDark = true,
+    bgPrimary = Color(0xFF07080A),
+    bgCard = Color(0xFF111318),
+    bgControl = Color(0xFF1E222B),
+    textPrimary = Color(0xFFFAFAFC),
+    textSecondary = Color(0xFF8A93A6),
+    borderSubtle = Color(0xFF1E222B),
+    borderStrong = Color(0xFF2C3240),
+    accentPrimary = Color(0xFFCCFF00),
+    onAccentPrimary = Color(0xFF07080A),
+    accentSecondary = Color(0xFF00F0FF),
+    successSurface = Color(0xFF132418),
+    successText = Color(0xFF4ADE80),
+    warningSurface = Color(0xFF2B1C10),
+    warningText = Color(0xFFFB923C),
+    dangerSurface = Color(0xFF2A1015),
+    dangerText = Color(0xFFFF453A)
+)
+
+val LightEditorialPalette = GymPalette(
+    isDark = false,
+    bgPrimary = Color(0xFFF4F6F9),
+    bgCard = Color(0xFFFFFFFF),
+    bgControl = Color(0xFFE6EAF2),
+    textPrimary = Color(0xFF0B0F19),
+    textSecondary = Color(0xFF5B6478),
+    borderSubtle = Color(0xFFD9DFE8),
+    borderStrong = Color(0xFFB0B9CB),
+    accentPrimary = Color(0xFFFF4500),
+    onAccentPrimary = Color(0xFFFFFFFF),
+    accentSecondary = Color(0xFF0066FF),
+    successSurface = Color(0xFFE0F5E8),
+    successText = Color(0xFF166534),
+    warningSurface = Color(0xFFFFF0D6),
+    warningText = Color(0xFF9A3412),
+    dangerSurface = Color(0xFFFFE5E5),
+    dangerText = Color(0xFF991B1B)
+)
+
+val CyberpunkNeonPalette = GymPalette(
+    isDark = true,
+    bgPrimary = Color(0xFF090A10),
+    bgCard = Color(0xFF131520),
+    bgControl = Color(0xFF1D2130),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFF94A3B8),
+    borderSubtle = Color(0xFF1D2130),
+    borderStrong = Color(0xFF333A56),
+    accentPrimary = Color(0xFFFF0055),
+    onAccentPrimary = Color(0xFFFFFFFF),
+    accentSecondary = Color(0xFF00F0FF),
+    successSurface = Color(0xFF0D2818),
+    successText = Color(0xFF22C55E),
+    warningSurface = Color(0xFF2E1A0C),
+    warningText = Color(0xFFF97316),
+    dangerSurface = Color(0xFF2E0D12),
+    dangerText = Color(0xFFEF4444)
+)
+
+val MidnightOledPalette = GymPalette(
+    isDark = true,
+    bgPrimary = Color(0xFF000000),
+    bgCard = Color(0xFF0A0A0A),
+    bgControl = Color(0xFF171717),
+    textPrimary = Color(0xFFFAFAFA),
+    textSecondary = Color(0xFF737373),
+    borderSubtle = Color(0xFF262626),
+    borderStrong = Color(0xFF404040),
+    accentPrimary = Color(0xFF3B82F6),
+    onAccentPrimary = Color(0xFFFFFFFF),
+    accentSecondary = Color(0xFFA855F7),
+    successSurface = Color(0xFF052E16),
+    successText = Color(0xFF4ADE80),
+    warningSurface = Color(0xFF451A03),
+    warningText = Color(0xFFFB923C),
+    dangerSurface = Color(0xFF450A0A),
+    dangerText = Color(0xFFF87171)
+)
+
+val LocalPalette = staticCompositionLocalOf { DarkLuxuryPalette }
