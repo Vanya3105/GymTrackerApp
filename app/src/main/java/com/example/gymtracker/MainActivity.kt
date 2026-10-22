@@ -2,18 +2,31 @@ package com.example.gymtracker
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,6 +38,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
@@ -42,12 +58,12 @@ fun GymTrackerRoot(activity: Activity) {
     val context = LocalContext.current
     val view = LocalView.current
 
-    // Automatically request Android 13+ Notification Permission on app start
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
     LaunchedEffect(Unit) {
+        ensureNotificationChannelCreated(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(
                 context,
@@ -60,7 +76,12 @@ fun GymTrackerRoot(activity: Activity) {
     }
 
     var settings by remember { mutableStateOf(LocalStorage.loadSettings(context)) }
-    val palette = if (settings.isDarkMode) DarkLuxuryPalette else LightEditorialPalette
+    val palette = when (settings.themeChoice) {
+        "ARCTIC" -> LightEditorialPalette
+        "CYBERPUNK" -> CyberpunkNeonPalette
+        "OLED" -> MidnightOledPalette
+        else -> DarkLuxuryPalette
+    }
 
     LaunchedEffect(settings.targetFps, settings.isDarkMode) {
         applyDisplayRefreshRate(activity, settings.targetFps)
@@ -111,6 +132,14 @@ fun GymTrackerRoot(activity: Activity) {
     }
 }
 
+private fun screenDepth(key: String): Int = when (key) {
+    "ONBOARDING" -> 0
+    "HOME" -> 1
+    "WEIGHT_TRACKER", "WEEKLY", "SETTINGS", "ACTIVE_WORKOUT" -> 2
+    "CALENDAR", "EDIT_PAST" -> 3
+    else -> 1
+}
+
 @Composable
 fun GymTrackerApp(
     activity: Activity,
@@ -119,17 +148,21 @@ fun GymTrackerApp(
     onHaptic: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    val splits = remember {
-        listOf(
-            WorkoutSplit("Push", "Chest • Shoulders • Triceps", "01"),
-            WorkoutSplit("Pull", "Lats • Upper Back • Biceps", "02"),
-            WorkoutSplit("Arms & Shoulders", "Delts • Biceps • Triceps", "03"),
-            WorkoutSplit("Chest & Back", "Torso Antagonist Hypertrophy", "04")
-        )
-    }
-
+    var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
+    var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
+
+    val activeProgram = remember(userProfile.splitProgram) {
+        SPLIT_PROGRAMS[userProfile.splitProgram] ?: SPLIT_PROGRAMS["PPL_ARNOLD"]!!
+    }
+    val splits = activeProgram.splits
+
+    var showOnboardingScreen by remember {
+        mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f)
+    }
+    var showWeightTrackerScreen by remember { mutableStateOf(false) }
     var showWeeklySummaryScreen by remember { mutableStateOf(false) }
     var showMonthlyCalendarScreen by remember { mutableStateOf(false) }
     var showSettingsScreen by remember { mutableStateOf(false) }
@@ -137,10 +170,51 @@ fun GymTrackerApp(
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var selectedWorkout by remember {
-        mutableStateOf(initialActive?.let { pair -> splits.find { it.title == pair.first } })
+        mutableStateOf(initialActive?.let { pair ->
+            splits.find { it.title == pair.first } ?: WorkoutSplit(pair.first, "", "01")
+        })
     }
     var currentExercises by remember {
         mutableStateOf(initialActive?.second ?: emptyList())
+    }
+
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    val reloadFromDisk = rememberUpdatedState {
+        val latestActive = LocalStorage.loadActiveSession(context)
+        if (latestActive != null && editingPastWorkout == null) {
+            selectedWorkout = splits.find { it.title == latestActive.first }
+                ?: WorkoutSplit(latestActive.first, "", "01")
+            currentExercises = latestActive.second
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                reloadFromDisk.value()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                reloadFromDisk.value()
+            }
+        }
+        val filter = IntentFilter(ACTION_SESSION_SYNC)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(receiver, filter)
+        }
+        onDispose {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+        }
     }
 
     val isWorkoutScreenOpen = selectedWorkout != null || editingPastWorkout != null
@@ -152,7 +226,50 @@ fun GymTrackerApp(
         }
     }
 
-    val currentWeekSummary = remember(history) { computeWeekSummary(history, weekOffset = 0) }
+    val currentScreenKey = when {
+        showOnboardingScreen -> "ONBOARDING"
+        editingPastWorkout != null -> "EDIT_PAST"
+        selectedWorkout != null -> "ACTIVE_WORKOUT"
+        showWeightTrackerScreen -> "WEIGHT_TRACKER"
+        showSettingsScreen -> "SETTINGS"
+        showMonthlyCalendarScreen -> "CALENDAR"
+        showWeeklySummaryScreen -> "WEEKLY"
+        else -> "HOME"
+    }
+
+    // System Edge-Swipe Back Navigation for all non-workout screens
+    // (Active Workout & Edit Past handle their own BackHandler inside ActiveWorkoutScreen)
+    BackHandler(enabled = currentScreenKey != "ACTIVE_WORKOUT" && currentScreenKey != "EDIT_PAST") {
+        onHaptic()
+        when (currentScreenKey) {
+            "CALENDAR" -> showMonthlyCalendarScreen = false
+            "WEEKLY" -> showWeeklySummaryScreen = false
+            "SETTINGS" -> showSettingsScreen = false
+            "WEIGHT_TRACKER" -> showWeightTrackerScreen = false
+            "ONBOARDING" -> {
+                if (userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f) {
+                    showOnboardingScreen = false
+                } else {
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressTime < 2000L) {
+                        activity.finish()
+                    } else {
+                        lastBackPressTime = now
+                        Toast.makeText(context, "Swipe back again to exit", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            "HOME" -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressTime < 2000L) {
+                    activity.finish()
+                } else {
+                    lastBackPressTime = now
+                    Toast.makeText(context, "Swipe back again to exit", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     fun startWorkout(split: WorkoutSplit) {
         onHaptic()
@@ -162,14 +279,17 @@ fun GymTrackerApp(
             val advice = evaluateSplitIsolatedAi(split.title, dummy, history, settings.weightStepKg)
             val workWeight = advice?.suggestedWeight?.ifBlank { "40" } ?: "40"
             val warmupWeight = ((workWeight.toFloatOrNull() ?: 40f) * 0.5f).toInt().toString()
+            val exRest = LocalStorage.getExerciseDefaultRest(context, exName, settings.restTimerSeconds)
 
             ExerciseEntry(
                 name = exName,
                 targetMuscle = muscle,
+                restSeconds = exRest,
+                isSkipped = false,
                 sets = listOf(
-                    SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true),
-                    SetEntry(2, weight = workWeight, reps = "8", isWarmup = false),
-                    SetEntry(3, weight = workWeight, reps = "8", isWarmup = false)
+                    SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, restSeconds = minOf(60, exRest)),
+                    SetEntry(2, weight = workWeight, reps = "8", isWarmup = false, restSeconds = exRest),
+                    SetEntry(3, weight = workWeight, reps = "8", isWarmup = false, restSeconds = exRest)
                 )
             )
         }
@@ -179,31 +299,70 @@ fun GymTrackerApp(
         LocalStorage.saveActiveSession(context, split.title, entries)
     }
 
-    val currentScreenKey = when {
-        editingPastWorkout != null -> "EDIT_PAST"
-        selectedWorkout != null -> "ACTIVE_WORKOUT"
-        showSettingsScreen -> "SETTINGS"
-        showMonthlyCalendarScreen -> "CALENDAR"
-        showWeeklySummaryScreen -> "WEEKLY"
-        else -> "HOME"
-    }
-
-    Crossfade(
+    AnimatedContent(
         targetState = currentScreenKey,
-        animationSpec = tween(durationMillis = 180),
+        transitionSpec = {
+            val isForward = screenDepth(targetState) >= screenDepth(initialState)
+            val slideSpec = tween<androidx.compose.ui.unit.IntOffset>(
+                durationMillis = 280,
+                easing = FastOutSlowInEasing
+            )
+            val fadeSpec = tween<Float>(durationMillis = 220)
+
+            if (isForward) {
+                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth / 4 } + fadeIn(fadeSpec))
+                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 5 } + fadeOut(fadeSpec))
+            } else {
+                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 5 } + fadeIn(fadeSpec))
+                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth / 4 } + fadeOut(fadeSpec))
+            }.using(SizeTransform(clip = false))
+        },
         label = "screen_transition"
     ) { screen ->
         when (screen) {
+            "ONBOARDING" -> {
+                OnboardingScreen(
+                    initialProfile = userProfile,
+                    onHaptic = onHaptic,
+                    onSaveProfile = { newProfile ->
+                        userProfile = newProfile
+                        LocalStorage.saveUserProfile(context, newProfile)
+                        weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
+                        showOnboardingScreen = false
+                    }
+                )
+            }
+            "WEIGHT_TRACKER" -> {
+                WeightTrackerScreen(
+                    userProfile = userProfile,
+                    weightHistory = weightHistory,
+                    onHaptic = onHaptic,
+                    onLogWeight = { newKg ->
+                        onHaptic()
+                        weightHistory = LocalStorage.addWeightLog(context, newKg)
+                        userProfile = LocalStorage.loadUserProfile(context)
+                    },
+                    onDeleteWeight = { id ->
+                        onHaptic()
+                        weightHistory = LocalStorage.deleteWeightLog(context, id)
+                    },
+                    onBack = {
+                        onHaptic()
+                        showWeightTrackerScreen = false
+                    }
+                )
+            }
             "EDIT_PAST" -> {
                 val target = editingPastWorkout
                 if (target != null) {
                     val splitObj = splits.find { it.title == target.splitTitle }
-                        ?: WorkoutSplit(target.splitTitle, "", "00")
+                        ?: WorkoutSplit(target.splitTitle, "", "01")
                     ActiveWorkoutScreen(
                         split = splitObj,
                         exercises = currentExercises,
                         history = history,
                         settings = settings,
+                        userProfile = userProfile,
                         isEditingPastWorkout = true,
                         initialPhotoPath = target.photoPath,
                         onHaptic = onHaptic,
@@ -223,11 +382,13 @@ fun GymTrackerApp(
                             editingPastWorkout = null
                             currentExercises = emptyList()
                         },
-                        onFinishWorkout = { _, updatedPhotoPath ->
+                        onFinishWorkout = { _, updatedPhotoPath, skippedList ->
                             onHaptic()
+                            val performedOnly = currentExercises.filter { !it.isSkipped }
                             val updatedWorkout = target.copy(
                                 photoPath = updatedPhotoPath,
-                                exercises = currentExercises
+                                skippedExercises = skippedList,
+                                exercises = performedOnly
                             )
                             LocalStorage.updateCompletedWorkout(context, updatedWorkout)
                             history = LocalStorage.loadHistory(context)
@@ -245,6 +406,7 @@ fun GymTrackerApp(
                         exercises = currentExercises,
                         history = history,
                         settings = settings,
+                        userProfile = userProfile,
                         isEditingPastWorkout = false,
                         initialPhotoPath = null,
                         onHaptic = onHaptic,
@@ -279,17 +441,20 @@ fun GymTrackerApp(
                             currentExercises = emptyList()
                             LocalStorage.saveActiveSession(context, null, emptyList())
                         },
-                        onFinishWorkout = { durationSecs, photoPath ->
+                        onFinishWorkout = { durationSecs, photoPath, skippedList ->
                             onHaptic()
                             val now = Date()
+                            val performedOnly = currentExercises.filter { !it.isSkipped }
                             val completed = CompletedWorkout(
                                 id = System.currentTimeMillis(),
                                 splitTitle = activeSplit.title,
                                 dateKey = DateUtils.formatDayKey(now),
                                 displayDate = DateUtils.formatDisplayDate(now),
                                 durationSeconds = durationSecs,
+                                bodyWeightKg = userProfile.currentWeightKg,
                                 photoPath = photoPath,
-                                exercises = currentExercises
+                                skippedExercises = skippedList,
+                                exercises = performedOnly
                             )
                             LocalStorage.saveCompletedWorkout(context, completed)
                             history = LocalStorage.loadHistory(context)
@@ -302,9 +467,22 @@ fun GymTrackerApp(
             "SETTINGS" -> {
                 SettingsScreen(
                     settings = settings,
+                    userProfile = userProfile,
                     onUpdateSettings = onUpdateSettings,
+                    onUpdateProfile = { updatedProf ->
+                        onHaptic()
+                        userProfile = updatedProf
+                        LocalStorage.saveUserProfile(context, updatedProf)
+                    },
+                    onOpenOnboarding = {
+                        onHaptic()
+                        showSettingsScreen = false
+                        showOnboardingScreen = true
+                    },
                     onDataRestored = {
                         history = LocalStorage.loadHistory(context)
+                        userProfile = LocalStorage.loadUserProfile(context)
+                        weightHistory = LocalStorage.loadWeightHistory(context)
                         onUpdateSettings(LocalStorage.loadSettings(context))
                     },
                     onBack = {
@@ -335,6 +513,7 @@ fun GymTrackerApp(
             "WEEKLY" -> {
                 WeeklySummaryScreen(
                     history = history,
+                    userProfile = userProfile,
                     onEditWorkout = { workoutToEdit ->
                         onHaptic()
                         currentExercises = workoutToEdit.exercises
@@ -356,11 +535,19 @@ fun GymTrackerApp(
                 )
             }
             else -> {
+                val currentWeekSummary = remember(history, userProfile.splitProgram) {
+                    computeWeekSummary(history, weekOffset = 0, splitProgramId = userProfile.splitProgram)
+                }
                 HomeScreen(
                     splits = splits,
                     currentWeek = currentWeekSummary,
-                    settings = settings,
+                    userProfile = userProfile,
+                    activeProgramName = activeProgram.name,
                     onSelectWorkout = { startWorkout(it) },
+                    onOpenWeightTracker = {
+                        onHaptic()
+                        showWeightTrackerScreen = true
+                    },
                     onOpenWeeklySummary = {
                         onHaptic()
                         showWeeklySummaryScreen = true

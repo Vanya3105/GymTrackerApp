@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions for Rest Notifications, Background Alarms & Haptics -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:enableOnBackInvokedCallback="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -26,7 +25,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Long-Press Home Screen Widget Settings Activity (Dark/Light & Opacity) -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
@@ -36,12 +34,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Background Rest Timer Alarm Receiver (Fires Notification When Rest Ends) -->
         <receiver
             android:name=".RestAlarmReceiver"
             android:exported="false" />
 
-        <!-- Home Screen Widget Receiver with Interactive Button Actions -->
+        <!-- WIDGET 1: Interactive Active Workout Widget -->
         <receiver
             android:name=".GymWidgetProvider"
             android:exported="true"
@@ -58,6 +55,43 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/gym_widget_info" />
         </receiver>
+
+        <!-- WIDGET 2: AI Muscle Fatigue & Recovery Matrix (4x2) -->
+        <receiver
+            android:name=".MuscleFatigueWidgetProvider"
+            android:exported="true"
+            android:label="Gym AI • Muscle Recovery">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fatigue_widget_info" />
+        </receiver>
+
+        <!-- WIDGET 3: Square 2x2 Weekly Pulse & Volume Ring -->
+        <receiver
+            android:name=".SquarePulseWidgetProvider"
+            android:exported="true"
+            android:label="Gym AI • Square Pulse (2x2)">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/square_widget_info" />
+        </receiver>
+
+        <!-- Required for sharing Pump Photos to Instagram/WhatsApp -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

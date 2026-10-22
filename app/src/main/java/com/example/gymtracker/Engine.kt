@@ -1,11 +1,15 @@
 package com.example.gymtracker
 
+import android.Manifest
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.Uri
@@ -14,7 +18,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,6 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -44,10 +48,11 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.random.Random
+
+const val ACTION_SESSION_SYNC = "com.example.gymtracker.ACTION_SESSION_SYNC"
 
 @Immutable
 data class ExerciseRecords(
@@ -61,8 +66,85 @@ data class ExerciseRecords(
 @Immutable
 data class WidgetAppearance(
     val isDark: Boolean = true,
-    val opacityPercent: Int = 92 // 0 to 100
+    val opacityPercent: Int = 94
 )
+
+val SPLIT_PROGRAMS = mapOf(
+    "PPL_ARNOLD" to SplitProgramInfo(
+        id = "PPL_ARNOLD",
+        name = "PPL + Arnold Hybrid",
+        tagline = "Push • Pull • Arms & Shoulders • Chest & Back",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("Push", "CHEST • SHOULDERS • TRICEPS", "01"),
+            WorkoutSplit("Pull", "LATS • UPPER BACK • BICEPS", "02"),
+            WorkoutSplit("Arms & Shoulders", "DELTS • BICEPS • TRICEPS", "03"),
+            WorkoutSplit("Chest & Back", "ANTAGONIST HYPERTROPHY", "04")
+        )
+    ),
+    "CLASSIC_PPL" to SplitProgramInfo(
+        id = "CLASSIC_PPL",
+        name = "Classic Push / Pull / Legs",
+        tagline = "3-Day Hypertrophy Foundation",
+        weeklyGoal = 3,
+        splits = listOf(
+            WorkoutSplit("Push", "CHEST • SHOULDERS • TRICEPS", "01"),
+            WorkoutSplit("Pull", "LATS • MID BACK • BICEPS", "02"),
+            WorkoutSplit("Legs", "QUADS • HAMSTRINGS • CALVES", "03")
+        )
+    ),
+    "UPPER_LOWER" to SplitProgramInfo(
+        id = "UPPER_LOWER",
+        name = "Upper / Lower 4-Day Split",
+        tagline = "High Frequency Strength & Hypertrophy",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("Upper A", "CHEST & BACK FOCUS • ARMS", "01"),
+            WorkoutSplit("Lower A", "QUAD FOCUS • HAMSTRINGS • CALVES", "02"),
+            WorkoutSplit("Upper B", "SHOULDER & ARM FOCUS • TORSO", "03"),
+            WorkoutSplit("Lower B", "POSTERIOR CHAIN • GLUTES • QUADS", "04")
+        )
+    ),
+    "FULL_BODY" to SplitProgramInfo(
+        id = "FULL_BODY",
+        name = "Full Body 3-Day Split",
+        tagline = "Maximum Efficiency • 3x Weekly Stimulus",
+        weeklyGoal = 3,
+        splits = listOf(
+            WorkoutSplit("Full Body A", "INCLINE PRESS • PULLDOWN • SQUAT", "01"),
+            WorkoutSplit("Full Body B", "SHOULDER PRESS • ROW • RDL", "02"),
+            WorkoutSplit("Full Body C", "DIPS/CHEST • CHIN-UPS • LEG PRESS", "03")
+        )
+    )
+)
+
+val REST_PRESETS = listOf(0, 60, 90, 120, 180, 240)
+val WEIGHT_STEP_PRESETS = listOf(0.5f, 1.0f, 1.25f, 2.0f, 2.5f, 5.0f)
+
+fun formatRestShort(sec: Int): String {
+    if (sec <= 0) return "Off"
+    return if (sec % 60 == 0) "${sec / 60}m" else "${sec}s"
+}
+
+fun cycleRestPreset(current: Int): Int {
+    val idx = REST_PRESETS.indexOf(current)
+    return if (idx == -1 || idx == REST_PRESETS.lastIndex) REST_PRESETS.first() else REST_PRESETS[idx + 1]
+}
+
+fun formatKgClean(value: Float): String {
+    val clamped = (value.coerceAtLeast(0f) * 100f).roundToInt() / 100f
+    return if (clamped % 1f == 0f) "${clamped.toInt()}" else "$clamped"
+}
+
+fun parseWeightClean(raw: String, fallback: Float = 20f): Float {
+    val cleaned = raw.replace("kg", "", ignoreCase = true).trim()
+    return cleaned.toFloatOrNull() ?: fallback
+}
+
+fun parseRepsClean(raw: String, fallback: Int = 8): Int {
+    val cleaned = raw.replace("r", "", ignoreCase = true).replace("reps", "", ignoreCase = true).trim()
+    return cleaned.toIntOrNull() ?: fallback
+}
 
 object DateUtils {
     private val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -90,7 +172,6 @@ fun applyDisplayRefreshRate(activity: Activity, targetHz: Int) {
 
         val modes = display.supportedModes
         val currentMode = display.mode
-
         val sameResModes = modes.filter {
             it.physicalWidth == currentMode.physicalWidth &&
                     it.physicalHeight == currentMode.physicalHeight
@@ -104,7 +185,6 @@ fun applyDisplayRefreshRate(activity: Activity, targetHz: Int) {
                 window.attributes = params
             }
         }
-
         if (Build.VERSION.SDK_INT >= 34) {
             window.attributes.preferredRefreshRate = targetHz.toFloat()
         }
@@ -112,12 +192,24 @@ fun applyDisplayRefreshRate(activity: Activity, targetHz: Int) {
 }
 
 const val REST_NOTIFICATION_CHANNEL_ID = "gym_rest_timer_channel"
+const val SET_DONE_NOTIFICATION_CHANNEL_ID = "gym_set_done_channel"
+
+fun hasNotificationPermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    } else {
+        true
+    }
+}
 
 fun ensureNotificationChannelCreated(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         try {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            val channel = android.app.NotificationChannel(
+            val restChannel = android.app.NotificationChannel(
                 REST_NOTIFICATION_CHANNEL_ID,
                 "Rest Timer Alerts",
                 android.app.NotificationManager.IMPORTANCE_HIGH
@@ -125,39 +217,54 @@ fun ensureNotificationChannelCreated(context: Context) {
                 description = "Alerts you when your rest timer between sets finishes"
                 enableVibration(true)
             }
-            manager.createNotificationChannel(channel)
+            val setDoneChannel = android.app.NotificationChannel(
+                SET_DONE_NOTIFICATION_CHANNEL_ID,
+                "Set Completed Notifications",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts you when a set is marked completed"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(restChannel)
+            manager.createNotificationChannel(setDoneChannel)
         } catch (_: Exception) {}
     }
 }
 
-fun openAppNotificationSettings(context: Context) {
+fun sendSetDoneNotification(
+    context: Context,
+    exerciseName: String,
+    weight: String,
+    reps: String,
+    restSeconds: Int
+) {
+    if (!hasNotificationPermission(context)) return
     try {
-        val intent = Intent().apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            } else {
-                action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                data = Uri.fromParts("package", context.packageName, null)
-            }
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        ensureNotificationChannelCreated(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        context.startActivity(intent)
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            context, 1, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(context, SET_DONE_NOTIFICATION_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            android.app.Notification.Builder(context)
+        }
+        val restMsg = if (restSeconds > 0) " • Resting ${formatRestShort(restSeconds)}" else " • Ready for next set!"
+        val notification = builder
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle("Set Done ✓ • $exerciseName")
+            .setContentText("${weight}kg × $reps reps logged$restMsg")
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        manager.notify(1002, notification)
     } catch (_: Exception) {}
-}
-
-fun playMusicSafeRestAlert(context: Context? = null, splitTitle: String = "Workout") {
-    try {
-        val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
-        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 240)
-        Handler(Looper.getMainLooper()).postDelayed({
-            try { toneGen.release() } catch (_: Exception) {}
-        }, 300L)
-    } catch (_: Exception) {}
-
-    if (context != null) {
-        sendRestFinishedNotification(context, splitTitle)
-    }
 }
 
 fun sendRestFinishedNotification(
@@ -165,27 +272,23 @@ fun sendRestFinishedNotification(
     splitTitle: String,
     detailText: String = "Rest is over! Time to start your next set."
 ) {
+    if (!hasNotificationPermission(context)) return
     try {
         ensureNotificationChannelCreated(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = android.app.PendingIntent.getActivity(
-            context,
-            0,
-            intent,
+            context, 0, intent,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
-
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.Notification.Builder(context, REST_NOTIFICATION_CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             android.app.Notification.Builder(context)
         }
-
         val notification = builder
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Rest Over • $splitTitle")
@@ -193,7 +296,6 @@ fun sendRestFinishedNotification(
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-
         manager.notify(1001, notification)
     } catch (_: Exception) {}
 }
@@ -210,9 +312,7 @@ object PhotoStorage {
             }
             memoryCache[file.absolutePath] = bitmap.asImageBitmap()
             file.absolutePath
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
     fun copyUriToInternalStorage(context: Context, uri: Uri): String? {
@@ -221,7 +321,6 @@ object PhotoStorage {
             val original = BitmapFactory.decodeStream(input)
             input.close()
             if (original == null) return null
-
             val maxDim = 1400
             val scaled = if (original.width > maxDim || original.height > maxDim) {
                 val ratio = minOf(maxDim.toFloat() / original.width, maxDim.toFloat() / original.height)
@@ -232,11 +331,8 @@ object PhotoStorage {
                     true
                 )
             } else original
-
             saveBitmapToInternalStorage(context, scaled)
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
     fun loadImageBitmap(path: String?): ImageBitmap? {
@@ -248,61 +344,119 @@ object PhotoStorage {
             val bmp = BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
             if (bmp != null) memoryCache[path] = bmp
             bmp
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 }
 
 object LocalStorage {
     private const val FILE_NAME = "gym_tracker_store_v2.json"
-    private val ioExecutor = Executors.newSingleThreadExecutor()
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var pendingWriteRunnable: Runnable? = null
 
-    @Volatile
-    private var cachedRoot: JSONObject? = null
-
+    @Synchronized
     private fun getRoot(context: Context): JSONObject {
-        cachedRoot?.let { return it }
-        val file = File(context.filesDir, FILE_NAME)
-        val loaded = if (!file.exists()) {
+        val file = File(context.applicationContext.filesDir, FILE_NAME)
+        if (!file.exists()) return JSONObject()
+        return try {
+            JSONObject(file.readText())
+        } catch (e: Exception) {
             JSONObject()
-        } else {
-            try {
-                JSONObject(file.readText())
-            } catch (e: Exception) {
-                JSONObject()
-            }
         }
-        cachedRoot = loaded
-        return loaded
     }
 
-    private fun saveRootDebounced(context: Context, root: JSONObject, immediate: Boolean = false) {
-        cachedRoot = root
+    @Synchronized
+    private fun saveRootSync(context: Context, root: JSONObject, notifyInApp: Boolean = false) {
         val appCtx = context.applicationContext
-        pendingWriteRunnable?.let { mainHandler.removeCallbacks(it) }
+        try {
+            File(appCtx.filesDir, FILE_NAME).writeText(root.toString())
+        } catch (_: Exception) {}
 
-        // Keep both the Home Screen Widget and Lock Screen Widget synced in real time
         GymWidgetProvider.refreshAllWidgets(appCtx)
+        MuscleFatigueWidgetProvider.refreshAll(appCtx)
+        SquarePulseWidgetProvider.refreshAll(appCtx)
         LockScreenWorkoutController.sync(appCtx)
 
-        val task = Runnable {
-            ioExecutor.execute {
-                try {
-                    val snapshot = synchronized(this) { root.toString() }
-                    File(appCtx.filesDir, FILE_NAME).writeText(snapshot)
-                } catch (_: Exception) {}
-            }
+        if (notifyInApp) {
+            try {
+                appCtx.sendBroadcast(Intent(ACTION_SESSION_SYNC).setPackage(appCtx.packageName))
+            } catch (_: Exception) {}
         }
+    }
 
-        if (immediate) {
-            task.run()
-        } else {
-            pendingWriteRunnable = task
-            mainHandler.postDelayed(task, 350L)
+    fun loadUserProfile(context: Context): UserProfile {
+        val root = getRoot(context)
+        val obj = root.optJSONObject("userProfile") ?: return UserProfile()
+        return UserProfile(
+            hasCompletedOnboarding = obj.optBoolean("hasCompletedOnboarding", false),
+            age = obj.optInt("age", 0),
+            currentWeightKg = obj.optDouble("currentWeightKg", 0.0).toFloat(),
+            splitProgram = obj.optString("splitProgram", "PPL_ARNOLD"),
+            currentStreakWeeks = obj.optInt("currentStreakWeeks", 0)
+        )
+    }
+
+    fun saveUserProfile(context: Context, profile: UserProfile) {
+        val root = getRoot(context)
+        val obj = JSONObject().apply {
+            put("hasCompletedOnboarding", profile.hasCompletedOnboarding)
+            put("age", profile.age)
+            put("currentWeightKg", profile.currentWeightKg.toDouble())
+            put("splitProgram", profile.splitProgram)
+            put("currentStreakWeeks", profile.currentStreakWeeks)
         }
+        root.put("userProfile", obj)
+        saveRootSync(context, root)
+    }
+
+    fun loadWeightHistory(context: Context): List<WeightLogEntry> {
+        val root = getRoot(context)
+        val arr = root.optJSONArray("weightHistory") ?: return emptyList()
+        val list = ArrayList<WeightLogEntry>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list.add(
+                WeightLogEntry(
+                    id = o.optLong("id"),
+                    dateKey = o.optString("dateKey"),
+                    displayDate = o.optString("displayDate"),
+                    weightKg = o.optDouble("weightKg", 0.0).toFloat()
+                )
+            )
+        }
+        return list.sortedByDescending { it.id }
+    }
+
+    fun addWeightLog(context: Context, weightKg: Float): List<WeightLogEntry> {
+        val root = getRoot(context)
+        val now = Date()
+        val rounded = (weightKg * 10f).roundToInt() / 10f
+        val arr = root.optJSONArray("weightHistory") ?: JSONArray()
+        val obj = JSONObject().apply {
+            put("id", System.currentTimeMillis())
+            put("dateKey", DateUtils.formatDayKey(now))
+            put("displayDate", DateUtils.formatDisplayDate(now))
+            put("weightKg", rounded.toDouble())
+        }
+        arr.put(obj)
+        root.put("weightHistory", arr)
+
+        val profObj = root.optJSONObject("userProfile") ?: JSONObject()
+        profObj.put("currentWeightKg", rounded.toDouble())
+        root.put("userProfile", profObj)
+
+        saveRootSync(context, root)
+        return loadWeightHistory(context)
+    }
+
+    fun deleteWeightLog(context: Context, id: Long): List<WeightLogEntry> {
+        val root = getRoot(context)
+        val arr = root.optJSONArray("weightHistory") ?: return emptyList()
+        val newArr = JSONArray()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (o.optLong("id") != id) newArr.put(o)
+        }
+        root.put("weightHistory", newArr)
+        saveRootSync(context, root)
+        return loadWeightHistory(context)
     }
 
     fun loadWidgetAppearance(context: Context): WidgetAppearance {
@@ -310,7 +464,7 @@ object LocalStorage {
         val obj = root.optJSONObject("widgetAppearance") ?: return WidgetAppearance()
         return WidgetAppearance(
             isDark = obj.optBoolean("isDark", true),
-            opacityPercent = obj.optInt("opacityPercent", 92).coerceIn(0, 100)
+            opacityPercent = obj.optInt("opacityPercent", 94).coerceIn(0, 100)
         )
     }
 
@@ -320,17 +474,15 @@ object LocalStorage {
             put("isDark", appearance.isDark)
             put("opacityPercent", appearance.opacityPercent.coerceIn(0, 100))
         }
-        synchronized(this) { root.put("widgetAppearance", obj) }
-        saveRootDebounced(context, root, immediate = true)
+        root.put("widgetAppearance", obj)
+        saveRootSync(context, root)
     }
 
-    fun setRestEndTimeMillis(context: Context, endTimeMillis: Long) {
+    fun setRestEndTimeMillis(context: Context, endTimeMillis: Long, fromWidget: Boolean = false) {
         val root = getRoot(context)
-        synchronized(this) {
-            val activeObj = root.optJSONObject("activeSession") ?: return
-            activeObj.put("restEndTimeMillis", endTimeMillis)
-        }
-        saveRootDebounced(context, root, immediate = true)
+        val activeObj = root.optJSONObject("activeSession") ?: return
+        activeObj.put("restEndTimeMillis", endTimeMillis)
+        saveRootSync(context, root, notifyInApp = fromWidget)
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, endTimeMillis)
     }
 
@@ -340,24 +492,16 @@ object LocalStorage {
     }
 
     fun exportJsonBackupString(context: Context): String {
-        val root = getRoot(context)
-        return synchronized(this) { root.toString(2) }
+        return getRoot(context).toString(2)
     }
 
     fun importJsonBackupString(context: Context, jsonContent: String): Boolean {
         return try {
-            val parsed = JSONObject(jsonContent)
-            synchronized(this) {
-                cachedRoot = parsed
-                File(context.filesDir, FILE_NAME).writeText(parsed.toString())
-            }
-            val appCtx = context.applicationContext
-            GymWidgetProvider.refreshAllWidgets(appCtx)
-            LockScreenWorkoutController.sync(appCtx)
+            val clean = jsonContent.removePrefix("\uFEFF").trim()
+            val parsed = JSONObject(clean)
+            saveRootSync(context, parsed)
             true
-        } catch (e: Exception) {
-            false
-        }
+        } catch (e: Exception) { false }
     }
 
     fun loadSettings(context: Context): AppSettings {
@@ -370,7 +514,8 @@ object LocalStorage {
             weightStepKg = obj.optDouble("weightStepKg", 2.5).toFloat(),
             restTimerSeconds = obj.optInt("restTimerSeconds", 90),
             keepScreenAwake = obj.optBoolean("keepScreenAwake", true),
-            restSoundEnabled = obj.optBoolean("restSoundEnabled", true)
+            restSoundEnabled = obj.optBoolean("restSoundEnabled", true),
+            themeChoice = obj.optString("themeChoice", "OBSIDIAN")
         )
     }
 
@@ -384,9 +529,10 @@ object LocalStorage {
             put("restTimerSeconds", settings.restTimerSeconds)
             put("keepScreenAwake", settings.keepScreenAwake)
             put("restSoundEnabled", settings.restSoundEnabled)
+            put("themeChoice", settings.themeChoice)
         }
-        synchronized(this) { root.put("settings", obj) }
-        saveRootDebounced(context, root, immediate = true)
+        root.put("settings", obj)
+        saveRootSync(context, root)
     }
 
     fun getExerciseNote(context: Context, exerciseName: String): String {
@@ -397,19 +543,31 @@ object LocalStorage {
 
     fun saveExerciseNote(context: Context, exerciseName: String, note: String) {
         val root = getRoot(context)
-        synchronized(this) {
-            val notesObj = root.optJSONObject("exerciseNotes") ?: JSONObject()
-            if (note.isBlank()) {
-                notesObj.remove(exerciseName.lowercase(Locale.US))
-            } else {
-                notesObj.put(exerciseName.lowercase(Locale.US), note.trim())
-            }
-            root.put("exerciseNotes", notesObj)
+        val notesObj = root.optJSONObject("exerciseNotes") ?: JSONObject()
+        if (note.isBlank()) {
+            notesObj.remove(exerciseName.lowercase(Locale.US))
+        } else {
+            notesObj.put(exerciseName.lowercase(Locale.US), note.trim())
         }
-        saveRootDebounced(context, root, immediate = true)
+        root.put("exerciseNotes", notesObj)
+        saveRootSync(context, root)
     }
 
-    private fun defaultTemplatesForSplit(splitTitle: String): List<Pair<String, String>> {
+    fun getExerciseDefaultRest(context: Context, exerciseName: String, fallback: Int): Int {
+        val root = getRoot(context)
+        val restObj = root.optJSONObject("exerciseRestDefaults") ?: return fallback
+        return restObj.optInt(exerciseName.lowercase(Locale.US), fallback)
+    }
+
+    fun saveExerciseDefaultRest(context: Context, exerciseName: String, restSec: Int) {
+        val root = getRoot(context)
+        val restObj = root.optJSONObject("exerciseRestDefaults") ?: JSONObject()
+        restObj.put(exerciseName.lowercase(Locale.US), restSec)
+        root.put("exerciseRestDefaults", restObj)
+        saveRootSync(context, root)
+    }
+
+    fun defaultTemplatesForSplit(splitTitle: String): List<Pair<String, String>> {
         return when (splitTitle) {
             "Push" -> listOf(
                 "Incline Bench Press" to "Upper Chest",
@@ -423,6 +581,19 @@ object LocalStorage {
                 "Face Pulls / Rear Delt Fly" to "Rear Delts",
                 "Preacher Curls" to "Biceps"
             )
+            "Legs", "Lower A" -> listOf(
+                "Barbell Squat / Hack Squat" to "Quads",
+                "Romanian Deadlift" to "Hamstrings",
+                "Leg Extension" to "Quads",
+                "Seated Leg Curl" to "Hamstrings",
+                "Standing Calf Raises" to "Calves"
+            )
+            "Lower B" -> listOf(
+                "Leg Press" to "Quads & Glutes",
+                "Lying Leg Curl" to "Hamstrings",
+                "Bulgarian Split Squat" to "Quads & Glutes",
+                "Seated Calf Raises" to "Calves"
+            )
             "Arms & Shoulders" -> listOf(
                 "Seated Dumbbell Shoulder Press" to "Shoulders",
                 "Cable Lateral Raises" to "Side Delts",
@@ -430,11 +601,36 @@ object LocalStorage {
                 "Overhead Cable Tricep Extension" to "Triceps",
                 "Hammer Curls" to "Brachialis"
             )
-            "Chest & Back" -> listOf(
+            "Chest & Back", "Upper A" -> listOf(
                 "Incline Dumbbell Press" to "Upper Chest",
                 "Weighted Pull-Ups / Lat Pulldown" to "Lats",
                 "Bench Press / Chest Press" to "Mid Chest",
                 "Chest-Supported Row" to "Upper Back"
+            )
+            "Upper B" -> listOf(
+                "Seated Shoulder Press" to "Shoulders",
+                "Cable Row" to "Mid Back",
+                "Cable Lateral Raises" to "Side Delts",
+                "Preacher Curls" to "Biceps",
+                "Tricep Rope Pushdowns" to "Triceps"
+            )
+            "Full Body A" -> listOf(
+                "Incline Dumbbell Press" to "Chest",
+                "Lat Pulldown" to "Lats",
+                "Leg Press / Squat" to "Legs",
+                "Lateral Raises" to "Side Delts"
+            )
+            "Full Body B" -> listOf(
+                "Seated Shoulder Press" to "Shoulders",
+                "Chest-Supported Row" to "Back",
+                "Romanian Deadlift" to "Hamstrings",
+                "Incline Dumbbell Curl" to "Biceps"
+            )
+            "Full Body C" -> listOf(
+                "Bench Press / Dips" to "Chest & Triceps",
+                "Weighted Pull-Ups" to "Lats",
+                "Leg Extension & Curl Superset" to "Legs",
+                "Overhead Tricep Extension" to "Triceps"
             )
             else -> emptyList()
         }
@@ -467,11 +663,9 @@ object LocalStorage {
             obj.put("muscle", muscle)
             arr.put(obj)
         }
-        synchronized(this) {
-            templatesObj.put(splitTitle, arr)
-            root.put("splitTemplates", templatesObj)
-        }
-        saveRootDebounced(context, root, immediate = true)
+        templatesObj.put(splitTitle, arr)
+        root.put("splitTemplates", templatesObj)
+        saveRootSync(context, root)
     }
 
     fun addExerciseToSplitTemplate(context: Context, splitTitle: String, name: String, muscle: String = "Custom") {
@@ -488,29 +682,30 @@ object LocalStorage {
         saveTemplateForSplit(context, splitTitle, current)
     }
 
-    fun saveActiveSession(context: Context, splitTitle: String?, exercises: List<ExerciseEntry>) {
+    fun saveActiveSession(
+        context: Context,
+        splitTitle: String?,
+        exercises: List<ExerciseEntry>,
+        fromWidget: Boolean = false
+    ) {
         val root = getRoot(context)
-        synchronized(this) {
-            if (splitTitle == null) {
-                root.remove("activeSession")
-            } else {
-                val prevObj = root.optJSONObject("activeSession")
-                val existingStart = prevObj?.optLong("startTimeMillis", 0L)
-                    ?.takeIf { it > 0L } ?: System.currentTimeMillis()
-                val existingRestEnd = prevObj?.optLong("restEndTimeMillis", 0L) ?: 0L
-
-                val activeObj = JSONObject()
-                activeObj.put("splitTitle", splitTitle)
-                activeObj.put("startTimeMillis", existingStart)
-                activeObj.put("restEndTimeMillis", existingRestEnd)
-                activeObj.put("exercises", serializeExercises(exercises))
-                root.put("activeSession", activeObj)
-            }
-        }
         if (splitTitle == null) {
+            root.remove("activeSession")
             RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
+        } else {
+            val prevObj = root.optJSONObject("activeSession")
+            val existingStart = prevObj?.optLong("startTimeMillis", 0L)
+                ?.takeIf { it > 0L } ?: System.currentTimeMillis()
+            val existingRestEnd = prevObj?.optLong("restEndTimeMillis", 0L) ?: 0L
+
+            val activeObj = JSONObject()
+            activeObj.put("splitTitle", splitTitle)
+            activeObj.put("startTimeMillis", existingStart)
+            activeObj.put("restEndTimeMillis", existingRestEnd)
+            activeObj.put("exercises", serializeExercises(exercises))
+            root.put("activeSession", activeObj)
         }
-        saveRootDebounced(context, root, immediate = splitTitle == null)
+        saveRootSync(context, root, notifyInApp = fromWidget)
     }
 
     fun getActiveSessionStartTime(context: Context): Long {
@@ -531,66 +726,68 @@ object LocalStorage {
 
     fun saveCompletedWorkout(context: Context, workout: CompletedWorkout) {
         val root = getRoot(context)
-        synchronized(this) {
-            val historyArr = root.optJSONArray("history") ?: JSONArray()
-            val obj = JSONObject().apply {
-                put("id", workout.id)
-                put("splitTitle", workout.splitTitle)
-                put("dateKey", workout.dateKey)
-                put("displayDate", workout.displayDate)
-                put("durationSeconds", workout.durationSeconds)
-                put("photoPath", workout.photoPath ?: "")
-                put("exercises", serializeExercises(workout.exercises))
-            }
-            historyArr.put(obj)
-            root.put("history", historyArr)
-            root.remove("activeSession")
+        val historyArr = root.optJSONArray("history") ?: JSONArray()
+        val skippedArr = JSONArray().apply { workout.skippedExercises.forEach { put(it) } }
+        val obj = JSONObject().apply {
+            put("id", workout.id)
+            put("splitTitle", workout.splitTitle)
+            put("dateKey", workout.dateKey)
+            put("displayDate", workout.displayDate)
+            put("durationSeconds", workout.durationSeconds)
+            put("bodyWeightKg", workout.bodyWeightKg.toDouble())
+            put("photoPath", workout.photoPath ?: "")
+            put("skippedExercises", skippedArr)
+            put("exercises", serializeExercises(workout.exercises))
+            put("totalVolumeKg", workout.totalVolumeKg)
+            put("prsHit", workout.prsHit)
         }
+        historyArr.put(obj)
+        root.put("history", historyArr)
+        root.remove("activeSession")
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
-        saveRootDebounced(context, root, immediate = true)
+        saveRootSync(context, root)
     }
 
     fun updateCompletedWorkout(context: Context, updatedWorkout: CompletedWorkout) {
         val root = getRoot(context)
-        synchronized(this) {
-            val arr = root.optJSONArray("history") ?: return
-            val newArr = JSONArray()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                if (obj.optLong("id") == updatedWorkout.id) {
-                    val replaced = JSONObject().apply {
-                        put("id", updatedWorkout.id)
-                        put("splitTitle", updatedWorkout.splitTitle)
-                        put("dateKey", updatedWorkout.dateKey)
-                        put("displayDate", updatedWorkout.displayDate)
-                        put("durationSeconds", updatedWorkout.durationSeconds)
-                        put("photoPath", updatedWorkout.photoPath ?: "")
-                        put("exercises", serializeExercises(updatedWorkout.exercises))
-                    }
-                    newArr.put(replaced)
-                } else {
-                    newArr.put(obj)
+        val arr = root.optJSONArray("history") ?: return
+        val newArr = JSONArray()
+        val skippedArr = JSONArray().apply { updatedWorkout.skippedExercises.forEach { put(it) } }
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            if (obj.optLong("id") == updatedWorkout.id) {
+                val replaced = JSONObject().apply {
+                    put("id", updatedWorkout.id)
+                    put("splitTitle", updatedWorkout.splitTitle)
+                    put("dateKey", updatedWorkout.dateKey)
+                    put("displayDate", updatedWorkout.displayDate)
+                    put("durationSeconds", updatedWorkout.durationSeconds)
+                    put("bodyWeightKg", updatedWorkout.bodyWeightKg.toDouble())
+                    put("photoPath", updatedWorkout.photoPath ?: "")
+                    put("skippedExercises", skippedArr)
+                    put("exercises", serializeExercises(updatedWorkout.exercises))
+                    put("totalVolumeKg", updatedWorkout.totalVolumeKg)
+                    put("prsHit", updatedWorkout.prsHit)
                 }
+                newArr.put(replaced)
+            } else {
+                newArr.put(obj)
             }
-            root.put("history", newArr)
         }
-        saveRootDebounced(context, root, immediate = true)
+        root.put("history", newArr)
+        saveRootSync(context, root)
     }
 
     fun deleteWorkoutFromHistory(context: Context, workoutId: Long) {
         val root = getRoot(context)
-        synchronized(this) {
-            val arr = root.optJSONArray("history") ?: return
-            val newArr = JSONArray()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                if (obj.optLong("id") != workoutId) {
-                    newArr.put(obj)
-                }
-            }
-            root.put("history", newArr)
+        val arr = root.optJSONArray("history") ?: return
+        val newArr = JSONArray()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            if (obj.optLong("id") != workoutId) newArr.put(obj)
         }
-        saveRootDebounced(context, root, immediate = true)
+        root.put("history", newArr)
+        saveRootSync(context, root)
     }
 
     fun loadHistory(context: Context): List<CompletedWorkout> {
@@ -600,6 +797,13 @@ object LocalStorage {
         for (i in 0 until arr.length()) {
             val obj = arr.getJSONObject(i)
             val rawPhoto = obj.optString("photoPath", "")
+            val skippedJson = obj.optJSONArray("skippedExercises")
+            val skippedList = mutableListOf<String>()
+            if (skippedJson != null) {
+                for (k in 0 until skippedJson.length()) {
+                    skippedList.add(skippedJson.optString(k))
+                }
+            }
             list.add(
                 CompletedWorkout(
                     id = obj.optLong("id"),
@@ -607,8 +811,12 @@ object LocalStorage {
                     dateKey = obj.optString("dateKey"),
                     displayDate = obj.optString("displayDate"),
                     durationSeconds = obj.optLong("durationSeconds", 0L),
+                    bodyWeightKg = obj.optDouble("bodyWeightKg", 0.0).toFloat(),
                     photoPath = rawPhoto.ifBlank { null },
-                    exercises = deserializeExercises(obj.optJSONArray("exercises"))
+                    skippedExercises = skippedList,
+                    exercises = deserializeExercises(obj.optJSONArray("exercises")),
+                    totalVolumeKg = obj.optInt("totalVolumeKg", 0),
+                    prsHit = obj.optInt("prsHit", 0)
                 )
             )
         }
@@ -617,20 +825,24 @@ object LocalStorage {
 
     private fun serializeExercises(exercises: List<ExerciseEntry>): JSONArray {
         val exArray = JSONArray()
-        for (i in exercises.indices) {
-            val ex = exercises[i]
+        for (ex in exercises) {
             val exObj = JSONObject()
             exObj.put("name", ex.name)
             exObj.put("targetMuscle", ex.targetMuscle)
+            exObj.put("restSeconds", ex.restSeconds)
+            exObj.put("isSkipped", ex.isSkipped)
+            exObj.put("isSuperset", ex.isSuperset)
             val setsArr = JSONArray()
             for (j in ex.sets.indices) {
                 val s = ex.sets[j]
                 val sObj = JSONObject()
                 sObj.put("setNumber", s.setNumber)
-                sObj.put("weight", s.weight)
-                sObj.put("reps", s.reps)
+                sObj.put("weight", s.weight.replace("kg", "", ignoreCase = true).trim())
+                sObj.put("reps", s.reps.replace("r", "", ignoreCase = true).trim())
                 sObj.put("isWarmup", s.isWarmup)
+                sObj.put("intensityType", s.intensityType)
                 sObj.put("isCompleted", s.isCompleted)
+                sObj.put("restSeconds", s.restSeconds)
                 setsArr.put(sObj)
             }
             exObj.put("sets", setsArr)
@@ -644,17 +856,26 @@ object LocalStorage {
         val list = ArrayList<ExerciseEntry>(arr.length())
         for (i in 0 until arr.length()) {
             val exObj = arr.getJSONObject(i)
+            val exRest = exObj.optInt("restSeconds", 90)
             val setsArr = exObj.optJSONArray("sets") ?: JSONArray()
             val sets = ArrayList<SetEntry>(setsArr.length())
             for (j in 0 until setsArr.length()) {
                 val sObj = setsArr.getJSONObject(j)
+                val rawWeight = (sObj.opt("weight")?.toString() ?: "20").replace("kg", "", ignoreCase = true).trim()
+                val rawReps = (sObj.opt("reps")?.toString() ?: "8").replace("r", "", ignoreCase = true).trim()
+
+                val oldIsWarmup = sObj.optBoolean("isWarmup", false)
+                val resolvedType = sObj.optString("intensityType", if (oldIsWarmup) "WARMUP" else "NORMAL")
+
                 sets.add(
                     SetEntry(
                         setNumber = sObj.optInt("setNumber", j + 1),
-                        weight = sObj.optString("weight", "20"),
-                        reps = sObj.optString("reps", "8"),
-                        isWarmup = sObj.optBoolean("isWarmup", false),
-                        isCompleted = sObj.optBoolean("isCompleted", false)
+                        weight = rawWeight,
+                        reps = rawReps,
+                        isWarmup = oldIsWarmup || resolvedType == "WARMUP",
+                        intensityType = resolvedType,
+                        isCompleted = sObj.optBoolean("isCompleted", false),
+                        restSeconds = sObj.optInt("restSeconds", exRest)
                     )
                 )
             }
@@ -662,7 +883,10 @@ object LocalStorage {
                 ExerciseEntry(
                     name = exObj.optString("name", ""),
                     targetMuscle = exObj.optString("targetMuscle", ""),
-                    sets = sets
+                    restSeconds = exRest,
+                    isSkipped = exObj.optBoolean("isSkipped", false),
+                    sets = sets,
+                    isSuperset = exObj.optBoolean("isSuperset", false)
                 )
             )
         }
@@ -684,12 +908,14 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
     val recentChartPoints = ArrayList<Pair<String, Float>>(5)
 
     for (workout in history) {
-        val matched = workout.exercises.find { it.name.equals(exerciseName, ignoreCase = true) } ?: continue
+        val matched = workout.exercises.find {
+            !it.isSkipped && it.name.equals(exerciseName, ignoreCase = true)
+        } ?: continue
         val workSets = matched.sets.filter {
-            !it.isWarmup && (it.weight.toFloatOrNull() ?: 0f) > 0f && (it.reps.toIntOrNull() ?: 0) > 0
+            !it.isWarmup && it.intensityType != "WARMUP" && parseWeightClean(it.weight, 0f) > 0f && parseRepsClean(it.reps, 0) > 0
         }
         if (workSets.isNotEmpty()) {
-            val sessionTopWeight = workSets.maxOfOrNull { it.weight.toFloatOrNull() ?: 0f } ?: 0f
+            val sessionTopWeight = workSets.maxOfOrNull { parseWeightClean(it.weight, 0f) } ?: 0f
             val shortDate = workout.displayDate.substringBefore(",")
             if (recentLogs.size < 5) {
                 val summary = workSets.joinToString(" • ") { "${it.weight}kg × ${it.reps}" }
@@ -697,8 +923,8 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
                 recentChartPoints.add(shortDate to sessionTopWeight)
             }
             for (s in workSets) {
-                val w = s.weight.toFloatOrNull() ?: 0f
-                val r = s.reps.toIntOrNull() ?: 0
+                val w = parseWeightClean(s.weight, 0f)
+                val r = parseRepsClean(s.reps, 0)
                 val e1rm = calculateEstimated1Rm(w, r)
                 if (w > maxWeight) maxWeight = w
                 if (e1rm > best1Rm) {
@@ -719,16 +945,21 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
 }
 
 fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords): Boolean {
-    if (setEntry.isWarmup || !setEntry.isCompleted) return false
-    val w = setEntry.weight.toFloatOrNull() ?: return false
-    val r = setEntry.reps.toIntOrNull() ?: return false
+    if (setEntry.isWarmup || setEntry.intensityType == "WARMUP" || !setEntry.isCompleted) return false
+    val w = parseWeightClean(setEntry.weight, 0f)
+    val r = parseRepsClean(setEntry.reps, 0)
     if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0) return false
     val current1Rm = calculateEstimated1Rm(w, r).roundToInt()
     return current1Rm > records.bestEstimated1Rm || w > records.maxWeightKg
 }
 
-fun computeWeekSummary(history: List<CompletedWorkout>, weekOffset: Int = 0): WeekSummaryData {
-    val coreRotation = listOf("Push", "Pull", "Arms & Shoulders")
+fun computeWeekSummary(
+    history: List<CompletedWorkout>,
+    weekOffset: Int = 0,
+    splitProgramId: String = "PPL_ARNOLD"
+): WeekSummaryData {
+    val prog = SPLIT_PROGRAMS[splitProgramId] ?: SPLIT_PROGRAMS["PPL_ARNOLD"]!!
+    val coreRotation = prog.splits.map { it.title }
 
     val startCal = Calendar.getInstance()
     startCal.firstDayOfWeek = Calendar.SUNDAY
@@ -757,6 +988,16 @@ fun computeWeekSummary(history: List<CompletedWorkout>, weekOffset: Int = 0): We
     val completedCore = doneTitles.intersect(coreRotation.toSet())
     val remainingCore = coreRotation.filter { it !in completedCore }
 
+    val fatigued = mutableSetOf<String>()
+    weekWorkouts.forEach { w ->
+        val title = w.splitTitle.lowercase(Locale.US)
+        if (title.contains("push") || title.contains("chest")) fatigued.addAll(listOf("Chest", "Front Delts", "Triceps"))
+        if (title.contains("pull") || title.contains("back")) fatigued.addAll(listOf("Lats", "Upper Back", "Biceps"))
+        if (title.contains("legs") || title.contains("lower")) fatigued.addAll(listOf("Quads", "Hamstrings", "Glutes", "Calves"))
+        if (title.contains("arms")) fatigued.addAll(listOf("Biceps", "Triceps", "Side Delts"))
+        if (title.contains("full")) fatigued.addAll(listOf("Chest", "Back", "Legs"))
+    }
+
     val titleLabel = when (weekOffset) {
         0 -> "THIS WEEK"
         -1 -> "LAST WEEK"
@@ -764,11 +1005,11 @@ fun computeWeekSummary(history: List<CompletedWorkout>, weekOffset: Int = 0): We
     }
 
     val (recommendedSplit, reasonText) = if (remainingCore.isNotEmpty()) {
-        remainingCore.first() to "${completedCore.size}/3 CORE SPLITS DONE"
+        remainingCore.first() to "${completedCore.size}/${prog.weeklyGoal} CORE SPLITS DONE"
     } else {
         val weekSeed = startCal.get(Calendar.YEAR) * 100 + startCal.get(Calendar.WEEK_OF_YEAR)
         val bonusSplit = coreRotation[Random(weekSeed).nextInt(coreRotation.size)]
-        bonusSplit to "ALL 3 DONE • WEEKLY BONUS"
+        bonusSplit to "ALL ${prog.weeklyGoal} DONE • WEEKLY BONUS"
     }
 
     return WeekSummaryData(
@@ -778,7 +1019,9 @@ fun computeWeekSummary(history: List<CompletedWorkout>, weekOffset: Int = 0): We
         workouts = weekWorkouts,
         completedCoreSplits = completedCore,
         recommendedSplit = recommendedSplit,
-        reasonText = reasonText
+        reasonText = reasonText,
+        weeklyGoal = prog.weeklyGoal,
+        fatiguedMuscles = fatigued.toList()
     )
 }
 
@@ -790,49 +1033,32 @@ fun evaluateSplitIsolatedAi(
 ): AiAdvice? {
     val sameSplitWorkouts = history.filter { it.splitTitle.equals(splitTitle, ignoreCase = true) }
 
-    val pastExerciseSessions = sameSplitWorkouts.mapNotNull { workout ->
-        val matched = workout.exercises.find { it.name.equals(exercise.name, ignoreCase = true) }
+    val pastSessions = sameSplitWorkouts.mapNotNull { workout ->
+        val matched = workout.exercises.find {
+            !it.isSkipped && it.name.equals(exercise.name, ignoreCase = true)
+        }
         val validWorkSets = matched?.sets?.filter {
-            !it.isWarmup && (it.weight.toFloatOrNull() ?: 0f) > 0f && (it.reps.toIntOrNull() ?: 0) > 0
+            !it.isWarmup && it.intensityType != "WARMUP" && parseWeightClean(it.weight, 0f) > 0f && parseRepsClean(it.reps, 0) > 0
         }.orEmpty()
         if (validWorkSets.isNotEmpty()) validWorkSets else null
     }
 
-    if (pastExerciseSessions.isEmpty()) return null
+    if (pastSessions.isEmpty()) return null
 
-    val prevSessionSets = pastExerciseSessions[0]
-    val prevTopSet = prevSessionSets.maxByOrNull { it.weight.toFloatOrNull() ?: 0f } ?: prevSessionSets.first()
-    val prevWeight = prevTopSet.weight.toFloatOrNull() ?: 0f
+    val prevSessionSets = pastSessions[0]
+    val prevTopSet = prevSessionSets.maxByOrNull { parseWeightClean(it.weight, 0f) } ?: prevSessionSets.first()
+    val prevWeight = parseWeightClean(prevTopSet.weight, 0f)
     val prevWeightStr = prevTopSet.weight
 
-    val prevHad8Plus = prevSessionSets.any { (it.reps.toIntOrNull() ?: 0) >= 8 }
-    val prevHad6OrLess = prevSessionSets.any { (it.reps.toIntOrNull() ?: 0) in 1..6 }
+    if (pastSessions.size >= 3) {
+        val vol1 = prevSessionSets.sumOf { (parseWeightClean(it.weight, 0f) * parseRepsClean(it.reps, 0)).toDouble() }
+        val vol2 = pastSessions[1].sumOf { (parseWeightClean(it.weight, 0f) * parseRepsClean(it.reps, 0)).toDouble() }
+        val vol3 = pastSessions[2].sumOf { (parseWeightClean(it.weight, 0f) * parseRepsClean(it.reps, 0)).toDouble() }
 
-    val completedTodayWorkSets = exercise.sets.filter {
-        !it.isWarmup && it.isCompleted && (it.reps.toIntOrNull() ?: 0) > 0
-    }
-    val currentHas8Plus = completedTodayWorkSets.any { (it.reps.toIntOrNull() ?: 0) >= 8 }
-    val currentHas6OrLess = completedTodayWorkSets.any { (it.reps.toIntOrNull() ?: 0) in 1..6 }
-
-    fun formatKg(value: Float): String {
-        val clamped = value.coerceAtLeast(0f)
-        return if (clamped % 1f == 0f) "${clamped.toInt()}" else "$clamped"
-    }
-
-    if (completedTodayWorkSets.isNotEmpty()) {
-        if (prevHad8Plus && currentHas8Plus) {
-            val nextW = formatKg(prevWeight + stepKg)
+        if (vol1 < vol2 && vol2 < vol3 && vol1 > 0) {
+            val dropW = formatKgClean(prevWeight * 0.9f)
             return AiAdvice(
-                message = "2× 8+ rep streak on $splitTitle → Up weight to ${nextW}kg",
-                isPositive = true,
-                isWarning = false,
-                suggestedWeight = nextW
-            )
-        }
-        if (prevHad6OrLess && currentHas6OrLess) {
-            val dropW = formatKg(prevWeight - stepKg)
-            return AiAdvice(
-                message = "2× ≤6 reps on $splitTitle → Drop weight to ${dropW}kg",
+                message = "⚠️ Volume dropped 3 sessions in a row. SMART DELOAD active. Use ${dropW}kg to recover.",
                 isPositive = false,
                 isWarning = true,
                 suggestedWeight = dropW
@@ -840,24 +1066,55 @@ fun evaluateSplitIsolatedAi(
         }
     }
 
-    if (pastExerciseSessions.size >= 2) {
-        val twoAgoSets = pastExerciseSessions[1]
-        val twoAgoHad8Plus = twoAgoSets.any { (it.reps.toIntOrNull() ?: 0) >= 8 }
-        val twoAgoHad6OrLess = twoAgoSets.any { (it.reps.toIntOrNull() ?: 0) in 1..6 }
+    val prevHad8Plus = prevSessionSets.any { parseRepsClean(it.reps, 0) >= 8 }
+    val prevHad6OrLess = prevSessionSets.any { parseRepsClean(it.reps, 0) in 1..6 }
+
+    val completedTodayWorkSets = exercise.sets.filter {
+        !it.isWarmup && it.intensityType != "WARMUP" && it.isCompleted && parseRepsClean(it.reps, 0) > 0
+    }
+
+    if (completedTodayWorkSets.isNotEmpty()) {
+        val currentHas8Plus = completedTodayWorkSets.any { parseRepsClean(it.reps, 0) >= 8 }
+        val currentHas6OrLess = completedTodayWorkSets.any { parseRepsClean(it.reps, 0) in 1..6 }
+
+        if (prevHad8Plus && currentHas8Plus) {
+            val nextW = formatKgClean(prevWeight + stepKg)
+            return AiAdvice(
+                message = "⚡ 2× 8+ rep streak on $splitTitle → Increase to ${nextW}kg",
+                isPositive = true,
+                isWarning = false,
+                suggestedWeight = nextW
+            )
+        }
+        if (prevHad6OrLess && currentHas6OrLess) {
+            val dropW = formatKgClean(prevWeight - stepKg)
+            return AiAdvice(
+                message = "⚠️ 2× ≤6 reps on $splitTitle → Deload to ${dropW}kg",
+                isPositive = false,
+                isWarning = true,
+                suggestedWeight = dropW
+            )
+        }
+    }
+
+    if (pastSessions.size >= 2) {
+        val twoAgoSets = pastSessions[1]
+        val twoAgoHad8Plus = twoAgoSets.any { parseRepsClean(it.reps, 0) >= 8 }
+        val twoAgoHad6OrLess = twoAgoSets.any { parseRepsClean(it.reps, 0) in 1..6 }
 
         if (prevHad8Plus && twoAgoHad8Plus) {
-            val nextW = formatKg(prevWeight + stepKg)
+            val nextW = formatKgClean(prevWeight + stepKg)
             return AiAdvice(
-                message = "8+ reps in last 2 $splitTitle sessions → Up to ${nextW}kg today",
+                message = "⚡ 8+ reps in last 2 $splitTitle sessions → Push ${nextW}kg today",
                 isPositive = true,
                 isWarning = false,
                 suggestedWeight = nextW
             )
         }
         if (prevHad6OrLess && twoAgoHad6OrLess) {
-            val dropW = formatKg(prevWeight - stepKg)
+            val dropW = formatKgClean(prevWeight - stepKg)
             return AiAdvice(
-                message = "≤6 reps in last 2 $splitTitle sessions → Drop to ${dropW}kg today",
+                message = "⚠️ ≤6 reps in last 2 $splitTitle sessions → Drop to ${dropW}kg",
                 isPositive = false,
                 isWarning = true,
                 suggestedWeight = dropW
@@ -867,19 +1124,19 @@ fun evaluateSplitIsolatedAi(
 
     return when {
         prevHad8Plus -> AiAdvice(
-            message = "Last $splitTitle: ${prevWeightStr}kg (8+ reps) • Hit 8+ again to move up",
+            message = "TARGET • Last $splitTitle: ${prevWeightStr}kg (8+ reps) • Repeat 8+ to progress",
             isPositive = false,
             isWarning = false,
             suggestedWeight = prevWeightStr
         )
         prevHad6OrLess -> AiAdvice(
-            message = "Last $splitTitle: ${prevWeightStr}kg (≤6 reps) • Push for 7–8 today",
+            message = "TARGET • Last $splitTitle: ${prevWeightStr}kg (≤6 reps) • Aim for 7–8 reps",
             isPositive = false,
             isWarning = true,
             suggestedWeight = prevWeightStr
         )
         else -> AiAdvice(
-            message = "Last $splitTitle top set: ${prevWeightStr}kg (6–8 rep zone)",
+            message = "TARGET • Last $splitTitle top set: ${prevWeightStr}kg (6–8 rep zone)",
             isPositive = false,
             isWarning = false,
             suggestedWeight = prevWeightStr
@@ -887,7 +1144,6 @@ fun evaluateSplitIsolatedAi(
     }
 }
 
-// --- System-Level Rest Timer Scheduler (Works With Screen Off, In Background & From Widget) ---
 object RestAlarmScheduler {
     private val fallbackHandler = Handler(Looper.getMainLooper())
     private var fallbackRunnable: Runnable? = null
@@ -896,9 +1152,7 @@ object RestAlarmScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
         val intent = Intent(context, RestAlarmReceiver::class.java)
         val pendingIntent = android.app.PendingIntent.getBroadcast(
-            context,
-            777,
-            intent,
+            context, 777, intent,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -929,9 +1183,7 @@ object RestAlarmScheduler {
             } catch (_: Exception) {}
         }
 
-        val task = Runnable {
-            triggerRestFinishedAlert(context)
-        }
+        val task = Runnable { triggerRestFinishedAlert(context) }
         fallbackRunnable = task
         fallbackHandler.postDelayed(task, delayMillis)
     }
@@ -944,11 +1196,10 @@ object RestAlarmScheduler {
         val settings = LocalStorage.loadSettings(context)
         val active = LocalStorage.loadActiveSession(context)
 
-        // Clearing restEndTimeMillis automatically refreshes both Home Screen & Lock Screen widgets!
-        LocalStorage.setRestEndTimeMillis(context, 0L)
+        LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
 
         val splitTitle = active?.first ?: "Workout"
-        val nextEx = active?.second?.firstOrNull { ex -> ex.sets.any { !it.isCompleted } }
+        val nextEx = active?.second?.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
         val nextSet = nextEx?.sets?.firstOrNull { !it.isCompleted }
 
         val detailLine = if (nextEx != null && nextSet != null) {
@@ -959,10 +1210,39 @@ object RestAlarmScheduler {
 
         if (settings.restSoundEnabled) {
             try {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val focusRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                        .setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build()
+                        )
+                        .build()
+                } else null
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    audioManager.requestAudioFocus(focusRequest!!)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.requestAudioFocus(
+                        null,
+                        AudioManager.STREAM_NOTIFICATION,
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                    )
+                }
+
                 val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85)
                 toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 260)
                 Handler(Looper.getMainLooper()).postDelayed({
                     try { toneGen.release() } catch (_: Exception) {}
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        audioManager.abandonAudioFocusRequest(focusRequest!!)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        audioManager.abandonAudioFocus(null)
+                    }
                 }, 320L)
             } catch (_: Exception) {}
         }
@@ -977,7 +1257,6 @@ class RestAlarmReceiver : android.content.BroadcastReceiver() {
     }
 }
 
-// --- Long-Press Home Screen Widget Settings Activity (Dark/Light Mode & Opacity Slider) ---
 class WidgetConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -996,7 +1275,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
             Surface(
                 modifier = Modifier.fillMaxSize(),
-                color = Color(0xFF0F1115)
+                color = Color(0xFF07080A)
             ) {
                 Column(
                     modifier = Modifier
@@ -1010,20 +1289,21 @@ class WidgetConfigActivity : ComponentActivity() {
                         Text(
                             text = "Widget Appearance",
                             fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFF3F4F6)
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFFFAFAFC)
                         )
 
-                        val previewBg = if (appearance.isDark) Color(0xFF181B22) else Color(0xFFFFFFFF)
-                        val previewText = if (appearance.isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
-                        val previewSub = if (appearance.isDark) Color(0xFF8E95A5) else Color(0xFF6B7280)
+                        val previewBg = if (appearance.isDark) Color(0xFF111318) else Color(0xFFFFFFFF)
+                        val previewText = if (appearance.isDark) Color(0xFFFAFAFC) else Color(0xFF0B0F19)
+                        val previewSub = if (appearance.isDark) Color(0xFF8A93A6) else Color(0xFF5B6478)
+                        val previewAccent = if (appearance.isDark) Color(0xFFCCFF00) else Color(0xFFFF4500)
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(130.dp)
                                 .clip(RoundedCornerShape(22.dp))
-                                .background(Color(0xFF283040))
+                                .background(Color(0xFF1E222B))
                                 .padding(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1038,10 +1318,10 @@ class WidgetConfigActivity : ComponentActivity() {
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
-                                        text = "RECOMMENDED NEXT",
+                                        text = "UP NEXT",
                                         fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF3B82F6)
+                                        fontWeight = FontWeight.Black,
+                                        color = previewAccent
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -1061,19 +1341,19 @@ class WidgetConfigActivity : ComponentActivity() {
 
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFF181B22),
+                            color = Color(0xFF111318),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
                                     text = "Widget Theme",
                                     fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFF3F4F6)
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFAFAFC)
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    listOf(true to "Dark Mode", false to "Light Mode").forEach { (isDarkOpt, label) ->
+                                    listOf(true to "Obsidian Volt", false to "Arctic Light").forEach { (isDarkOpt, label) ->
                                         val selected = appearance.isDark == isDarkOpt
                                         Surface(
                                             modifier = Modifier
@@ -1083,7 +1363,7 @@ class WidgetConfigActivity : ComponentActivity() {
                                                 .clickable {
                                                     appearance = appearance.copy(isDark = isDarkOpt)
                                                 },
-                                            color = if (selected) Color(0xFF3B82F6) else Color(0xFF222630),
+                                            color = if (selected) Color(0xFFCCFF00) else Color(0xFF1E222B),
                                             shape = RoundedCornerShape(10.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
@@ -1091,7 +1371,7 @@ class WidgetConfigActivity : ComponentActivity() {
                                                     text = label,
                                                     fontSize = 13.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = Color.White
+                                                    color = if (selected) Color(0xFF07080A) else Color.White
                                                 )
                                             }
                                         }
@@ -1102,7 +1382,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFF181B22),
+                            color = Color(0xFF111318),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
@@ -1113,14 +1393,14 @@ class WidgetConfigActivity : ComponentActivity() {
                                     Text(
                                         text = "Background Opacity",
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFF3F4F6)
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFAFAFC)
                                     )
                                     Text(
                                         text = "${appearance.opacityPercent}%",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF3B82F6)
+                                        color = Color(0xFFCCFF00)
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -1131,8 +1411,8 @@ class WidgetConfigActivity : ComponentActivity() {
                                     },
                                     valueRange = 0f..100f,
                                     colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFF3B82F6),
-                                        activeTrackColor = Color(0xFF3B82F6)
+                                        thumbColor = Color(0xFFCCFF00),
+                                        activeTrackColor = Color(0xFFCCFF00)
                                     )
                                 )
                             }
@@ -1142,8 +1422,11 @@ class WidgetConfigActivity : ComponentActivity() {
                     Button(
                         onClick = {
                             LocalStorage.saveWidgetAppearance(this@WidgetConfigActivity, appearance)
+                            // Refresh all 3 widgets instantly when settings are saved
                             GymWidgetProvider.refreshAllWidgets(this@WidgetConfigActivity)
-                            LockScreenWorkoutController.sync(this@WidgetConfigActivity)
+                            MuscleFatigueWidgetProvider.refreshAll(this@WidgetConfigActivity)
+                            SquarePulseWidgetProvider.refreshAll(this@WidgetConfigActivity)
+
                             setResult(Activity.RESULT_OK, resultValue)
                             finish()
                         },
@@ -1151,13 +1434,13 @@ class WidgetConfigActivity : ComponentActivity() {
                             .fillMaxWidth()
                             .height(54.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCCFF00))
                     ) {
                         Text(
-                            text = "Apply to Widget",
+                            text = "Apply to Widgets",
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF07080A)
                         )
                     }
                 }
@@ -1166,7 +1449,6 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 }
 
-// --- Non-Dismissible S26 Ultra Lock Screen Live Workout Widget ---
 object LockScreenWorkoutController {
     private const val LIVE_WORKOUT_CHANNEL_ID = "gym_live_lockscreen_channel"
     private const val LIVE_NOTIFICATION_ID = 2002
@@ -1177,10 +1459,12 @@ object LockScreenWorkoutController {
             val channel = android.app.NotificationChannel(
                 LIVE_WORKOUT_CHANNEL_ID,
                 "Active Workout Lock Screen Widget",
-                android.app.NotificationManager.IMPORTANCE_LOW
+                android.app.NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Shows interactive workout controls on the lock screen during an active session"
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
+                enableVibration(false)
                 setShowBadge(false)
             }
             manager.createNotificationChannel(channel)
@@ -1190,11 +1474,10 @@ object LockScreenWorkoutController {
     private fun getBroadcastPending(context: Context, action: String, reqCode: Int): android.app.PendingIntent {
         val intent = Intent(context, GymWidgetProvider::class.java).apply {
             this.action = action
+            setPackage(context.packageName)
         }
         return android.app.PendingIntent.getBroadcast(
-            context,
-            reqCode,
-            intent,
+            context, reqCode, intent,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
     }
@@ -1212,9 +1495,9 @@ object LockScreenWorkoutController {
             ensureChannel(context)
 
             val splitName = active.first
-            val exercises = active.second
-            val currentExercise = exercises.firstOrNull { ex -> ex.sets.any { !it.isCompleted } }
-            val totalSetsLeft = exercises.sumOf { ex -> ex.sets.count { !it.isCompleted } }
+            val activeExercises = active.second.filter { !it.isSkipped }
+            val currentExercise = activeExercises.firstOrNull { ex -> ex.sets.any { !it.isCompleted } }
+            val totalSetsLeft = activeExercises.sumOf { ex -> ex.sets.count { !it.isCompleted } }
 
             val restEndMillis = LocalStorage.getRestEndTimeMillis(context)
             val remainingMillis = restEndMillis - System.currentTimeMillis()
@@ -1227,7 +1510,7 @@ object LockScreenWorkoutController {
                 totalSetsLeft = totalSetsLeft,
                 isResting = isResting,
                 remainingMillis = remainingMillis,
-                showControls = false
+                isCompactCollapsed = true
             )
 
             val expandedView = buildLockScreenRemoteViews(
@@ -1237,16 +1520,14 @@ object LockScreenWorkoutController {
                 totalSetsLeft = totalSetsLeft,
                 isResting = isResting,
                 remainingMillis = remainingMillis,
-                showControls = true
+                isCompactCollapsed = false
             )
 
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val openAppPending = android.app.PendingIntent.getActivity(
-                context,
-                0,
-                openAppIntent,
+                context, 0, openAppIntent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -1266,6 +1547,7 @@ object LockScreenWorkoutController {
                 .setContentIntent(openAppPending)
                 .setCustomContentView(collapsedView)
                 .setCustomBigContentView(expandedView)
+                .setCustomHeadsUpContentView(expandedView)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 builder.setForegroundServiceBehavior(android.app.Notification.FOREGROUND_SERVICE_IMMEDIATE)
@@ -1282,56 +1564,34 @@ object LockScreenWorkoutController {
         totalSetsLeft: Int,
         isResting: Boolean,
         remainingMillis: Long,
-        showControls: Boolean
+        isCompactCollapsed: Boolean
     ): android.widget.RemoteViews {
         val views = android.widget.RemoteViews(context.packageName, R.layout.gym_widget)
         val appearance = LocalStorage.loadWidgetAppearance(context)
 
-        val bgColorInt = if (appearance.isDark) {
-            android.graphics.Color.parseColor("#181B22")
-        } else {
-            android.graphics.Color.parseColor("#FFFFFF")
-        }
-        val pillBgColorInt = if (appearance.isDark) {
-            android.graphics.Color.parseColor("#242936")
-        } else {
-            android.graphics.Color.parseColor("#EEF1F6")
-        }
-        val primaryTextColor = if (appearance.isDark) {
-            android.graphics.Color.parseColor("#F3F4F6")
-        } else {
-            android.graphics.Color.parseColor("#111827")
-        }
-        val secondaryTextColor = if (appearance.isDark) {
-            android.graphics.Color.parseColor("#8E95A5")
-        } else {
-            android.graphics.Color.parseColor("#6B7280")
-        }
-        val accentBlue = android.graphics.Color.parseColor(if (appearance.isDark) "#3B82F6" else "#2563EB")
-        val accentGreen = android.graphics.Color.parseColor(if (appearance.isDark) "#10B981" else "#059669")
+        val bgColorInt = android.graphics.Color.parseColor(if (appearance.isDark) "#111318" else "#FFFFFF")
+        val pillBgColorInt = android.graphics.Color.parseColor(if (appearance.isDark) "#1E222B" else "#E6EAF2")
+        val primaryTextColor = android.graphics.Color.parseColor(if (appearance.isDark) "#FAFAFC" else "#0B0F19")
+        val secondaryTextColor = android.graphics.Color.parseColor(if (appearance.isDark) "#8A93A6" else "#5B6478")
+        val accentVolt = android.graphics.Color.parseColor(if (appearance.isDark) "#CCFF00" else "#FF4500")
+        val accentCyan = android.graphics.Color.parseColor(if (appearance.isDark) "#00F0FF" else "#0066FF")
 
         views.setInt(R.id.widget_bg_image, "setColorFilter", bgColorInt)
         views.setInt(R.id.widget_bg_image, "setImageAlpha", 255)
         views.setInt(R.id.widget_weight_pill_bg, "setColorFilter", pillBgColorInt)
         views.setInt(R.id.widget_reps_pill_bg, "setColorFilter", pillBgColorInt)
-        views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accentGreen)
+        views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accentVolt)
 
         views.setTextColor(R.id.widget_split_title, primaryTextColor)
         views.setTextColor(R.id.widget_subtitle, secondaryTextColor)
         views.setTextColor(R.id.widget_weight_value, primaryTextColor)
         views.setTextColor(R.id.widget_reps_value, primaryTextColor)
-        views.setTextColor(R.id.widget_btn_weight_plus, accentBlue)
-        views.setTextColor(R.id.widget_btn_reps_plus, accentBlue)
+        views.setTextColor(R.id.widget_btn_weight_plus, accentVolt)
+        views.setTextColor(R.id.widget_btn_reps_plus, accentVolt)
         views.setTextColor(R.id.widget_btn_weight_minus, secondaryTextColor)
         views.setTextColor(R.id.widget_btn_reps_minus, secondaryTextColor)
-        views.setTextColor(R.id.widget_action_badge, accentBlue)
-        views.setTextColor(R.id.widget_rest_chronometer, accentGreen)
-
-        views.setTextViewText(
-            R.id.widget_status_label,
-            if (isResting) "${splitName.uppercase()} • RESTING" else "${splitName.uppercase()} • LIVE WORKOUT"
-        )
-        views.setTextColor(R.id.widget_status_label, accentGreen)
+        views.setTextColor(R.id.widget_action_badge, accentVolt)
+        views.setTextColor(R.id.widget_rest_chronometer, accentCyan)
 
         if (currentExercise != null && totalSetsLeft > 0) {
             val nextSetIndex = currentExercise.sets.indexOfFirst { !it.isCompleted }
@@ -1340,29 +1600,41 @@ object LockScreenWorkoutController {
 
             var workNum = 0
             for (i in 0..nextSetIndex) {
-                if (!currentExercise.sets[i].isWarmup) workNum++
+                if (!currentExercise.sets[i].isWarmup && currentExercise.sets[i].intensityType != "WARMUP") workNum++
             }
-            val setLabel = if (nextSet.isWarmup) "Warmup Set" else "Work Set $workNum"
+            val setLabel = if (nextSet.isWarmup || nextSet.intensityType == "WARMUP") "Warmup" else "Set $workNum"
+            val cleanW = formatKgClean(parseWeightClean(nextSet.weight, 20f))
+            val cleanR = parseRepsClean(nextSet.reps, 8)
 
+            views.setTextViewText(
+                R.id.widget_status_label,
+                if (isResting) "${splitName.uppercase()} • RESTING"
+                else "${splitName.uppercase()} • ${setLabel.uppercase()} ($currentExSetsLeft LEFT)"
+            )
+            views.setTextColor(R.id.widget_status_label, if (isResting) accentCyan else accentVolt)
             views.setTextViewText(R.id.widget_split_title, currentExercise.name)
 
             if (isResting) {
                 views.setViewVisibility(R.id.widget_controls_row, View.GONE)
+                views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    "Resting • Next: $setLabel (${nextSet.weight}kg × ${nextSet.reps})"
+                    "Up Next: $setLabel • ${cleanW}kg × $cleanR reps"
                 )
             } else {
-                views.setViewVisibility(
-                    R.id.widget_controls_row,
-                    if (showControls) View.VISIBLE else View.GONE
-                )
-                views.setTextViewText(
-                    R.id.widget_subtitle,
-                    "$setLabel (${nextSet.weight}kg × ${nextSet.reps}) • $currentExSetsLeft left ($totalSetsLeft total)"
-                )
-                views.setTextViewText(R.id.widget_weight_value, "${nextSet.weight}kg")
-                views.setTextViewText(R.id.widget_reps_value, "${nextSet.reps} reps")
+                views.setViewVisibility(R.id.widget_controls_row, View.VISIBLE)
+                if (isCompactCollapsed) {
+                    views.setViewVisibility(R.id.widget_subtitle, View.GONE)
+                } else {
+                    views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
+                    views.setTextViewText(
+                        R.id.widget_subtitle,
+                        "$setLabel (${cleanW}kg × $cleanR) • $totalSetsLeft total sets left"
+                    )
+                }
+
+                views.setTextViewText(R.id.widget_weight_value, "${cleanW}kg")
+                views.setTextViewText(R.id.widget_reps_value, "${cleanR}r")
 
                 views.setOnClickPendingIntent(
                     R.id.widget_btn_weight_minus,
@@ -1387,6 +1659,9 @@ object LockScreenWorkoutController {
             }
         } else {
             views.setViewVisibility(R.id.widget_controls_row, View.GONE)
+            views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
+            views.setTextViewText(R.id.widget_status_label, "${splitName.uppercase()} • COMPLETE")
+            views.setTextColor(R.id.widget_status_label, accentVolt)
             views.setTextViewText(R.id.widget_split_title, "All Sets Completed 🎉")
             views.setTextViewText(R.id.widget_subtitle, "Tap to open app & save $splitName")
         }
@@ -1401,7 +1676,7 @@ object LockScreenWorkoutController {
             views.setChronometer(
                 R.id.widget_rest_chronometer,
                 baseElapsed,
-                "⏱ Rest %s",
+                "⏱ %s",
                 true
             )
         } else {
@@ -1414,7 +1689,6 @@ object LockScreenWorkoutController {
     }
 }
 
-// --- Responsive 2x2 Box / 4x2 Rectangle Home Screen Widget Provider ---
 class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -1428,7 +1702,7 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
                 ACTION_COMPLETE_SET
             )
         ) {
-            handleWidgetSetAction(context, action)
+            handleWidgetSetAction(context.applicationContext, action)
         }
     }
 
@@ -1460,7 +1734,6 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
         const val ACTION_COMPLETE_SET = "com.example.gymtracker.ACTION_COMPLETE_SET"
 
         private fun handleWidgetSetAction(context: Context, action: String) {
-            // Block logging or changing sets while the rest timer is still active
             val restEndMillis = LocalStorage.getRestEndTimeMillis(context)
             if (restEndMillis - System.currentTimeMillis() > 1000L) {
                 refreshAllWidgets(context)
@@ -1473,7 +1746,7 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
             val exercises = active.second.toMutableList()
             val settings = LocalStorage.loadSettings(context)
 
-            val exIdx = exercises.indexOfFirst { ex -> ex.sets.any { !it.isCompleted } }
+            val exIdx = exercises.indexOfFirst { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
             if (exIdx == -1) return
 
             val currentEx = exercises[exIdx]
@@ -1485,87 +1758,71 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
 
             when (action) {
                 ACTION_WEIGHT_MINUS -> {
-                    val cur = targetSet.weight.toFloatOrNull() ?: 20f
+                    val cur = parseWeightClean(targetSet.weight, 20f)
                     val next = (cur - settings.weightStepKg).coerceAtLeast(0f)
-                    val formatted = if (next % 1f == 0f) "${next.toInt()}" else "$next"
-                    updatedSets[setIdx] = targetSet.copy(weight = formatted)
+                    updatedSets[setIdx] = targetSet.copy(weight = formatKgClean(next))
                 }
                 ACTION_WEIGHT_PLUS -> {
-                    val cur = targetSet.weight.toFloatOrNull() ?: 20f
+                    val cur = parseWeightClean(targetSet.weight, 20f)
                     val next = cur + settings.weightStepKg
-                    val formatted = if (next % 1f == 0f) "${next.toInt()}" else "$next"
-                    updatedSets[setIdx] = targetSet.copy(weight = formatted)
+                    updatedSets[setIdx] = targetSet.copy(weight = formatKgClean(next))
                 }
                 ACTION_REPS_MINUS -> {
-                    val cur = targetSet.reps.toIntOrNull() ?: 8
+                    val cur = parseRepsClean(targetSet.reps, 8)
                     val next = (cur - 1).coerceAtLeast(0)
                     updatedSets[setIdx] = targetSet.copy(reps = "$next")
                 }
                 ACTION_REPS_PLUS -> {
-                    val cur = targetSet.reps.toIntOrNull() ?: 7
+                    val cur = parseRepsClean(targetSet.reps, 8)
                     val next = cur + 1
                     updatedSets[setIdx] = targetSet.copy(reps = "$next")
                 }
                 ACTION_COMPLETE_SET -> {
                     updatedSets[setIdx] = targetSet.copy(isCompleted = true)
                     exercises[exIdx] = currentEx.copy(sets = updatedSets)
-                    LocalStorage.saveActiveSession(context, splitTitle, exercises)
+                    LocalStorage.saveActiveSession(context, splitTitle, exercises, fromWidget = true)
 
-                    if (settings.restTimerSeconds > 0) {
+                    val setRestSec = targetSet.restSeconds.takeIf { it >= 0 } ?: settings.restTimerSeconds
+
+                    sendSetDoneNotification(context, currentEx.name, targetSet.weight, targetSet.reps, setRestSec)
+
+                    if (setRestSec > 0) {
                         LocalStorage.setRestEndTimeMillis(
                             context,
-                            System.currentTimeMillis() + (settings.restTimerSeconds * 1000L)
+                            System.currentTimeMillis() + (setRestSec * 1000L),
+                            fromWidget = true
                         )
                     } else {
-                        refreshAllWidgets(context)
-                        LockScreenWorkoutController.sync(context)
+                        LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
                     }
                     return
                 }
             }
 
             exercises[exIdx] = currentEx.copy(sets = updatedSets)
-            LocalStorage.saveActiveSession(context, splitTitle, exercises)
-            refreshAllWidgets(context)
-            LockScreenWorkoutController.sync(context)
+            LocalStorage.saveActiveSession(context, splitTitle, exercises, fromWidget = true)
         }
 
         private fun getActionPendingIntent(context: Context, action: String, reqCode: Int): android.app.PendingIntent {
             val intent = Intent(context, GymWidgetProvider::class.java).apply {
                 this.action = action
+                setPackage(context.packageName)
             }
             return android.app.PendingIntent.getBroadcast(
-                context,
-                reqCode,
-                intent,
+                context, reqCode, intent,
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
         }
 
-        fun requestPinWidgetToHomeScreen(context: Context) {
-            requestPinWidget(context)
-        }
-
-        fun requestPinWidget(context: Context) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val manager = AppWidgetManager.getInstance(context)
-                    val provider = android.content.ComponentName(context, GymWidgetProvider::class.java)
-                    if (manager.isRequestPinAppWidgetSupported) {
-                        manager.requestPinAppWidget(provider, null, null)
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-
         fun refreshAllWidgets(context: Context) {
             try {
-                val manager = AppWidgetManager.getInstance(context)
+                val appCtx = context.applicationContext
+                val manager = AppWidgetManager.getInstance(appCtx)
                 val ids = manager.getAppWidgetIds(
-                    android.content.ComponentName(context, GymWidgetProvider::class.java)
+                    android.content.ComponentName(appCtx, GymWidgetProvider::class.java)
                 )
                 for (id in ids) {
-                    updateWidgetUi(context, manager, id)
+                    updateWidgetUi(appCtx, manager, id)
                 }
             } catch (_: Exception) {}
         }
@@ -1579,31 +1836,15 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
 
             val options = manager.getAppWidgetOptions(widgetId)
             val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
-            val isCompactSquare = minWidthDp < 185
+            val isCompactSquare = minWidthDp < 210
 
             val appearance = LocalStorage.loadWidgetAppearance(context)
-            val bgColorInt = if (appearance.isDark) {
-                android.graphics.Color.parseColor("#181B22")
-            } else {
-                android.graphics.Color.parseColor("#FFFFFF")
-            }
-            val pillBgColorInt = if (appearance.isDark) {
-                android.graphics.Color.parseColor("#242936")
-            } else {
-                android.graphics.Color.parseColor("#EEF1F6")
-            }
-            val primaryTextColor = if (appearance.isDark) {
-                android.graphics.Color.parseColor("#F3F4F6")
-            } else {
-                android.graphics.Color.parseColor("#111827")
-            }
-            val secondaryTextColor = if (appearance.isDark) {
-                android.graphics.Color.parseColor("#8E95A5")
-            } else {
-                android.graphics.Color.parseColor("#6B7280")
-            }
-            val accentBlue = android.graphics.Color.parseColor(if (appearance.isDark) "#3B82F6" else "#2563EB")
-            val accentGreen = android.graphics.Color.parseColor(if (appearance.isDark) "#10B981" else "#059669")
+            val bgColorInt = android.graphics.Color.parseColor(if (appearance.isDark) "#111318" else "#FFFFFF")
+            val pillBgColorInt = android.graphics.Color.parseColor(if (appearance.isDark) "#1E222B" else "#E6EAF2")
+            val primaryTextColor = android.graphics.Color.parseColor(if (appearance.isDark) "#FAFAFC" else "#0B0F19")
+            val secondaryTextColor = android.graphics.Color.parseColor(if (appearance.isDark) "#8A93A6" else "#5B6478")
+            val accentVolt = android.graphics.Color.parseColor(if (appearance.isDark) "#CCFF00" else "#FF4500")
+            val accentCyan = android.graphics.Color.parseColor(if (appearance.isDark) "#00F0FF" else "#0066FF")
 
             val alpha255 = ((appearance.opacityPercent.coerceIn(0, 100) / 100f) * 255f).roundToInt()
             views.setInt(R.id.widget_bg_image, "setColorFilter", bgColorInt)
@@ -1611,29 +1852,30 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
 
             views.setInt(R.id.widget_weight_pill_bg, "setColorFilter", pillBgColorInt)
             views.setInt(R.id.widget_reps_pill_bg, "setColorFilter", pillBgColorInt)
-            views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accentGreen)
+            views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accentVolt)
 
             views.setTextColor(R.id.widget_split_title, primaryTextColor)
             views.setTextColor(R.id.widget_subtitle, secondaryTextColor)
             views.setTextColor(R.id.widget_weight_value, primaryTextColor)
             views.setTextColor(R.id.widget_reps_value, primaryTextColor)
-            views.setTextColor(R.id.widget_btn_weight_plus, accentBlue)
-            views.setTextColor(R.id.widget_btn_reps_plus, accentBlue)
+            views.setTextColor(R.id.widget_btn_weight_plus, accentVolt)
+            views.setTextColor(R.id.widget_btn_reps_plus, accentVolt)
             views.setTextColor(R.id.widget_btn_weight_minus, secondaryTextColor)
             views.setTextColor(R.id.widget_btn_reps_minus, secondaryTextColor)
-            views.setTextColor(R.id.widget_action_badge, accentBlue)
-            views.setTextColor(R.id.widget_rest_chronometer, accentGreen)
+            views.setTextColor(R.id.widget_action_badge, accentVolt)
+            views.setTextColor(R.id.widget_rest_chronometer, accentCyan)
 
             val active = LocalStorage.loadActiveSession(context)
             val history = LocalStorage.loadHistory(context)
-            val weekSummary = computeWeekSummary(history, 0)
+            val profile = LocalStorage.loadUserProfile(context)
+            val weekSummary = computeWeekSummary(history, 0, profile.splitProgram)
 
             if (active != null) {
                 val splitName = active.first
-                val exercises = active.second
+                val activeExercises = active.second.filter { !it.isSkipped }
 
-                val currentExercise = exercises.firstOrNull { ex -> ex.sets.any { !it.isCompleted } }
-                val totalSetsLeft = exercises.sumOf { ex -> ex.sets.count { !it.isCompleted } }
+                val currentExercise = activeExercises.firstOrNull { ex -> ex.sets.any { !it.isCompleted } }
+                val totalSetsLeft = activeExercises.sumOf { ex -> ex.sets.count { !it.isCompleted } }
 
                 val restEndMillis = LocalStorage.getRestEndTimeMillis(context)
                 val remainingMillis = restEndMillis - System.currentTimeMillis()
@@ -1647,7 +1889,7 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
                         if (isCompactSquare) splitName.uppercase() else "${splitName.uppercase()} • ACTIVE"
                     }
                 )
-                views.setTextColor(R.id.widget_status_label, accentGreen)
+                views.setTextColor(R.id.widget_status_label, if (isResting) accentCyan else accentVolt)
 
                 if (currentExercise != null && totalSetsLeft > 0) {
                     val nextSetIndex = currentExercise.sets.indexOfFirst { !it.isCompleted }
@@ -1656,9 +1898,11 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
 
                     var workNum = 0
                     for (i in 0..nextSetIndex) {
-                        if (!currentExercise.sets[i].isWarmup) workNum++
+                        if (!currentExercise.sets[i].isWarmup && currentExercise.sets[i].intensityType != "WARMUP") workNum++
                     }
-                    val setLabel = if (nextSet.isWarmup) "Warmup Set" else "Work Set $workNum"
+                    val setLabel = if (nextSet.isWarmup || nextSet.intensityType == "WARMUP") "Warmup" else "Set $workNum"
+                    val cleanW = formatKgClean(parseWeightClean(nextSet.weight, 20f))
+                    val cleanR = parseRepsClean(nextSet.reps, 8)
 
                     views.setTextViewText(R.id.widget_split_title, currentExercise.name)
 
@@ -1666,22 +1910,22 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
                         views.setViewVisibility(R.id.widget_controls_row, View.GONE)
                         views.setTextViewText(
                             R.id.widget_subtitle,
-                            "Resting • Next: $setLabel (${nextSet.weight}kg × ${nextSet.reps})"
+                            "Resting • Next: $setLabel (${cleanW}kg × $cleanR)"
                         )
                     } else {
                         views.setViewVisibility(R.id.widget_controls_row, View.VISIBLE)
-                        views.setTextViewText(
-                            R.id.widget_subtitle,
-                            "$setLabel • $currentExSetsLeft left on this ($totalSetsLeft total)"
-                        )
-                        views.setTextViewText(
-                            R.id.widget_weight_value,
-                            if (isCompactSquare) nextSet.weight else "${nextSet.weight}kg"
-                        )
-                        views.setTextViewText(
-                            R.id.widget_reps_value,
-                            if (isCompactSquare) nextSet.reps else "${nextSet.reps} reps"
-                        )
+                        if (isCompactSquare) {
+                            views.setViewVisibility(R.id.widget_subtitle, View.GONE)
+                        } else {
+                            views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
+                            views.setTextViewText(
+                                R.id.widget_subtitle,
+                                "$setLabel • $currentExSetsLeft left ($totalSetsLeft total)"
+                            )
+                        }
+
+                        views.setTextViewText(R.id.widget_weight_value, "${cleanW}kg")
+                        views.setTextViewText(R.id.widget_reps_value, "${cleanR}r")
 
                         views.setOnClickPendingIntent(
                             R.id.widget_btn_weight_minus,
@@ -1737,11 +1981,11 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
                     R.id.widget_status_label,
                     if (isCompactSquare) "NEXT UP" else "RECOMMENDED NEXT"
                 )
-                views.setTextColor(R.id.widget_status_label, accentBlue)
+                views.setTextColor(R.id.widget_status_label, accentVolt)
                 views.setTextViewText(R.id.widget_split_title, weekSummary.recommendedSplit)
                 views.setTextViewText(
                     R.id.widget_subtitle,
-                    "${weekSummary.completedCoreSplits.size} of 3 weekly sessions completed"
+                    "${weekSummary.completedCoreSplits.size} of ${weekSummary.weeklyGoal} weekly sessions done"
                 )
                 views.setTextViewText(R.id.widget_action_badge, "Start ›")
             }
@@ -1750,11 +1994,8 @@ class GymWidgetProvider : android.appwidget.AppWidgetProvider() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val openAppPending = android.app.PendingIntent.getActivity(
-                context,
-                0,
-                openAppIntent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or
-                        android.app.PendingIntent.FLAG_IMMUTABLE
+                context, 0, openAppIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_header_click_area, openAppPending)
             if (active == null) {
