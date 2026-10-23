@@ -9,8 +9,9 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 4 in progress on branch `phase-4-routines`. Step 1 (your own programs) is done.
-Next: **Phase 4, step 2**: per-exercise targets on a day's exercise list (sets × rep range, rest). Store them on `split_template_items` (schema v4), prefill new workouts from them, and use the rep range in coaching instead of the compound/isolation guess.
+Phase 4 in progress on branch `phase-4-routines`. Steps 1 (own programs) and 2 (targets) are committed.
+Step 2 still needs an emulator check of the target dialog (Profile > Edit program > a day > tap an exercise) and of a new workout using a target; unit tests cover the logic.
+Next: **Phase 4, step 3**: built-in percentage programs (5/3/1, GZCLP, nSuns) with a training max per lift.
 
 ---
 
@@ -52,7 +53,7 @@ Next: **Phase 4, step 2**: per-exercise targets on a day's exercise list (sets �
 ## Phase 4 — Routines & programs (branch `phase-4-routines`)
 - [x] Your own programs (Room v3, auto-migrated): Profile lists built-in + yours; "Customize" copies a built-in, "New program" starts blank; the editor sets name, workouts per week and days (add, rename, reorder, remove) and each day's exercise list. Built-in programs stay read-only presets
 - [x] Days are identified by title, shared across programs. Renaming a day moves its history unless another of *your* programs uses the old title, and copies its exercise list if any other program (built-ins included) still uses it
-- [ ] Per-exercise targets (sets × rep range, rest)
+- [x] Per-exercise targets on a day (sets × rep range; Room v4 auto-migrated, backup `splitTargets`): new workouts lay out that many sets at the top of the range, the workout card shows "Plan 3 × 8–12", coaching moves up at the top and down below the bottom of the range (defaults unchanged without a target). Rest stays per exercise as before
 - [ ] Built-in programs: 5/3/1, GZCLP, nSuns (percentage-based, with training max)
 
 ## Phase 5 — Gym tools

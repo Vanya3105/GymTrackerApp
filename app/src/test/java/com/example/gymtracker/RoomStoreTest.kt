@@ -204,6 +204,15 @@ class RoomStoreTest {
     }
 
     @Test
+    fun targets_roundTrip_withTheirDay() {
+        val data = full.copy(targets = mapOf("Push" to mapOf("barbell bench press" to ExerciseTarget(4, 5, 8))))
+        RoomStore.replaceAll(db, data)
+        assertEquals(data, RoomStore.load(db))
+        RoomStore.renameSplit(db, "Push", "Chest Day", keepTemplate = true, keepHistory = true)
+        assertEquals(ExerciseTarget(4, 5, 8), RoomStore.load(db).targets["Chest Day"]?.get("barbell bench press"))
+    }
+
+    @Test
     fun mergedOver_keepsNewerEntriesAndAddsMissingOnes() {
         val room = StoreData(history = listOf(workout(3, custom), workout(1, custom).copy(splitTitle = "Room")))
         val json = StoreData(history = listOf(workout(2, bench), workout(1, bench)), notes = mapOf("x" to "y"))

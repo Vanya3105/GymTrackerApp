@@ -294,6 +294,8 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
     val context = LocalContext.current
     var items by remember(dayTitle) { mutableStateOf(LocalStorage.loadTemplateForSplit(context, dayTitle)) }
     var picking by remember { mutableStateOf(false) }
+    var targetFor by remember { mutableStateOf<String?>(null) }
+    var targetsVersion by remember { mutableIntStateOf(0) }
 
     fun save(list: List<Pair<String, String>>) {
         items = list
@@ -315,12 +317,21 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
                 Text("No exercises yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(vertical = 12.dp))
             }
             items.forEachIndexed { i, (name, muscle) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val target = remember(name, targetsVersion) { LocalStorage.getTarget(context, dayTitle, name) }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.99f) { targetFor = name }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(name, style = AppType.bodyStrong, color = P.textPrimary)
                         val type = LocalStorage.exerciseType(context, name)
                         val sub = listOfNotNull(muscle.ifBlank { null }, type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label)
                         if (sub.isNotEmpty()) Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary)
+                        Text(
+                            target?.let { if (type.usesReps) "Plan: ${it.label} reps" else "Plan: ${it.sets} sets" } ?: "Tap to set a plan",
+                            style = AppType.caption,
+                            color = if (target != null) P.accentPrimary else P.textTertiary
+                        )
                     }
                     CircleIconButton(Icons.Rounded.ArrowUpward, "Move up", { haptics.tick(); save(items.moved(i, i - 1)) },
                         enabled = i > 0, size = 34.dp, container = Color.Transparent)
@@ -335,6 +346,22 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
         }
     }
 
+    targetFor?.let { name ->
+        val type = LocalStorage.exerciseType(context, name)
+        TargetDialog(
+            name = name,
+            usesReps = type.usesReps,
+            current = LocalStorage.getTarget(context, dayTitle, name),
+            onDismiss = { targetFor = null },
+            onSave = { target ->
+                haptics.tick()
+                LocalStorage.setTarget(context, dayTitle, name, target)
+                targetsVersion++
+                targetFor = null
+            }
+        )
+    }
+
     if (picking) {
         ExercisePickerSheet(
             existingNames = items.map { it.first }.toSet(),
@@ -347,6 +374,64 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
             addedLabel = "Already on this day"
         )
     }
+}
+
+/** Sets × rep range for one exercise on a day; "No plan" clears it. */
+@Composable
+private fun TargetDialog(
+    name: String,
+    usesReps: Boolean,
+    current: ExerciseTarget?,
+    onDismiss: () -> Unit,
+    onSave: (ExerciseTarget?) -> Unit
+) {
+    val P = LocalPalette.current
+    var sets by remember { mutableIntStateOf(current?.sets ?: 3) }
+    var repMin by remember { mutableIntStateOf(current?.repMin ?: 8) }
+    var repMax by remember { mutableIntStateOf(current?.repMax ?: 12) }
+
+    @Composable
+    fun row(label: String, value: Int, onValue: (Int) -> Unit, range: IntRange) {
+        Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+            NumberStepper(
+                value = "$value",
+                onValueChange = { v -> v.filter(Char::isDigit).toIntOrNull()?.let { onValue(it.coerceIn(range)) } },
+                onMinus = { onValue((value - 1).coerceIn(range)) },
+                onPlus = { onValue((value + 1).coerceIn(range)) },
+                keyboardType = KeyboardType.Number,
+                modifier = Modifier.width(140.dp)
+            )
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = P.bgElevated,
+        title = { Text(name, style = AppType.headline, color = P.textPrimary) },
+        text = {
+            Column {
+                Text(
+                    if (usesReps) "New workouts start with these sets. Hit the top of the range on every set and the app suggests more weight."
+                    else "New workouts start with this many sets.",
+                    style = AppType.caption,
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(10.dp))
+                row("Sets", sets, { sets = it }, 1..10)
+                if (usesReps) {
+                    row("Reps from", repMin, { repMin = it; if (repMax < it) repMax = it }, 1..50)
+                    row("Reps up to", repMax, { repMax = it; if (repMin > it) repMin = it }, 1..50)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(ExerciseTarget(sets, repMin, repMax)) }) { Text("Save", color = P.accentPrimary, style = AppType.label) }
+        },
+        dismissButton = {
+            TextButton(onClick = { onSave(null) }) { Text(if (current != null) "No plan" else "Cancel", color = P.textSecondary, style = AppType.label) }
+        }
+    )
 }
 
 @Composable

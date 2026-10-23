@@ -733,6 +733,7 @@ private fun ExerciseCard(
                 Text(exercise.name, style = AppType.headline, color = P.textPrimary, maxLines = 2)
                 val sub = buildList {
                     if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
+                    exercise.target?.let { add("Plan ${it.label}") }
                     records.bestSet?.let { add("Best ${formatSet(it, exercise.type)}") }
                 }.joinToString(" · ")
                 if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary)

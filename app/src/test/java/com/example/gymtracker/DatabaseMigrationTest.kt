@@ -5,6 +5,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,6 +70,26 @@ class DatabaseMigrationTest {
             db.query("SELECT COUNT(*) FROM programs").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
             db.query("SELECT COUNT(*) FROM program_splits").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
         }
+    }
+
+    @Test
+    fun v3ToV4_addsTargetColumns_leavingExistingListsWithoutTargets() {
+        helper.createDatabase(dbName, 3).use { db ->
+            db.execSQL("INSERT INTO exercises (id, name, nameKey, muscle, note, type) VALUES (1, 'Row', 'row', '', '', 'WEIGHT_REPS')")
+            db.execSQL("INSERT INTO split_template_items (splitTitle, position, exerciseId, muscle) VALUES ('Pull', 0, 1, 'Back')")
+        }
+        helper.runMigrationsAndValidate(dbName, 4, true).use { db ->
+            db.query("SELECT targetSets, repMin, repMax FROM split_template_items").use { c ->
+                c.moveToFirst()
+                assertTrue(c.isNull(0) && c.isNull(1) && c.isNull(2))
+            }
+        }
+    }
+
+    @Test
+    fun v1ToV4_inOneGo() {
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(dbName, 4, true, MIGRATION_1_2).close()
     }
 
     @Test

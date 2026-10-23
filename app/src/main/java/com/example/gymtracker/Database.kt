@@ -113,7 +113,11 @@ data class SplitTemplateItemEntity(
     val splitTitle: String,
     val position: Int,
     val exerciseId: Long,
-    val muscle: String
+    val muscle: String,
+    /** Optional target; all three are set together or not at all. */
+    val targetSets: Int? = null,
+    val repMin: Int? = null,
+    val repMax: Int? = null
 )
 
 /** A program the user built or customized. Built-in programs live in code ([SPLIT_PROGRAMS]). */
@@ -201,10 +205,10 @@ interface GymDao {
         ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseEntity::class, WorkoutSetEntity::class,
         BodyWeightEntity::class, SplitTemplateItemEntity::class, ProgramEntity::class, ProgramSplitEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    // v3 only adds tables, which Room can migrate by itself.
-    autoMigrations = [AutoMigration(from = 2, to = 3)]
+    // v3 only adds tables and v4 only adds nullable columns, which Room can migrate by itself.
+    autoMigrations = [AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)]
 )
 @TypeConverters(Converters::class)
 abstract class GymDatabase : RoomDatabase() {
@@ -281,7 +285,9 @@ data class StoreData(
      */
     val types: Map<String, ExerciseType>? = emptyMap(),
     /** The user's own programs, in display order. */
-    val programs: List<SplitProgramInfo> = emptyList()
+    val programs: List<SplitProgramInfo> = emptyList(),
+    /** Day title → [exerciseKey] → target, for exercises on that day's list that have one. */
+    val targets: Map<String, Map<String, ExerciseTarget>> = emptyMap()
 )
 
 fun exerciseKey(name: String): String = name.trim().lowercase(Locale.US)
@@ -329,9 +335,17 @@ object RoomStore {
             .map { WeightLogEntry(it.id, it.dateKey, it.displayDate, it.weightKg) }
             .sortedByDescending { it.id }
 
-        val templates = dao.templateItems().groupBy { it.splitTitle }.mapValues { (_, items) ->
+        val templateRows = dao.templateItems().groupBy { it.splitTitle }
+        val templates = templateRows.mapValues { (_, items) ->
             items.map { (exercises[it.exerciseId]?.name.orEmpty()) to it.muscle }
         }
+        val targets = templateRows.mapValues { (_, items) ->
+            items.mapNotNull { row ->
+                val target = row.toTarget() ?: return@mapNotNull null
+                val key = exercises[row.exerciseId]?.nameKey ?: return@mapNotNull null
+                key to target
+            }.toMap()
+        }.filterValues { it.isNotEmpty() }
 
         return StoreData(
             history = history,
@@ -340,7 +354,8 @@ object RoomStore {
             notes = exercises.values.filter { it.note.isNotBlank() }.associate { it.nameKey to it.note },
             restDefaults = exercises.values.mapNotNull { e -> e.defaultRestSeconds?.let { e.nameKey to it } }.toMap(),
             types = exercises.values.associate { it.nameKey to ExerciseType.fromKey(it.type) },
-            programs = loadPrograms(db)
+            programs = loadPrograms(db),
+            targets = targets
         )
     }
 
@@ -355,7 +370,7 @@ object RoomStore {
 
         // The first spelling of a name wins for differently-cased duplicates, so go templates
         // first, then oldest workouts: that keeps how the user originally typed it.
-        data.templates.forEach { (split, items) -> saveTemplate(db, split, items) }
+        data.templates.forEach { (split, items) -> saveTemplate(db, split, items, data.targets[split].orEmpty()) }
         data.history.sortedBy { it.id }.forEach { insertWorkout(db, it) }
         data.weights.forEach { dao.insertBodyWeight(BodyWeightEntity(it.id, it.dateKey, it.displayDate, it.weightKg)) }
         data.notes.forEach { (key, note) -> setNote(db, key, note) }
@@ -427,12 +442,26 @@ object RoomStore {
 
     fun deleteBodyWeight(db: GymDatabase, id: Long) = db.dao().deleteBodyWeight(id)
 
-    fun saveTemplate(db: GymDatabase, splitTitle: String, items: List<Pair<String, String>>) = db.runInTransaction {
+    /** Replaces a day's exercise list. [targets] is keyed by [exerciseKey]. */
+    fun saveTemplate(
+        db: GymDatabase,
+        splitTitle: String,
+        items: List<Pair<String, String>>,
+        targets: Map<String, ExerciseTarget> = emptyMap()
+    ) = db.runInTransaction {
         val dao = db.dao()
         dao.deleteTemplate(splitTitle)
         dao.insertTemplateItems(items.mapIndexed { i, (name, muscle) ->
-            SplitTemplateItemEntity(splitTitle, i, exerciseId(db, name, muscle), muscle)
+            val t = targets[exerciseKey(name)]
+            SplitTemplateItemEntity(splitTitle, i, exerciseId(db, name, muscle), muscle, t?.sets, t?.repMin, t?.repMax)
         })
+    }
+
+    private fun SplitTemplateItemEntity.toTarget(): ExerciseTarget? {
+        val sets = targetSets ?: return null
+        val min = repMin ?: return null
+        val max = repMax ?: return null
+        return ExerciseTarget(sets, min, max)
     }
 
     fun setNote(db: GymDatabase, name: String, note: String) =

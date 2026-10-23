@@ -7,6 +7,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -183,6 +184,25 @@ class StorageMigrationTest {
         assertEquals(listOf("Barbell Row" to "Back"), LocalStorage.loadTemplateForSplit(context, "Pull")) // built-ins keep theirs
         assertEquals(listOf("Push", "Back Day", "Legs"), programFor("custom-1").splits.map { it.title })
         assertEquals("Back Day", LocalStorage.loadActiveSession(context)?.first) // the open workout follows too
+    }
+
+    @Test
+    fun targets_surviveListEdits_andShapeNewWorkouts() {
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Barbell Bench Press" to "Chest", "Cable Fly" to "Chest"))
+        LocalStorage.setTarget(context, "Push", "Barbell Bench Press", ExerciseTarget(4, 6, 10))
+        // Reordering (as the workout screen does) keeps it; removing the exercise drops it.
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Cable Fly" to "Chest", "Barbell Bench Press" to "Chest"))
+        restart()
+        assertEquals(ExerciseTarget(4, 6, 10), LocalStorage.getTarget(context, "Push", "barbell bench press"))
+
+        val entry = newExerciseEntry(context, "Push", "Barbell Bench Press", "Chest", emptyList(), AppSettings())
+        assertEquals(ExerciseTarget(4, 6, 10), entry.target)
+        assertEquals(1 + 4, entry.sets.size) // warm-up + 4 work sets
+        assertEquals(listOf("10", "10", "10", "10"), entry.sets.drop(1).map { it.reps })
+
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Cable Fly" to "Chest"))
+        restart()
+        assertNull(LocalStorage.getTarget(context, "Push", "Barbell Bench Press"))
     }
 
     @Test

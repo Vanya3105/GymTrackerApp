@@ -641,8 +641,12 @@ fun suggestFromSplitHistory(
     val prevText = formatWeightKg(prevWeight)
 
     fun volume(sets: List<SetEntry>) = sets.sumOf { (it.weightKg * it.repCount).toDouble() }
-    fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= 8 }
-    fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..6 }
+    // A target's rep range sets the thresholds; without one: 8+ moves up, 6 or fewer moves down.
+    val top = exercise.target?.repMax ?: 8
+    val low = exercise.target?.let { it.repMin - 1 } ?: 6
+    val rangeText = exercise.target?.repText ?: "6–8"
+    fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= top }
+    fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..low }
     fun suggest(value: Float, tone: SuggestionTone, message: (String) -> String): Suggestion {
         val v = unit.round(value.coerceAtLeast(0f))
         return Suggestion(message("${formatKgClean(v)} ${unit.label}"), tone, suggestedWeight = unit.stored(v))
@@ -667,33 +671,33 @@ fun suggestFromSplitHistory(
     val completedToday = exercise.sets.filter { !it.isWarmupSet && it.isCompleted && it.repCount > 0 }
     if (completedToday.isNotEmpty()) {
         if (prevHad8Plus && hit8Plus(completedToday)) {
-            return increase { w -> "8+ reps two sessions running. Move up to $w." }
+            return increase { w -> "$top+ reps two sessions running. Move up to $w." }
         }
         if (prevHad6OrLess && hit6OrLess(completedToday)) {
-            return decrease { w -> "Under 7 reps two sessions running. Drop to $w." }
+            return decrease { w -> "Under ${low + 1} reps two sessions running. Drop to $w." }
         }
     }
 
     if (pastSessions.size >= 2) {
         if (prevHad8Plus && hit8Plus(pastSessions[1])) {
-            return increase { w -> "You hit 8+ reps the last two times. Try $w today." }
+            return increase { w -> "You hit $top+ reps the last two times. Try $w today." }
         }
         if (prevHad6OrLess && hit6OrLess(pastSessions[1])) {
-            return decrease { w -> "Under 7 reps the last two times. Try $w today." }
+            return decrease { w -> "Under ${low + 1} reps the last two times. Try $w today." }
         }
     }
 
     return when {
         prevHad8Plus -> Suggestion(
-            "Last time: $prevText for 8+ reps. Do it again to move up.",
+            "Last time: $prevText for $top+ reps. Do it again to move up.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
         prevHad6OrLess -> Suggestion(
-            "Last time: $prevText for 6 or fewer. Aim for 7–8 reps.",
+            "Last time: $prevText for $low or fewer. Aim for ${low + 1}–$top reps.",
             SuggestionTone.CAUTION, prevWeightStr
         )
         else -> Suggestion(
-            "Last time: $prevText. Aim for 6–8 reps.",
+            "Last time: $prevText. Aim for $rangeText reps.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
     }

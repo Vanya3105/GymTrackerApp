@@ -567,36 +567,40 @@ fun newExerciseEntry(
 ): ExerciseEntry {
     val type = LocalStorage.exerciseType(context, name)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    // A target sets how many work sets to lay out and the reps to aim for (the top of the range).
+    val target = LocalStorage.getTarget(context, splitTitle, name)
+    val workSetCount = target?.sets
+    val targetReps = target?.repMax?.toString()
 
     if (!type.hasWeightSuggestions) {
         // No weight to suggest: start from your own last session, else plain defaults.
         val last = history.firstNotNullOfOrNull { w ->
             w.exercises.find { !it.isSkipped && exerciseKey(it.name) == exerciseKey(name) }?.workSets?.takeIf { it.isNotEmpty() }
         }
-        val template = last ?: List(if (type == ExerciseType.DISTANCE_TIME) 1 else 3) {
-            SetEntry(
-                setNumber = 0,
-                weight = "",
-                reps = if (type.usesReps) "10" else "",
-                seconds = if (type == ExerciseType.DURATION) "60" else ""
-            )
-        }
+        val defaultSet = SetEntry(
+            setNumber = 0,
+            weight = "",
+            reps = if (type.usesReps) targetReps ?: "10" else "",
+            seconds = if (type == ExerciseType.DURATION) "60" else ""
+        )
+        val count = workSetCount ?: last?.size ?: if (type == ExerciseType.DISTANCE_TIME) 1 else 3
+        val template = List(count) { i -> last?.getOrNull(i) ?: last?.lastOrNull() ?: defaultSet }
         return ExerciseEntry(
-            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type, target = target,
             sets = template.mapIndexed { i, s ->
-                SetEntry(i + 1, weight = s.weight, reps = s.reps, seconds = s.seconds, distanceM = s.distanceM, restSeconds = rest)
+                SetEntry(i + 1, weight = s.weight, reps = (if (type.usesReps) targetReps else null) ?: s.reps, seconds = s.seconds, distanceM = s.distanceM, restSeconds = rest)
             }
         )
     }
 
-    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle, type = type), history, settings.weightStep)
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle, type = type, target = target), history, settings.weightStep)
     val unit = Units.current
     if (type == ExerciseType.WEIGHTED_BODYWEIGHT) {
         // Added weight; no warm-up set (the warm-up is the bodyweight version).
         val added = suggestion?.suggestedWeight?.ifBlank { null } ?: "0"
         return ExerciseEntry(
-            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
-            sets = List(3) { i -> SetEntry(i + 1, weight = added, reps = "8", restSeconds = rest) }
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type, target = target,
+            sets = List(workSetCount ?: 3) { i -> SetEntry(i + 1, weight = added, reps = targetReps ?: "8", restSeconds = rest) }
         )
     }
     val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
@@ -608,11 +612,9 @@ fun newExerciseEntry(
         targetMuscle = muscle,
         restSeconds = rest,
         type = type,
-        sets = listOf(
-            SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest)),
-            SetEntry(2, weight = workWeight, reps = "8", restSeconds = rest),
-            SetEntry(3, weight = workWeight, reps = "8", restSeconds = rest)
-        )
+        target = target,
+        sets = listOf(SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest))) +
+            List(workSetCount ?: 2) { i -> SetEntry(i + 2, weight = workWeight, reps = targetReps ?: "8", restSeconds = rest) }
     )
 }
 
