@@ -1,470 +1,634 @@
 package com.example.gymtracker
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.View
 import android.widget.RemoteViews
 import android.widget.Toast
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
+import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 // ============================================================================
-// 1. THEME COLOR RESOLVER FOR NATIVE CANVAS (WIDGETS & STORY CARDS)
+// SHARED HELPERS
 // ============================================================================
 
-private data class NativeCanvasTheme(
-    val bgCard: Int,
-    val bgControl: Int,
-    val textPrimary: Int,
-    val textSecondary: Int,
-    val borderStrong: Int,
-    val accentPrimary: Int,
-    val accentSecondary: Int,
-    val success: Int,
-    val warning: Int,
-    val danger: Int
+private val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+private val REGULAR: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+private val BOLD: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
+
+private fun textPaint(color: Int, size: Float, typeface: Typeface = MEDIUM, align: Paint.Align = Paint.Align.LEFT) =
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        textSize = size
+        this.typeface = typeface
+        textAlign = align
+    }
+
+private fun fillPaint(color: Int, alpha: Int = 255) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    this.color = color
+    this.alpha = alpha
+}
+
+private fun strokePaint(color: Int, width: Float, alpha: Int = 255) = fillPaint(color, alpha).apply {
+    style = Paint.Style.STROKE
+    strokeWidth = width
+    strokeCap = Paint.Cap.ROUND
+}
+
+/** Shrinks the text size so [text] fits in [maxWidth]. */
+private fun Paint.fitTo(text: String, maxWidth: Float): Paint = apply {
+    val w = measureText(text)
+    if (w > maxWidth) textSize *= maxWidth / w
+}
+
+/** Cuts [text] with an ellipsis so it fits in [maxWidth]. */
+private fun Paint.ellipsize(text: String, maxWidth: Float): String {
+    if (measureText(text) <= maxWidth) return text
+    var end = text.length
+    while (end > 1 && measureText(text, 0, end) + measureText("…") > maxWidth) end--
+    return text.substring(0, end).trimEnd() + "…"
+}
+
+/** Palette that follows the in-app theme setting (System/Light/Dark). */
+private fun appPalette(context: Context): GymPalette = paletteFor(context, LocalStorage.loadSettings(context).themeChoice)
+
+private fun widgetPalette(context: Context, settings: WidgetSettings): GymPalette = when (settings.theme) {
+    THEME_LIGHT -> LightPalette
+    THEME_DARK -> DarkPalette
+    else -> appPalette(context)
+}
+
+private fun widgetBackground(p: GymPalette, settings: WidgetSettings): Int =
+    (if (settings.style == WIDGET_STYLE_TINTED) p.accentSoft else p.bgCard).toArgb()
+
+private fun alpha255(percent: Int) = (percent.coerceIn(0, 100) / 100f * 255f).roundToInt()
+
+/** Kind of widget placed under [appWidgetId], from the provider class that owns it. */
+fun widgetKindFor(context: Context, appWidgetId: Int): String =
+    when (AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)?.provider?.className) {
+        MuscleFatigueWidgetProvider::class.java.name -> WIDGET_KIND_RECOVERY
+        SquarePulseWidgetProvider::class.java.name -> WIDGET_KIND_WEEKLY
+        else -> WIDGET_KIND_WORKOUT
+    }
+
+// ============================================================================
+// 1. LIVE SESSION (shared by the workout widget and the lock-screen card)
+// ============================================================================
+
+private class NextSetInfo(
+    val exerciseName: String,
+    val label: String,
+    val weightLabel: String,
+    val reps: Int,
+    val setNumber: Int,
+    val setCount: Int
 )
 
-private fun resolveNativeCanvasTheme(context: Context): NativeCanvasTheme {
-    val settings = LocalStorage.loadSettings(context)
-    return when (settings.themeChoice) {
-        "ARCTIC" -> NativeCanvasTheme(
-            bgCard = Color.parseColor("#FFFFFF"),
-            bgControl = Color.parseColor("#E6EAF2"),
-            textPrimary = Color.parseColor("#0B0F19"),
-            textSecondary = Color.parseColor("#5B6478"),
-            borderStrong = Color.parseColor("#B0B9CB"),
-            accentPrimary = Color.parseColor("#FF4500"),
-            accentSecondary = Color.parseColor("#0066FF"),
-            success = Color.parseColor("#16A34A"),
-            warning = Color.parseColor("#EA580C"),
-            danger = Color.parseColor("#DC2626")
-        )
-        "CYBERPUNK" -> NativeCanvasTheme(
-            bgCard = Color.parseColor("#131520"),
-            bgControl = Color.parseColor("#1D2130"),
-            textPrimary = Color.parseColor("#FFFFFF"),
-            textSecondary = Color.parseColor("#94A3B8"),
-            borderStrong = Color.parseColor("#333A56"),
-            accentPrimary = Color.parseColor("#FF0055"),
-            accentSecondary = Color.parseColor("#00F0FF"),
-            success = Color.parseColor("#22C55E"),
-            warning = Color.parseColor("#F97316"),
-            danger = Color.parseColor("#EF4444")
-        )
-        "OLED" -> NativeCanvasTheme(
-            bgCard = Color.parseColor("#080808"),
-            bgControl = Color.parseColor("#171717"),
-            textPrimary = Color.parseColor("#FAFAFA"),
-            textSecondary = Color.parseColor("#8A8A8A"),
-            borderStrong = Color.parseColor("#383838"),
-            accentPrimary = Color.parseColor("#3B82F6"),
-            accentSecondary = Color.parseColor("#A855F7"),
-            success = Color.parseColor("#4ADE80"),
-            warning = Color.parseColor("#FB923C"),
-            danger = Color.parseColor("#F87171")
-        )
-        else -> NativeCanvasTheme(
-            bgCard = Color.parseColor("#111318"),
-            bgControl = Color.parseColor("#1E222B"),
-            textPrimary = Color.parseColor("#FAFAFC"),
-            textSecondary = Color.parseColor("#8A93A6"),
-            borderStrong = Color.parseColor("#2C3240"),
-            accentPrimary = Color.parseColor("#CCFF00"),
-            accentSecondary = Color.parseColor("#00F0FF"),
-            success = Color.parseColor("#4ADE80"),
-            warning = Color.parseColor("#FB923C"),
-            danger = Color.parseColor("#FF453A")
+private class LiveSession(
+    val splitName: String,
+    val currentExercise: ExerciseEntry?,
+    val totalSetsLeft: Int,
+    val restRemainingMillis: Long
+) {
+    val isResting: Boolean get() = restRemainingMillis > 1000L
+
+    val nextSet: NextSetInfo? get() {
+        val ex = currentExercise ?: return null
+        val idx = ex.sets.indexOfFirst { !it.isCompleted }
+        if (idx == -1) return null
+        val set = ex.sets[idx]
+        val workNum = ex.sets.take(idx + 1).count { !it.isWarmupSet }
+        return NextSetInfo(
+            exerciseName = ex.name,
+            label = when {
+                set.isWarmupSet -> "Warm-up"
+                set.intensityType == "DROP" -> "Drop set"
+                else -> "Set $workNum"
+            },
+            weightLabel = formatKgClean(parseWeightClean(set.weight, 20f)),
+            reps = parseRepsClean(set.reps, 8),
+            setNumber = idx + 1,
+            setCount = ex.sets.size
         )
     }
 }
 
+private fun readLiveSession(context: Context): LiveSession? {
+    val (splitName, exercises) = LocalStorage.loadActiveSession(context) ?: return null
+    val active = exercises.filter { !it.isSkipped }
+    return LiveSession(
+        splitName = splitName,
+        currentExercise = active.firstOrNull { ex -> ex.sets.any { !it.isCompleted } },
+        totalSetsLeft = active.sumOf { ex -> ex.sets.count { !it.isCompleted } },
+        restRemainingMillis = LocalStorage.getRestEndTimeMillis(context) - System.currentTimeMillis()
+    )
+}
+
+private fun widgetActionPendingIntent(context: Context, action: String, requestCode: Int): PendingIntent {
+    val intent = Intent(context, GymWidgetProvider::class.java).apply {
+        this.action = action
+        setPackage(context.packageName)
+    }
+    return PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+}
+
+/**
+ * Builds the workout widget / lock-screen card. Used by the provider, the lock-screen
+ * notification and the live preview in [WidgetConfigActivity].
+ */
+fun buildWorkoutWidgetViews(
+    context: Context,
+    settings: WidgetSettings,
+    compact: Boolean,
+    requestCodeBase: Int = 10,
+    forLockScreen: Boolean = false
+): RemoteViews {
+    val p = widgetPalette(context, settings)
+    val views = RemoteViews(context.packageName, R.layout.gym_widget)
+    val primary = p.textPrimary.toArgb()
+    val secondary = p.textSecondary.toArgb()
+    val accent = p.accentPrimary.toArgb()
+    val info = p.accentSecondary.toArgb()
+    val control = (if (settings.style == WIDGET_STYLE_TINTED) p.bgCard else p.bgControl).toArgb()
+
+    views.setInt(R.id.widget_bg_image, "setColorFilter", widgetBackground(p, settings))
+    views.setInt(R.id.widget_bg_image, "setImageAlpha", if (forLockScreen) 255 else alpha255(settings.opacityPercent))
+    listOf(R.id.widget_weight_pill_bg, R.id.widget_reps_pill_bg, R.id.widget_badge_bg).forEach {
+        views.setInt(it, "setColorFilter", control)
+    }
+    views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accent)
+    views.setInt(R.id.widget_done_icon, "setColorFilter", p.onAccentPrimary.toArgb())
+    views.setInt(R.id.widget_btn_weight_minus, "setColorFilter", secondary)
+    views.setInt(R.id.widget_btn_reps_minus, "setColorFilter", secondary)
+    views.setInt(R.id.widget_btn_weight_plus, "setColorFilter", accent)
+    views.setInt(R.id.widget_btn_reps_plus, "setColorFilter", accent)
+    views.setTextColor(R.id.widget_split_title, primary)
+    views.setTextColor(R.id.widget_subtitle, secondary)
+    views.setTextColor(R.id.widget_weight_value, primary)
+    views.setTextColor(R.id.widget_reps_value, primary)
+    views.setTextColor(R.id.widget_action_badge, accent)
+    views.setTextColor(R.id.widget_rest_chronometer, info)
+
+    val showControls = WIDGET_OPTION_CONTROLS in settings.options || forLockScreen
+    val live = readLiveSession(context)
+
+    fun status(text: String, color: Int) {
+        views.setTextViewText(R.id.widget_status_label, text)
+        views.setTextColor(R.id.widget_status_label, color)
+        views.setInt(R.id.widget_status_dot, "setColorFilter", color)
+    }
+
+    if (live != null) {
+        val next = live.nextSet
+        if (next != null) {
+            status(
+                when {
+                    live.isResting -> "Resting"
+                    compact -> next.label
+                    else -> "${live.splitName} · ${next.label}"
+                },
+                if (live.isResting) info else accent
+            )
+            views.setTextViewText(R.id.widget_split_title, next.exerciseName)
+            views.setTextViewText(
+                R.id.widget_subtitle,
+                if (live.isResting) "Next: ${next.weightLabel} kg × ${next.reps}"
+                else "${live.totalSetsLeft} sets left today"
+            )
+            views.setViewVisibility(R.id.widget_subtitle, if (compact && !live.isResting && showControls) View.GONE else View.VISIBLE)
+
+            val controlsVisible = showControls && !live.isResting
+            views.setViewVisibility(R.id.widget_controls_row, if (controlsVisible) View.VISIBLE else View.GONE)
+            if (controlsVisible) {
+                views.setTextViewText(R.id.widget_weight_value, "${next.weightLabel} kg")
+                views.setTextViewText(R.id.widget_reps_value, "${next.reps}")
+                listOf(
+                    R.id.widget_btn_weight_minus to GymWidgetProvider.ACTION_WEIGHT_MINUS,
+                    R.id.widget_btn_weight_plus to GymWidgetProvider.ACTION_WEIGHT_PLUS,
+                    R.id.widget_btn_reps_minus to GymWidgetProvider.ACTION_REPS_MINUS,
+                    R.id.widget_btn_reps_plus to GymWidgetProvider.ACTION_REPS_PLUS,
+                    R.id.widget_btn_complete_set to GymWidgetProvider.ACTION_COMPLETE_SET
+                ).forEachIndexed { i, (viewId, action) ->
+                    views.setOnClickPendingIntent(viewId, widgetActionPendingIntent(context, action, requestCodeBase + i))
+                }
+            }
+        } else {
+            status("${live.splitName} · done", p.successText.toArgb())
+            views.setTextViewText(R.id.widget_split_title, "All sets done")
+            views.setTextViewText(R.id.widget_subtitle, "Open the app to save your workout")
+            views.setViewVisibility(R.id.widget_controls_row, View.GONE)
+        }
+
+        if (live.isResting) {
+            views.setViewVisibility(R.id.widget_rest_chronometer, View.VISIBLE)
+            views.setViewVisibility(R.id.widget_badge_container, View.GONE)
+            views.setChronometerCountDown(R.id.widget_rest_chronometer, true)
+            views.setChronometer(R.id.widget_rest_chronometer, SystemClock.elapsedRealtime() + live.restRemainingMillis, "%s", true)
+        } else {
+            views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
+            views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
+            views.setTextViewText(R.id.widget_action_badge, "Open")
+        }
+    } else {
+        val profile = LocalStorage.loadUserProfile(context)
+        val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
+        val split = programFor(profile.splitProgram).splits.find { it.title == week.recommendedSplit }
+        status("Up next", accent)
+        views.setTextViewText(R.id.widget_split_title, week.recommendedSplit)
+        views.setTextViewText(
+            R.id.widget_subtitle,
+            if (WIDGET_OPTION_WEEKLY in settings.options) "${week.completedCoreSplits.size} of ${week.weeklyGoal} done this week"
+            else split?.subtitle.orEmpty()
+        )
+        views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_controls_row, View.GONE)
+        views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
+        views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
+        views.setTextViewText(R.id.widget_action_badge, "Start")
+    }
+
+    val openApp = openAppPendingIntent(context, 0)
+    views.setOnClickPendingIntent(R.id.widget_header_click_area, openApp)
+    if (live == null) views.setOnClickPendingIntent(R.id.widget_root, openApp)
+    return views
+}
+
+private const val WIDGET_OPTION_CONTROLS = "controls"
+private const val WIDGET_OPTION_WEEKLY = "weekly"
+
 // ============================================================================
-// 2. WIDGET #2: AI MUSCLE FATIGUE & RECOVERY MATRIX WIDGET (4x2)
+// 2. LOCK-SCREEN LIVE WORKOUT NOTIFICATION
 // ============================================================================
+
+object LockScreenWorkoutController {
+    private const val LIVE_WORKOUT_CHANNEL_ID = "gym_live_lockscreen_channel"
+    private const val LIVE_NOTIFICATION_ID = 2002
+    private var channelCreated = false
+
+    private fun ensureChannel(manager: NotificationManager) {
+        if (channelCreated || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        manager.createNotificationChannel(
+            NotificationChannel(LIVE_WORKOUT_CHANNEL_ID, "Workout in progress", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Shows your current set on the lock screen while you train"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            }
+        )
+        channelCreated = true
+    }
+
+    fun sync(context: Context) {
+        try {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            val live = readLiveSession(context)
+            if (live == null) {
+                manager.cancel(LIVE_NOTIFICATION_ID)
+                return
+            }
+            ensureChannel(manager)
+
+            val settings = defaultWidgetSettings(WIDGET_KIND_WORKOUT)
+            val expanded = buildWorkoutWidgetViews(context, settings, compact = false, requestCodeBase = 20, forLockScreen = true)
+            val builder = notificationBuilder(context, LIVE_WORKOUT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_workout)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setCategory(Notification.CATEGORY_WORKOUT)
+                .setContentIntent(openAppPendingIntent(context, 0))
+                .setCustomContentView(buildWorkoutWidgetViews(context, settings, compact = true, requestCodeBase = 20, forLockScreen = true))
+                .setCustomBigContentView(expanded)
+                .setCustomHeadsUpContentView(expanded)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            }
+            manager.notify(LIVE_NOTIFICATION_ID, builder.build())
+        } catch (_: Exception) {}
+    }
+}
+
+// ============================================================================
+// 3. WIDGET #1: INTERACTIVE WORKOUT WIDGET
+// ============================================================================
+
+class GymWidgetProvider : AppWidgetProvider() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        val action = intent.action ?: return
+        if (action in SET_ACTIONS) {
+            handleWidgetSetAction(context.applicationContext, action)
+            LocalStorage.flush(context)
+        }
+    }
+
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        for (id in appWidgetIds) updateWidgetUi(context, appWidgetManager, id)
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateWidgetUi(context, appWidgetManager, appWidgetId)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) = LocalStorage.deleteWidgetSettings(context, appWidgetIds)
+
+    companion object {
+        const val ACTION_WEIGHT_MINUS = "com.example.gymtracker.ACTION_WEIGHT_MINUS"
+        const val ACTION_WEIGHT_PLUS = "com.example.gymtracker.ACTION_WEIGHT_PLUS"
+        const val ACTION_REPS_MINUS = "com.example.gymtracker.ACTION_REPS_MINUS"
+        const val ACTION_REPS_PLUS = "com.example.gymtracker.ACTION_REPS_PLUS"
+        const val ACTION_COMPLETE_SET = "com.example.gymtracker.ACTION_COMPLETE_SET"
+        private val SET_ACTIONS = setOf(ACTION_WEIGHT_MINUS, ACTION_WEIGHT_PLUS, ACTION_REPS_MINUS, ACTION_REPS_PLUS, ACTION_COMPLETE_SET)
+
+        private fun handleWidgetSetAction(context: Context, action: String) {
+            // Set controls are hidden while resting; ignore stale taps (the caller's flush redraws).
+            if (LocalStorage.getRestEndTimeMillis(context) - System.currentTimeMillis() > 1000L) return
+
+            val (splitTitle, sessionExercises) = LocalStorage.loadActiveSession(context) ?: return
+            val exercises = sessionExercises.toMutableList()
+            val exIdx = exercises.indexOfFirst { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
+            if (exIdx == -1) return
+            val currentEx = exercises[exIdx]
+            val setIdx = currentEx.sets.indexOfFirst { !it.isCompleted }
+            val target = currentEx.sets[setIdx]
+            val settings = LocalStorage.loadSettings(context)
+            val curWeight = parseWeightClean(target.weight, 20f)
+            val curReps = parseRepsClean(target.reps, 8)
+
+            val updated = when (action) {
+                ACTION_WEIGHT_MINUS -> target.copy(weight = formatKgClean((curWeight - settings.weightStepKg).coerceAtLeast(0f)))
+                ACTION_WEIGHT_PLUS -> target.copy(weight = formatKgClean(curWeight + settings.weightStepKg))
+                ACTION_REPS_MINUS -> target.copy(reps = "${(curReps - 1).coerceAtLeast(0)}")
+                ACTION_REPS_PLUS -> target.copy(reps = "${curReps + 1}")
+                ACTION_COMPLETE_SET -> target.copy(isCompleted = true)
+                else -> return
+            }
+            exercises[exIdx] = currentEx.copy(sets = currentEx.sets.toMutableList().also { it[setIdx] = updated })
+            LocalStorage.saveActiveSession(context, splitTitle, exercises, fromWidget = true)
+
+            if (action == ACTION_COMPLETE_SET) {
+                val restSec = target.restSeconds.takeIf { it >= 0 } ?: settings.restTimerSeconds
+                sendSetDoneNotification(context, currentEx.name, target.weight, target.reps, restSec)
+                val restEnd = if (restSec > 0) System.currentTimeMillis() + restSec * 1000L else 0L
+                LocalStorage.setRestEndTimeMillis(context, restEnd, fromWidget = true)
+            }
+        }
+
+        fun refreshAllWidgets(context: Context) {
+            try {
+                val appCtx = context.applicationContext
+                val manager = AppWidgetManager.getInstance(appCtx)
+                for (id in manager.getAppWidgetIds(ComponentName(appCtx, GymWidgetProvider::class.java))) {
+                    updateWidgetUi(appCtx, manager, id)
+                }
+            } catch (_: Exception) {}
+        }
+
+        fun updateWidgetUi(context: Context, manager: AppWidgetManager, widgetId: Int) {
+            val compact = manager.getAppWidgetOptions(widgetId).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250) < 210
+            val settings = LocalStorage.loadWidgetSettings(context, widgetId, WIDGET_KIND_WORKOUT)
+            manager.updateAppWidget(widgetId, buildWorkoutWidgetViews(context, settings, compact))
+        }
+    }
+}
+
+// ============================================================================
+// 4. CANVAS WIDGETS (#2 RECOVERY, #3 WEEKLY) — drawn at the widget's real size
+// ============================================================================
+
+/** Size of a placed widget in dp (portrait), falling back to [defaultW]×[defaultH]. */
+private fun widgetSizeDp(manager: AppWidgetManager, widgetId: Int, defaultW: Int, defaultH: Int): Pair<Int, Int> {
+    val o = manager.getAppWidgetOptions(widgetId)
+    val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: defaultW
+    val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: defaultH
+    return w to h
+}
+
+/** Pixels per dp for a widget bitmap, capped so the bitmap stays within RemoteViews' memory budget. */
+private fun bitmapScale(context: Context, wDp: Int, hDp: Int): Float {
+    val density = context.resources.displayMetrics.density
+    val maxScale = sqrt(2_500_000f / (wDp * hDp).coerceAtLeast(1))
+    return min(density, maxScale)
+}
+
+private fun refreshCanvasWidgets(
+    context: Context,
+    provider: Class<*>,
+    update: (Context, AppWidgetManager, Int) -> Unit
+) {
+    try {
+        val appCtx = context.applicationContext
+        val manager = AppWidgetManager.getInstance(appCtx)
+        manager.getAppWidgetIds(ComponentName(appCtx, provider)).forEach { update(appCtx, manager, it) }
+    } catch (_: Exception) {}
+}
+
+private fun pushCanvasWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bitmap: Bitmap, requestCode: Int) {
+    val views = RemoteViews(context.packageName, R.layout.gym_canvas_widget)
+    views.setImageViewBitmap(R.id.canvas_widget_image, bitmap)
+    views.setOnClickPendingIntent(R.id.canvas_widget_root, openAppPendingIntent(context, requestCode))
+    manager.updateAppWidget(widgetId, views)
+}
+
+/** Draws the rounded card background shared by both canvas widgets. Returns the palette used. */
+private fun drawWidgetCard(canvas: Canvas, context: Context, settings: WidgetSettings, w: Float, h: Float, s: Float): GymPalette {
+    val p = widgetPalette(context, settings)
+    val rect = RectF(0f, 0f, w, h)
+    canvas.drawRoundRect(rect, 24 * s, 24 * s, fillPaint(widgetBackground(p, settings), alpha255(settings.opacityPercent)))
+    if (settings.opacityPercent >= 30) {
+        canvas.drawRoundRect(RectF(0.5f, 0.5f, w - 0.5f, h - 0.5f), 24 * s, 24 * s, strokePaint(p.borderSubtle.toArgb(), 1 * s))
+    }
+    return p
+}
 
 class MuscleFatigueWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        for (id in appWidgetIds) {
-            updateWidget(context, appWidgetManager, id)
-        }
+        appWidgetIds.forEach { update(context, appWidgetManager, it) }
     }
 
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle
-    ) {
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        updateWidget(context, appWidgetManager, appWidgetId)
+        update(context, appWidgetManager, appWidgetId)
     }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) = LocalStorage.deleteWidgetSettings(context, appWidgetIds)
 
     companion object {
-        fun refreshAll(context: Context) {
-            try {
-                val appCtx = context.applicationContext
-                val manager = AppWidgetManager.getInstance(appCtx)
-                val ids = manager.getAppWidgetIds(ComponentName(appCtx, MuscleFatigueWidgetProvider::class.java))
-                for (id in ids) {
-                    updateWidget(appCtx, manager, id)
-                }
-            } catch (_: Exception) {}
+        fun refreshAll(context: Context) = refreshCanvasWidgets(context, MuscleFatigueWidgetProvider::class.java, ::update)
+
+        fun update(context: Context, manager: AppWidgetManager, widgetId: Int) {
+            val (wDp, hDp) = widgetSizeDp(manager, widgetId, 300, 140)
+            val settings = LocalStorage.loadWidgetSettings(context, widgetId, WIDGET_KIND_RECOVERY)
+            pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 301)
         }
 
-        private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
-            val views = RemoteViews(context.packageName, R.layout.gym_canvas_widget)
-            val bmp = renderFatigueMatrixBitmap(context)
-            views.setImageViewBitmap(R.id.canvas_widget_image, bmp)
-
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val pending = PendingIntent.getActivity(
-                context, 301, openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.canvas_widget_root, pending)
-            manager.updateAppWidget(widgetId, views)
-        }
-
-        private fun renderFatigueMatrixBitmap(context: Context): Bitmap {
-            val width = 840
-            val height = 380
-            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
+            val s = bitmapScale(context, wDp, hDp)
+            val w = wDp * s
+            val h = hDp * s
+            val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
-            val appCtx = context.applicationContext
-            val T = resolveNativeCanvasTheme(appCtx)
-            val appearance = LocalStorage.loadWidgetAppearance(appCtx)
+            val p = drawWidgetCard(canvas, context, settings, w, h, s)
 
-            // Safe history retrieval with fallback dummy data if logbook is empty
-            val history = LocalStorage.loadHistory(appCtx)
-            val recoveryList = computeMuscleRecoveryStatus(history)
-            val fatiguedCount = recoveryList.count { it.statusLabel == "FATIGUED" }
+            val items = computeMuscleRecoveryStatus(LocalStorage.loadHistory(context))
+            val ready = items.count { it.status == RecoveryStatus.READY }
+            val pad = 16 * s
 
-            val alphaInt = ((appearance.opacityPercent.coerceIn(10, 100) / 100f) * 255f).roundToInt()
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.bgCard
-                alpha = alphaInt
-            }
-            val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.borderStrong
-                style = Paint.Style.STROKE
-                strokeWidth = 3f
-            }
-            val cardRect = RectF(4f, 4f, width - 4f, height - 4f)
-            canvas.drawRoundRect(cardRect, 48f, 48f, bgPaint)
-            canvas.drawRoundRect(cardRect, 48f, 48f, borderPaint)
+            canvas.drawText("Recovery", pad, pad + 14 * s, textPaint(p.textPrimary.toArgb(), 15 * s))
+            canvas.drawText(
+                if (ready == items.size) "All rested" else "$ready of ${items.size} rested",
+                w - pad, pad + 14 * s,
+                textPaint(p.textSecondary.toArgb(), 12 * s, REGULAR, Paint.Align.RIGHT)
+            )
 
-            // Header Title
-            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.accentSecondary
-                textSize = 24f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                letterSpacing = 0.08f
-            }
-            canvas.drawText("🧠 AI MUSCLE RECOVERY & MAV", 38f, 52f, headerPaint)
+            val showSets = "sets" in settings.options
+            val showHours = "hours" in settings.options
+            val colW = (w - pad * 2) / items.size
+            val textRows = (if (showSets) 1 else 0) + (if (showHours) 1 else 0)
+            val textBlock = (18 + textRows * 15) * s
+            val areaTop = pad + 30 * s
+            val ringD = min(colW - 10 * s, h - areaTop - pad - textBlock).coerceAtLeast(16 * s)
+            // Center the rings + labels in the space under the header.
+            val top = areaTop + ((h - areaTop - pad) - (ringD + textBlock)).coerceAtLeast(0f) / 2
+            val stroke = (ringD * 0.11f).coerceIn(3 * s, 6 * s)
 
-            // Status Pill on Top Right
-            val badgeText = if (fatiguedCount == 0) "100% PRIMED ⚡" else "$fatiguedCount RECOVERING"
-            val badgeColor = if (fatiguedCount == 0) T.success else T.warning
-            val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = badgeColor
-                alpha = 38
-            }
-            val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = badgeColor
-                textSize = 21f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.RIGHT
-            }
-            val badgeWidth = badgeTextPaint.measureText(badgeText) + 36f
-            val badgeRect = RectF(width - 38f - badgeWidth, 24f, width - 38f, 64f)
-            canvas.drawRoundRect(badgeRect, 18f, 18f, badgeBgPaint)
-            canvas.drawText(badgeText, width - 56f, 51f, badgeTextPaint)
+            items.forEachIndexed { i, item ->
+                val cx = pad + colW * i + colW / 2
+                val cy = top + ringD / 2
+                val color = when (item.status) {
+                    RecoveryStatus.TIRED -> p.dangerText
+                    RecoveryStatus.RECOVERING -> p.warningText
+                    RecoveryStatus.READY -> p.successText
+                }.toArgb()
+                val r = ringD / 2 - stroke / 2
+                val arc = RectF(cx - r, cy - r, cx + r, cy + r)
+                canvas.drawArc(arc, 0f, 360f, false, strokePaint(p.bgControl.toArgb(), stroke))
+                canvas.drawArc(arc, -90f, 360f * item.recoveryPercent / 100f, false, strokePaint(color, stroke))
+                val pctPaint = textPaint(p.textPrimary.toArgb(), (ringD * 0.26f).coerceAtMost(15 * s), MEDIUM, Paint.Align.CENTER)
+                canvas.drawText("${item.recoveryPercent}", cx, cy + pctPaint.textSize * 0.35f, pctPaint)
 
-            // 5 Muscle Columns
-            val colGap = 16f
-            val totalSidePad = 76f
-            val colWidth = (width - totalSidePad - (colGap * 4)) / 5f
-            val colTop = 84f
-            val colBottom = height - 34f
-
-            val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.bgControl
-                alpha = alphaInt
-            }
-            val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.textPrimary
-                textSize = 24f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            val pctPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = 36f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.textSecondary
-                textSize = 20f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-
-            recoveryList.forEachIndexed { idx, item ->
-                val left = 38f + idx * (colWidth + colGap)
-                val right = left + colWidth
-                val centerX = (left + right) / 2f
-
-                val statusColor = when (item.statusLabel) {
-                    "FATIGUED" -> T.danger
-                    "RECOVERING" -> T.warning
-                    else -> T.success
+                var y = top + ringD + 16 * s
+                canvas.drawText(item.muscleGroup, cx, y, textPaint(p.textPrimary.toArgb(), 11.5f * s, MEDIUM, Paint.Align.CENTER))
+                if (showSets) {
+                    y += 15 * s
+                    val inTarget = item.weeklyWorkingSets in WEEKLY_SET_TARGET
+                    canvas.drawText("${item.weeklyWorkingSets} sets", cx, y, textPaint((if (inTarget) p.successText else p.textSecondary).toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
                 }
-
-                val colRect = RectF(left, colTop, right, colBottom)
-                canvas.drawRoundRect(colRect, 28f, 28f, boxPaint)
-
-                val colStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = statusColor
-                    alpha = 95
-                    style = Paint.Style.STROKE
-                    strokeWidth = 2.5f
+                if (showHours) {
+                    y += 15 * s
+                    val label = item.hoursSinceTrained?.let { if (it < 1) "Just now" else if (it < 48) "${it}h ago" else "${it / 24}d ago" } ?: "Not yet"
+                    canvas.drawText(label, cx, y, textPaint(p.textTertiary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
                 }
-                canvas.drawRoundRect(colRect, 28f, 28f, colStroke)
-
-                // Muscle Name
-                canvas.drawText(item.muscleGroup.uppercase(Locale.US), centerX, colTop + 44f, namePaint)
-
-                // Recovery %
-                pctPaint.color = statusColor
-                canvas.drawText("${item.recoveryPercent}%", centerX, colTop + 102f, pctPaint)
-
-                // Progress Bar Track & Fill
-                val barLeft = left + 18f
-                val barRight = right - 18f
-                val barTop = colTop + 126f
-                val barBottom = barTop + 14f
-                val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.BLACK
-                    alpha = 90
-                }
-                canvas.drawRoundRect(RectF(barLeft, barTop, barRight, barBottom), 7f, 7f, trackPaint)
-
-                val fillWidth = (barRight - barLeft) * (item.recoveryPercent / 100f).coerceIn(0.1f, 1f)
-                val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = statusColor }
-                canvas.drawRoundRect(RectF(barLeft, barTop, barLeft + fillWidth, barBottom), 7f, 7f, fillPaint)
-
-                // Weekly Sets (MAV)
-                subPaint.color = if (item.weeklyWorkingSets in 6..16) T.accentPrimary else T.textSecondary
-                canvas.drawText("${item.weeklyWorkingSets} sets/wk", centerX, colTop + 178f, subPaint)
-
-                // Fresh / Hours Ago
-                val timeLbl = if (item.hoursSinceTrained != null && item.hoursSinceTrained < 72) {
-                    "${item.hoursSinceTrained}h ago"
-                } else {
-                    "FRESH"
-                }
-                subPaint.color = T.textSecondary
-                subPaint.textSize = 18f
-                canvas.drawText(timeLbl, centerX, colTop + 216f, subPaint)
             }
-
             return bmp
         }
     }
 }
-
-// ============================================================================
-// 3. WIDGET #3: SQUARE 2x2 WEEKLY PULSE & VOLUME RING WIDGET
-// ============================================================================
 
 class SquarePulseWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        for (id in appWidgetIds) {
-            updateWidget(context, appWidgetManager, id)
-        }
+        appWidgetIds.forEach { update(context, appWidgetManager, it) }
     }
 
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle
-    ) {
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        updateWidget(context, appWidgetManager, appWidgetId)
+        update(context, appWidgetManager, appWidgetId)
     }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) = LocalStorage.deleteWidgetSettings(context, appWidgetIds)
 
     companion object {
-        fun refreshAll(context: Context) {
-            try {
-                val appCtx = context.applicationContext
-                val manager = AppWidgetManager.getInstance(appCtx)
-                val ids = manager.getAppWidgetIds(ComponentName(appCtx, SquarePulseWidgetProvider::class.java))
-                for (id in ids) {
-                    updateWidget(appCtx, manager, id)
-                }
-            } catch (_: Exception) {}
+        fun refreshAll(context: Context) = refreshCanvasWidgets(context, SquarePulseWidgetProvider::class.java, ::update)
+
+        fun update(context: Context, manager: AppWidgetManager, widgetId: Int) {
+            val (wDp, hDp) = widgetSizeDp(manager, widgetId, 160, 160)
+            val settings = LocalStorage.loadWidgetSettings(context, widgetId, WIDGET_KIND_WEEKLY)
+            pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 302)
         }
 
-        private fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
-            val views = RemoteViews(context.packageName, R.layout.gym_canvas_widget)
-            val bmp = renderSquarePulseBitmap(context)
-            views.setImageViewBitmap(R.id.canvas_widget_image, bmp)
-
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val pending = PendingIntent.getActivity(
-                context, 302, openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.canvas_widget_root, pending)
-            manager.updateAppWidget(widgetId, views)
-        }
-
-        private fun renderSquarePulseBitmap(context: Context): Bitmap {
-            val size = 420
-            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
+            val s = bitmapScale(context, wDp, hDp)
+            val w = wDp * s
+            val h = hDp * s
+            val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
-            val T = resolveNativeCanvasTheme(context)
+            val p = drawWidgetCard(canvas, context, settings, w, h, s)
 
-            val history = LocalStorage.loadHistory(context)
             val profile = LocalStorage.loadUserProfile(context)
-            val weekSummary = computeWeekSummary(history, 0, profile.splitProgram)
+            val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
+            val done = week.completedCoreSplits.size
+            val goal = week.weeklyGoal.coerceAtLeast(1)
+            val showVolume = "volume" in settings.options
+            val showNext = "next" in settings.options
+            val pad = 14 * s
 
-            val doneCount = weekSummary.completedCoreSplits.size
-            val goalCount = weekSummary.weeklyGoal.coerceAtLeast(1)
-            val progress = (doneCount.toFloat() / goalCount.toFloat()).coerceIn(0f, 1f)
+            canvas.drawText("This week", pad, pad + 13 * s, textPaint(p.textPrimary.toArgb(), 14 * s))
 
-            var weekVol = 0f
-            for (w in weekSummary.workouts) {
-                for (ex in w.exercises) {
-                    for (s in ex.sets) {
-                        if (!s.isWarmup && s.intensityType != "WARMUP") {
-                            weekVol += parseWeightClean(s.weight, 0f) * parseRepsClean(s.reps, 0)
-                        }
-                    }
-                }
+            val footerLines = (if (showNext) 1 else 0) + (if (showVolume) 1 else 0)
+            val footerH = footerLines * 16 * s + if (footerLines > 0) 6 * s else 0f
+            val areaTop = pad + 24 * s
+            val areaBottom = h - pad - footerH
+            val d = min(w - pad * 2, areaBottom - areaTop).coerceAtLeast(24 * s)
+            val cx = w / 2
+            val cy = areaTop + (areaBottom - areaTop) / 2
+            val stroke = (d * 0.1f).coerceIn(5 * s, 12 * s)
+            val r = d / 2 - stroke / 2
+            val arc = RectF(cx - r, cy - r, cx + r, cy + r)
+            canvas.drawArc(arc, 0f, 360f, false, strokePaint(p.bgControl.toArgb(), stroke))
+            if (done > 0) canvas.drawArc(arc, -90f, 360f * (done.toFloat() / goal).coerceAtMost(1f), false, strokePaint(p.accentPrimary.toArgb(), stroke))
+            val big = textPaint(p.textPrimary.toArgb(), d * 0.26f, BOLD, Paint.Align.CENTER)
+            canvas.drawText("$done/$goal", cx, cy + big.textSize * 0.2f, big)
+            canvas.drawText("workouts", cx, cy + big.textSize * 0.2f + 13 * s, textPaint(p.textSecondary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
+
+            var y = h - pad - footerH + 16 * s
+            if (showNext) {
+                val nextText = "Next: ${week.recommendedSplit}"
+                canvas.drawText(nextText, cx, y, textPaint(p.accentPrimary.toArgb(), 12 * s, MEDIUM, Paint.Align.CENTER).fitTo(nextText, w - pad * 2))
+                y += 16 * s
             }
-            val volFormatted = if (weekVol >= 1000f) {
-                String.format(Locale.US, "%.1fk kg", weekVol / 1000f)
-            } else {
-                "${weekVol.roundToInt()} kg"
+            if (showVolume) {
+                val vol = week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }
+                canvas.drawText(formatVolume(vol) + " lifted", cx, y, textPaint(p.textSecondary.toArgb(), 11 * s, REGULAR, Paint.Align.CENTER))
             }
-
-            // Card Background
-            val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = T.bgCard }
-            val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.borderStrong
-                style = Paint.Style.STROKE
-                strokeWidth = 3f
-            }
-            val rect = RectF(4f, 4f, size - 4f, size - 4f)
-            canvas.drawRoundRect(rect, 56f, 56f, bgPaint)
-            canvas.drawRoundRect(rect, 56f, 56f, borderPaint)
-
-            // Top Label
-            val topPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.accentPrimary
-                textSize = 21f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                letterSpacing = 0.08f
-            }
-            canvas.drawText("⚡ WEEKLY PULSE", 32f, 48f, topPaint)
-
-            // Circular Progress Ring in Center
-            val ringCenterX = size / 2f
-            val ringCenterY = 185f
-            val ringRadius = 92f
-            val ringRect = RectF(
-                ringCenterX - ringRadius,
-                ringCenterY - ringRadius,
-                ringCenterX + ringRadius,
-                ringCenterY + ringRadius
-            )
-
-            val trackRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.bgControl
-                style = Paint.Style.STROKE
-                strokeWidth = 22f
-                strokeCap = Paint.Cap.ROUND
-            }
-            canvas.drawArc(ringRect, 0f, 360f, false, trackRingPaint)
-
-            val fillRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.accentPrimary
-                style = Paint.Style.STROKE
-                strokeWidth = 22f
-                strokeCap = Paint.Cap.ROUND
-            }
-            val sweepAngle = (progress * 360f).coerceAtLeast(18f)
-            canvas.drawArc(ringRect, -90f, sweepAngle, false, fillRingPaint)
-
-            // Center Ring Text (e.g. "3/4")
-            val centerBigPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.textPrimary
-                textSize = 54f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText("$doneCount/$goalCount", ringCenterX, ringCenterY + 12f, centerBigPaint)
-
-            val centerSubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.textSecondary
-                textSize = 19f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText("SPLITS", ringCenterX, ringCenterY + 42f, centerSubPaint)
-
-            // Bottom Pill: Next Split & Weekly Volume
-            val pillRect = RectF(28f, size - 108f, size - 28f, size - 26f)
-            val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = T.bgControl }
-            canvas.drawRoundRect(pillRect, 26f, 26f, pillPaint)
-
-            val nextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.accentSecondary
-                textSize = 21f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText(
-                "NEXT: ${weekSummary.recommendedSplit.uppercase(Locale.US)}",
-                ringCenterX,
-                size - 72f,
-                nextPaint
-            )
-
-            val volPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = T.textPrimary
-                textSize = 20f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText("📦 Vol: $volFormatted", ringCenterX, size - 42f, volPaint)
-
             return bmp
         }
     }
 }
 
 // ============================================================================
-// 4. STRAVA-STYLE INSTAGRAM STORY IMAGE CARD GENERATOR (1080x1920)
+// 5. SHARE CARD (1080×1920 image for stories and chats)
 // ============================================================================
 
 fun shareWorkoutCardImage(
@@ -477,48 +641,31 @@ fun shareWorkoutCardImage(
     photoPath: String? = null
 ) {
     try {
-        val cardBitmap = generateStravaWorkoutCardBitmap(
-            context = context,
-            splitTitle = splitTitle,
-            durationSeconds = durationSeconds,
-            exercises = exercises,
-            history = history,
-            bodyWeightKg = bodyWeightKg,
-            photoPath = photoPath
-        )
+        val card = generateShareCard(context, splitTitle, durationSeconds, exercises, history, bodyWeightKg, photoPath)
 
-        val folder = File(context.filesDir, "workout_photos").apply { mkdirs() }
-        val shareFile = File(folder, "gym_story_share_${System.currentTimeMillis()}.jpg")
-        FileOutputStream(shareFile).use { out ->
-            cardBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-        }
+        // Share cards are throwaway: keep them in cache and replace the previous one.
+        val folder = File(context.cacheDir, "share_cards").apply { mkdirs() }
+        folder.listFiles()?.forEach { it.delete() }
+        // Older versions saved share cards next to workout photos and never removed them.
+        File(context.filesDir, "workout_photos").listFiles { f -> f.name.startsWith("gym_story_share_") }?.forEach { it.delete() }
+        val file = File(folder, "workout_${System.currentTimeMillis()}.jpg")
+        FileOutputStream(file).use { out -> card.compress(Bitmap.CompressFormat.JPEG, 95, out) }
+        card.recycle()
 
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            shareFile
-        )
-
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
             type = "image/jpeg"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(
-                Intent.EXTRA_TEXT,
-                "⚡ ${splitTitle.uppercase(Locale.US)} Session Complete! Crushed with Gym Tracker AI."
-            )
+            putExtra(Intent.EXTRA_TEXT, "$splitTitle done. Logged with GymTracker.")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-
-        val chooser = Intent.createChooser(sendIntent, "Share Workout Card to Instagram / WhatsApp").apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(chooser)
+        context.startActivity(Intent.createChooser(send, "Share workout").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: Exception) {
-        Toast.makeText(context, "Unable to generate share card", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Couldn't create the image", Toast.LENGTH_SHORT).show()
     }
 }
 
-private fun generateStravaWorkoutCardBitmap(
+private fun generateShareCard(
     context: Context,
     splitTitle: String,
     durationSeconds: Long,
@@ -527,242 +674,94 @@ private fun generateStravaWorkoutCardBitmap(
     bodyWeightKg: Float,
     photoPath: String?
 ): Bitmap {
-    val W = 1080
-    val H = 1920
-    val bmp = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+    val W = 1080f
+    val H = 1920f
+    val bmp = Bitmap.createBitmap(W.toInt(), H.toInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
-    val T = resolveNativeCanvasTheme(context)
+    val photo = photoPath?.takeIf { it.isNotBlank() && File(it).exists() }?.let { BitmapFactory.decodeFile(it) }
+    // Text over a photo always needs the dark palette to stay readable.
+    val p = if (photo != null) DarkPalette else appPalette(context)
+    val accent = p.accentPrimary.toArgb()
 
-    // 1. Draw Background (Pump Photo if attached, or Luxury Neon Grid)
-    val pumpBitmap = if (!photoPath.isNullOrBlank() && File(photoPath).exists()) {
-        BitmapFactory.decodeFile(photoPath)
-    } else null
-
-    if (pumpBitmap != null) {
-        // Center-crop pump photo across the 1080x1920 canvas
-        val scale = maxOf(W.toFloat() / pumpBitmap.width, H.toFloat() / pumpBitmap.height)
-        val scaledW = pumpBitmap.width * scale
-        val scaledH = pumpBitmap.height * scale
-        val dx = (W - scaledW) / 2f
-        val dy = (H - scaledH) / 2f
-        val matrix = Matrix().apply {
+    if (photo != null) {
+        val scale = maxOf(W / photo.width, H / photo.height)
+        val m = Matrix().apply {
             postScale(scale, scale)
-            postTranslate(dx, dy)
+            postTranslate((W - photo.width * scale) / 2f, (H - photo.height * scale) / 2f)
         }
-        canvas.drawBitmap(pumpBitmap, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
-
-        // Strava-style cinematic top & bottom dark gradient vignette
-        val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        canvas.drawBitmap(photo, m, Paint(Paint.FILTER_BITMAP_FLAG))
+        photo.recycle()
+        canvas.drawRect(0f, 0f, W, H, Paint().apply {
             shader = LinearGradient(
-                0f, 0f, 0f, H.toFloat(),
-                intArrayOf(
-                    Color.argb(190, 7, 8, 10),
-                    Color.argb(40, 7, 8, 10),
-                    Color.argb(215, 7, 8, 10),
-                    Color.argb(248, 7, 8, 10)
-                ),
-                floatArrayOf(0f, 0.38f, 0.66f, 1f),
+                0f, 0f, 0f, H,
+                intArrayOf(Color.argb(150, 0, 0, 0), Color.argb(0, 0, 0, 0), Color.argb(200, 10, 10, 12), Color.argb(245, 10, 10, 12)),
+                floatArrayOf(0f, 0.3f, 0.55f, 1f),
                 Shader.TileMode.CLAMP
             )
-        }
-        canvas.drawRect(0f, 0f, W.toFloat(), H.toFloat(), vignettePaint)
+        })
     } else {
-        // Luxury Dark Carbon Background + Subtle Tactical Grid + Accent Glow
-        canvas.drawColor(Color.parseColor("#07080A"))
-        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(
-                W / 2f, H * 0.28f, 680f,
-                Color.argb(65, Color.red(T.accentPrimary), Color.green(T.accentPrimary), Color.blue(T.accentPrimary)),
-                Color.TRANSPARENT,
-                Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawRect(0f, 0f, W.toFloat(), H.toFloat(), glowPaint)
-
-        val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            alpha = 12
-            strokeWidth = 2f
-        }
-        for (x in 0..W step 90) canvas.drawLine(x.toFloat(), 0f, x.toFloat(), H.toFloat(), gridPaint)
-        for (y in 0..H step 90) canvas.drawLine(0f, y.toFloat(), W.toFloat(), y.toFloat(), gridPaint)
+        canvas.drawColor(p.bgPrimary.toArgb())
+        canvas.drawRect(0f, 0f, W, H, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(W * 0.85f, H * 0.08f, 900f, Color.argb(70, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        })
     }
 
-    // 2. Top Branding Pill & Date Stamp
-    val topPillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(200, 17, 19, 24)
-    }
-    val topPillStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentPrimary
-        style = Paint.Style.STROKE
-        strokeWidth = 3f
-    }
-    val topPillRect = RectF(64f, 88f, 490f, 158f)
-    canvas.drawRoundRect(topPillRect, 35f, 35f, topPillPaint)
-    canvas.drawRoundRect(topPillRect, 35f, 35f, topPillStroke)
+    val left = 96f
+    val right = W - 96f
+    val text = p.textPrimary.toArgb()
+    val muted = p.textSecondary.toArgb()
 
-    val brandTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentPrimary
-        textSize = 28f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        letterSpacing = 0.1f
-    }
-    canvas.drawText("⚡ GYM TRACKER AI", 98f, 133f, brandTextPaint)
+    // Header
+    canvas.drawCircle(left + 14f, 158f, 14f, fillPaint(accent))
+    canvas.drawText("GymTracker", left + 44f, 170f, textPaint(text, 40f))
+    canvas.drawText(DateUtils.formatShortDayYear(Date()), right, 170f, textPaint(muted, 36f, REGULAR, Paint.Align.RIGHT))
 
-    val dateStr = SimpleDateFormat("MMM d, yyyy • HH:mm", Locale.US).format(Date())
-    val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        alpha = 210
-        textSize = 28f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.RIGHT
-    }
-    canvas.drawText(dateStr.uppercase(Locale.US), W - 64f, 133f, datePaint)
-
-    // 3. Calculate Workout Stats
-    val performed = exercises.filter { !it.isSkipped }
-    var workSetsDone = 0
-    var totalVolFloat = 0f
-    var prCount = 0
-    val liftSummaries = mutableListOf<Pair<String, String>>()
-
-    for (ex in performed) {
-        val rec = computeExerciseRecords(ex.name, history)
-        val validSets = ex.sets.filter {
-            !it.isWarmup && it.intensityType != "WARMUP" && parseRepsClean(it.reps, 0) > 0
-        }
-        if (validSets.isNotEmpty()) {
-            val topSet = validSets.maxByOrNull { parseWeightClean(it.weight, 0f) } ?: validSets.first()
-            val tags = buildString {
-                if (ex.isSuperset) append(" 🔗")
-                if (ex.sets.any { it.intensityType == "DROP" }) append(" 🔥")
-            }
-            liftSummaries.add("${ex.name}$tags" to "${topSet.weight}kg × ${topSet.reps} (${validSets.size} sets)")
-        }
-        for (s in ex.sets) {
-            if (!s.isWarmup && s.intensityType != "WARMUP") {
-                val r = parseRepsClean(s.reps, 0)
-                val w = parseWeightClean(s.weight, 0f)
-                if (r > 0) {
-                    workSetsDone++
-                    totalVolFloat += (w * r)
-                }
-            }
-            if (isSetPersonalRecord(s, rec)) prCount++
-        }
-    }
-    val totalVol = totalVolFloat.roundToInt()
-    val mins = (durationSeconds / 60L).coerceAtLeast(1L)
-
-    // 4. Main Strava Summary HUD Box
-    val boxTop = if (pumpBitmap != null) 1020f else 480f
-    val boxBottom = H - 96f
-    val boxRect = RectF(56f, boxTop, W - 56f, boxBottom)
-
-    val hudBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(228, 17, 19, 24)
-    }
-    val hudBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentPrimary
-        alpha = 180
-        style = Paint.Style.STROKE
-        strokeWidth = 4f
-    }
-    canvas.drawRoundRect(boxRect, 54f, 54f, hudBgPaint)
-    canvas.drawRoundRect(boxRect, 54f, 54f, hudBorderPaint)
-
-    // Workout Split Title & Subtitle inside HUD Box
-    val subHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentSecondary
-        textSize = 26f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        letterSpacing = 0.12f
-    }
-    val bwSuffix = if (bodyWeightKg > 0f) " • BW: ${formatKgClean(bodyWeightKg)}KG" else ""
-    canvas.drawText("SESSION COMPLETE$bwSuffix", 104f, boxTop + 72f, subHeaderPaint)
-
-    val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = 74f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    }
-    canvas.drawText(splitTitle.uppercase(Locale.US), 104f, boxTop + 154f, titlePaint)
-
-    // 4 Stat Pills Row (TIME | VOLUME | SETS | PRs)
-    val statRowTop = boxTop + 195f
-    val statRowBottom = statRowTop + 160f
-    val statGap = 20f
-    val statWidth = ((W - 208f) - (statGap * 3)) / 4f
-
-    val stats = listOf(
-        "${mins}m" to "DURATION",
-        "${totalVol}kg" to "VOLUME",
-        "$workSetsDone" to "WORK SETS",
-        "🏆 $prCount" to "NEW PRs"
-    )
-
-    val statPillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(255, 30, 34, 43)
-    }
-    val statValPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentPrimary
-        textSize = 40f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    val statLblPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#8A93A6")
-        textSize = 22f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
+    val stats = computeWorkoutStats(exercises, history)
+    val lifts = exercises.filter { !it.isSkipped }.mapNotNull { ex ->
+        val sets = ex.sets.filter { !it.isWarmupSet && it.repCount > 0 }
+        if (sets.isEmpty()) null else ex.name to sets.maxBy { it.weightKg }.let { "${it.weight} kg × ${it.reps}" }
     }
 
-    stats.forEachIndexed { idx, (valStr, lblStr) ->
-        val left = 104f + idx * (statWidth + statGap)
-        val right = left + statWidth
-        val centerX = (left + right) / 2f
-        canvas.drawRoundRect(RectF(left, statRowTop, right, statRowBottom), 28f, 28f, statPillPaint)
-        canvas.drawText(valStr, centerX, statRowTop + 74f, statValPaint)
-        canvas.drawText(lblStr, centerX, statRowTop + 122f, statLblPaint)
-    }
+    // Title block sits lower when a photo fills the top.
+    var y = if (photo != null) 1040f else 520f
+    val bw = if (bodyWeightKg > 0f) "  ·  ${formatKgClean(bodyWeightKg)} kg body weight" else ""
+    canvas.drawText("Workout complete$bw", left, y, textPaint(accent, 40f).fitTo("Workout complete$bw", right - left))
+    y += 120f
+    canvas.drawText(splitTitle, left, y, textPaint(text, 120f, BOLD).fitTo(splitTitle, right - left))
+    y += 90f
 
-    // Top Lifts List inside HUD Box
-    val listStartY = statRowBottom + 68f
-    val secTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#8A93A6")
-        textSize = 24f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        letterSpacing = 0.08f
+    // Stats grid (2 × 2)
+    val gap = 24f
+    val cellW = (right - left - gap) / 2
+    val cellH = 170f
+    listOf(
+        formatDuration(durationSeconds) to "Time",
+        formatVolume(stats.volumeKg) to "Volume",
+        "${stats.workSets}" to "Sets",
+        "${stats.prCount}" to "New bests"
+    ).forEachIndexed { i, (value, label) ->
+        val cx = left + (i % 2) * (cellW + gap)
+        val cy = y + (i / 2) * (cellH + gap)
+        canvas.drawRoundRect(RectF(cx, cy, cx + cellW, cy + cellH), 36f, 36f, fillPaint(p.bgCard.toArgb(), if (photo != null) 200 else 255))
+        canvas.drawText(value, cx + 36f, cy + 92f, textPaint(text, 58f, BOLD))
+        canvas.drawText(label, cx + 36f, cy + 136f, textPaint(muted, 32f, REGULAR))
     }
-    canvas.drawText("KEY LIFTS & TOP SETS", 104f, listStartY, secTitlePaint)
+    y += cellH * 2 + gap + 90f
 
-    val exNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = 31f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-    }
-    val exSetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = T.accentSecondary
-        textSize = 30f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textAlign = Paint.Align.RIGHT
-    }
-    val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        alpha = 25
-        strokeWidth = 2f
-    }
-
-    val maxLiftsToShow = if (pumpBitmap != null) 5 else 8
-    liftSummaries.take(maxLiftsToShow).forEachIndexed { i, (exName, setSummary) ->
-        val rowY = listStartY + 62f + (i * 70f)
-        if (rowY < boxBottom - 36f) {
-            val truncatedName = if (exName.length > 24) exName.take(22) + "…" else exName
-            canvas.drawText(truncatedName, 104f, rowY, exNamePaint)
-            canvas.drawText(setSummary, W - 104f, rowY, exSetPaint)
-            canvas.drawLine(104f, rowY + 22f, W - 104f, rowY + 22f, dividerPaint)
+    // Top sets
+    val maxRows = ((H - 200f - y) / 76f).toInt().coerceIn(0, 7)
+    if (lifts.isNotEmpty() && maxRows > 0) {
+        canvas.drawText("Top sets", left, y, textPaint(muted, 34f))
+        y += 30f
+        lifts.take(maxRows).forEach { (name, set) ->
+            y += 76f
+            val setPaint = textPaint(text, 40f, MEDIUM, Paint.Align.RIGHT)
+            val namePaint = textPaint(text, 40f, REGULAR)
+            canvas.drawText(namePaint.ellipsize(name, right - left - setPaint.measureText(set) - 32f), left, y, namePaint)
+            canvas.drawText(set, right, y, setPaint)
         }
     }
 
+    canvas.drawText("Logged with GymTracker", W / 2, H - 110f, textPaint(muted, 30f, REGULAR, Paint.Align.CENTER))
     return bmp
 }

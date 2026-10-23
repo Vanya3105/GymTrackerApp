@@ -1,41 +1,49 @@
-# 🏋️ GymTracker for Android
+# GymTracker for Android
 
-A minimalist, high-performance offline workout tracker built for Android (optimized for Samsung One UI / Galaxy S26 Ultra), featuring split-isolated AI progressive overload, hardware-synced Home & Lock Screen interactive widgets, and background alarm-backed rest timers.
-
----
-
-## ✨ Key Features
-
-### 🚀 Interactive Home & Lock Screen Widgets
-* **Live Rest Timer:** Displays a live second-by-second countdown chronometer right on your home screen and lock screen without draining battery.
-* **In-Widget Set Control:** Adjust weight (`−` / `+`), adjust reps (`−` / `+`), and complete sets (`✓`) directly from your home screen or lock screen widget without opening the app.
-* **Auto-Locking Rest Protection:** Automatically hides set logging controls while the rest timer is active and pops them back up the exact second your rest finishes.
-* **Custom Themes & Opacity:** Long-press your home screen widget to access configuration settings for Dark/Light mode and custom background opacity (0–100%) with a live preview.
-* **Non-Dismissible Lock Screen Live Widget:** Stays pinned to your lock screen during an active session (cannot be swiped away) and automatically disappears when you finish or cancel your workout.
-
-### 🤖 Smart 6–8 Rep Failure AI Overload
-* Analyzes past session logs for your current split.
-* Tracks 2-session rep streaks in the 8+ or ≤6 rep zones to dynamically recommend when to increase weight (e.g., `+2.5kg`) or drop weight.
-
-### ⏱️ Background Rest Alarms & Notifications
-* Powered by Android's native `AlarmManager` so rest timer notifications and music-safe beeps fire precisely—even when your phone is locked in your pocket or the app is closed.
-
-### 📊 Minimalist Logbook & Analytics
-* **Clean Summary Cards:** Quick stat pills showing total exercises, work sets, and duration (`4 Exercises • 8 Work Sets • ⏱ 45 min`) instead of cluttered text walls.
-* **Exercise Analytics:** Tap any exercise to view a 5-session progression chart, Estimated 1RM, Max Weight, Best Set, and permanent machine/seat setup notes.
-* **Progress & Pump Photos:** Attach photo receipts to finished workouts to track physical progress.
+A simple, offline workout log. Pick your split, follow the suggested weights, and log sets from the app, your home screen or your lock screen.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
-* **UI:** Jetpack Compose (Material 3, Crossfade transitions, custom high-contrast dark/light design systems).
-* **Widgets & Lock Screen:** Android `RemoteViews`, `AppWidgetProvider`, and custom foreground notification views.
-* **Persistence:** Local JSON storage (`LocalStorage`) via high-speed asynchronous writing with debouncing.
-* **Background Tasks:** `AlarmManager` and `BroadcastReceiver` for exact-timing rest triggers.
+## What it does
+
+### Training
+* **Today screen:** your next workout, this week's progress (with a dot for every day you trained) and how rested each muscle group is.
+* **Live workout:** steppers for weight and reps, one tap to mark a set done, and "last time" numbers under every exercise.
+* **Weight suggestions:** plain-language tips based on your past sessions of the same split. Two sessions in a row at 8+ reps means go up; two at 6 or fewer means go down. Tap "Use" to fill in the weight.
+* **Exercise library:** 130 exercises you can search by name, muscle, equipment or nickname ("rdl", "ohp"). You can still create your own.
+* **Set types:** tap a set number to mark it as a warm-up, drop set or rest-pause, change its rest, or delete it.
+* **Supersets:** link exercises so the rest timer starts after the whole round.
+* **Drag to reorder:** hold the handle on an exercise and drag. The card follows your finger and the others slide out of the way.
+* **Rest timer:** a floating countdown with −15 / +15 / skip, plus an alarm-backed beep and notification that work with the phone locked.
+* **Minimize a workout:** go back to browse your history mid-session; a "Resume" bar brings you back.
+
+### History & progress
+* Week and month views, each workout card with share, edit and delete.
+* Body weight log with a trend chart, muscle recovery details and your best lifts (estimated 1-rep max).
+* Shareable workout image with your stats and top sets, over your photo if you added one.
+
+### Widgets
+* **Workout:** your next workout, or the current set with weight/rep buttons and a done button. It hides the buttons while you rest.
+* **Recovery:** how rested each muscle group is and your sets this week.
+* **This week:** workouts done against your goal, what's next, and weekly volume.
+* Every widget has its own settings (long-press → settings): theme (match app, light, dark), plain or tinted background, opacity, and what it shows.
+* While training, the same workout card appears on the lock screen.
+
+### Look & feel
+* Two themes, light and dark, or follow the system.
+* Bottom tabs: Today, History, Progress, Profile.
 
 ---
 
-## 📲 Getting Started
-1. Clone or download this repository.
-2. Open the project in **Android Studio**.
-3. Sync Gradle and run on your Android device (Android 13+ / One UI recommended for full notification and widget features).
+## Tech
+* **UI:** Jetpack Compose with Material 3, a custom design system (`Theme.kt`, `Components.kt`) and Material icons.
+* **Widgets & lock screen:** `RemoteViews`, `AppWidgetProvider`, bitmaps drawn at each widget's real size.
+* **Storage:** a single local JSON file (`LocalStorage`), kept in memory and written in the background with an atomic file swap. Widget and lock-screen refreshes are batched.
+* **Rest alarms:** `AlarmManager` + `BroadcastReceiver`.
+
+---
+
+## Getting started
+1. Clone the repository.
+2. Open it in **Android Studio**.
+3. Sync Gradle and run it on a device (Android 7.0+; Android 12+ for the best widget experience).

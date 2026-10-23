@@ -1,0 +1,361 @@
+package com.example.gymtracker
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
+private enum class HistoryMode { WEEK, MONTH }
+
+@Composable
+fun HistoryScreen(
+    history: List<CompletedWorkout>,
+    userProfile: UserProfile,
+    onOpenWorkout: (CompletedWorkout) -> Unit,
+    onDeleteWorkout: (Long) -> Unit
+) {
+    val P = LocalPalette.current
+    var mode by rememberSaveable { mutableStateOf(HistoryMode.WEEK) }
+    var pendingDelete by remember { mutableStateOf<CompletedWorkout?>(null) }
+    var photoToView by remember { mutableStateOf<String?>(null) }
+
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 12.dp)) {
+            Text("History", style = AppType.display, color = P.textPrimary)
+            Spacer(Modifier.height(14.dp))
+            SegmentedControl(
+                options = listOf(HistoryMode.WEEK to "Week", HistoryMode.MONTH to "Month"),
+                selected = mode,
+                onSelect = { mode = it }
+            )
+        }
+
+        AnimatedContent(
+            targetState = mode,
+            transitionSpec = { fadeIn(tween(200)).togetherWith(fadeOut(tween(120))) },
+            label = "history_mode"
+        ) { m ->
+            when (m) {
+                HistoryMode.WEEK -> WeekView(history, userProfile, onOpenWorkout, { pendingDelete = it }, { photoToView = it })
+                HistoryMode.MONTH -> MonthView(history, onOpenWorkout, { pendingDelete = it }, { photoToView = it })
+            }
+        }
+    }
+
+    pendingDelete?.let { workout ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            containerColor = P.bgElevated,
+            title = { Text("Delete this workout?", style = AppType.headline, color = P.textPrimary) },
+            text = { Text("${workout.splitTitle} on ${workout.displayDate.substringBefore(" •")} will be removed for good.", style = AppType.body, color = P.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { onDeleteWorkout(workout.id); pendingDelete = null }) {
+                    Text("Delete", color = P.dangerText, style = AppType.label)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("Keep", color = P.textSecondary, style = AppType.label) }
+            }
+        )
+    }
+
+    photoToView?.let { path ->
+        val bmp = remember(path) { PhotoStorage.loadImageBitmap(path) }
+        if (bmp == null) photoToView = null
+        else AppBottomSheet(onDismiss = { photoToView = null }) {
+            Image(
+                bitmap = bmp,
+                contentDescription = "Workout photo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(20.dp))
+            )
+            Spacer(Modifier.navigationBarsPadding().height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun WeekView(
+    history: List<CompletedWorkout>,
+    userProfile: UserProfile,
+    onOpen: (CompletedWorkout) -> Unit,
+    onDelete: (CompletedWorkout) -> Unit,
+    onViewPhoto: (String) -> Unit
+) {
+    val P = LocalPalette.current
+    var weekOffset by rememberSaveable { mutableIntStateOf(0) }
+    val week = remember(history, weekOffset, userProfile.splitProgram) { computeWeekSummary(history, weekOffset, userProfile.splitProgram) }
+    val stats = remember(week) { week.workouts.map { computeWorkoutStats(it.exercises, emptyList()) } }
+
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous week", { weekOffset-- })
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(week.titleLabel, style = AppType.bodyStrong, color = P.textPrimary)
+                    Text(week.dateRangeLabel, style = AppType.caption, color = P.textSecondary)
+                }
+                CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next week", { weekOffset++ }, enabled = weekOffset < 0)
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile("${week.workouts.size}", "Workouts", Modifier.weight(1f))
+                StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
+                StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
+            }
+        }
+        workoutList(week.workouts, history, onOpen, onDelete, onViewPhoto, emptyText = "Nothing logged this week yet.")
+    }
+}
+
+@Composable
+private fun MonthView(
+    history: List<CompletedWorkout>,
+    onOpen: (CompletedWorkout) -> Unit,
+    onDelete: (CompletedWorkout) -> Unit,
+    onViewPhoto: (String) -> Unit
+) {
+    val P = LocalPalette.current
+    val today = remember { Calendar.getInstance() }
+    var year by rememberSaveable { mutableIntStateOf(today.get(Calendar.YEAR)) }
+    var month by rememberSaveable { mutableIntStateOf(today.get(Calendar.MONTH)) }
+    val todayKey = remember { DateUtils.formatDayKey(Date()) }
+    var selectedKey by rememberSaveable { mutableStateOf(todayKey) }
+    val byDate = remember(history) { history.groupBy { it.dateKey } }
+
+    val (firstDayOffset, daysInMonth, monthTitle) = remember(year, month) {
+        val cal = Calendar.getInstance().apply { set(year, month, 1) }
+        Triple(cal.get(Calendar.DAY_OF_WEEK) - 1, cal.getActualMaximum(Calendar.DAY_OF_MONTH), DateUtils.formatMonthTitle(cal.time))
+    }
+    val workoutsThisMonth = byDate.keys.count { it.startsWith(String.format(Locale.US, "%04d-%02d", year, month + 1)) }
+
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            AppCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", {
+                        if (month == 0) { month = 11; year-- } else month--
+                    }, size = 36.dp)
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(monthTitle, style = AppType.bodyStrong, color = P.textPrimary)
+                        Text("$workoutsThisMonth training days", style = AppType.caption, color = P.textSecondary)
+                    }
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", {
+                        if (month == 11) { month = 0; year++ } else month++
+                    }, size = 36.dp)
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("S", "M", "T", "W", "T", "F", "S").forEach {
+                        Text(it, Modifier.weight(1f), style = AppType.caption, color = P.textTertiary, textAlign = TextAlign.Center)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                val rows = (firstDayOffset + daysInMonth + 6) / 7
+                for (week in 0 until rows) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        for (col in 0..6) {
+                            val day = week * 7 + col - firstDayOffset + 1
+                            if (day !in 1..daysInMonth) {
+                                Spacer(Modifier.weight(1f).height(42.dp))
+                                continue
+                            }
+                            val key = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                            val trained = byDate.containsKey(key)
+                            val selected = key == selectedKey
+                            val isToday = key == todayKey
+                            val bg by animateColorAsState(
+                                when {
+                                    selected -> P.accentPrimary
+                                    trained -> P.accentSoft
+                                    else -> Color.Transparent
+                                }, label = "day_bg"
+                            )
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                                    .padding(2.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(bg)
+                                    .pressable(pressedScale = 0.9f) { selectedKey = key },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "$day",
+                                    style = if (trained || isToday) AppType.label else AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                                    color = when {
+                                        selected -> P.onAccentPrimary
+                                        trained -> P.accentPrimary
+                                        isToday -> P.textPrimary
+                                        else -> P.textSecondary
+                                    }
+                                )
+                                if (isToday && !selected) {
+                                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).size(4.dp).clip(CircleShape).background(P.textPrimary))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            val label = if (selectedKey == todayKey) "Today" else selectedKey.toDayLabel()
+            SectionHeader(label)
+        }
+        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyText = "No workout on this day.")
+    }
+}
+
+private fun String.toDayLabel(): String = try {
+    val d = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(this)
+    java.text.SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(d!!)
+} catch (e: Exception) { this }
+
+private fun LazyListScope.workoutList(
+    workouts: List<CompletedWorkout>,
+    allHistory: List<CompletedWorkout>,
+    onOpen: (CompletedWorkout) -> Unit,
+    onDelete: (CompletedWorkout) -> Unit,
+    onViewPhoto: (String) -> Unit,
+    emptyText: String
+) {
+    if (workouts.isEmpty()) {
+        item { EmptyState(Icons.Rounded.FitnessCenter, "Nothing here", emptyText) }
+    } else {
+        itemsIndexed(workouts, key = { _, w -> w.id }) { i, workout ->
+            WorkoutHistoryCard(
+                workout = workout,
+                allHistory = allHistory,
+                onOpen = { onOpen(workout) },
+                onDelete = { onDelete(workout) },
+                onViewPhoto = onViewPhoto,
+                modifier = Modifier.animateItem().enterAnimation(i)
+            )
+        }
+    }
+}
+
+@Composable
+fun WorkoutHistoryCard(
+    workout: CompletedWorkout,
+    allHistory: List<CompletedWorkout>,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+    onViewPhoto: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val photo = remember(workout.photoPath) { PhotoStorage.loadImageBitmap(workout.photoPath) }
+    val sets = remember(workout.exercises) { workout.exercises.sumOf { ex -> ex.sets.count { !it.isWarmupSet && it.repCount > 0 } } }
+    var menuOpen by remember { mutableStateOf(false) }
+
+    AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpen) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(workout.splitTitle, style = AppType.headline, color = P.textPrimary)
+                Text(workout.displayDate.replace(" • ", " · "), style = AppType.caption, color = P.textSecondary)
+            }
+            if (workout.prsHit > 0) {
+                Pill("${workout.prsHit} PR${if (workout.prsHit > 1) "s" else ""}", icon = Icons.Rounded.EmojiEvents, color = P.warningText, container = P.warningSurface)
+            }
+            Box {
+                CircleIconButton(Icons.Rounded.MoreVert, "More", { menuOpen = true }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
+                    DropdownMenuItem(
+                        text = { Text("Share", style = AppType.body) },
+                        leadingIcon = { Icon(Icons.Rounded.IosShare, null) },
+                        onClick = {
+                            menuOpen = false
+                            shareWorkoutCardImage(
+                                context, workout.splitTitle, workout.durationSeconds, workout.exercises,
+                                allHistory.filter { it.id < workout.id }, workout.bodyWeightKg, workout.photoPath
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Edit", style = AppType.body) },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                        onClick = { menuOpen = false; onOpen() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", style = AppType.body, color = P.dangerText) },
+                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
+                        onClick = { menuOpen = false; onDelete() }
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("${workout.exercises.size} exercises", icon = Icons.Rounded.FitnessCenter)
+            Pill("$sets sets")
+            Pill(formatDuration(workout.durationSeconds), icon = Icons.Rounded.Schedule)
+        }
+        if (workout.skippedExercises.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Skipped: ${workout.skippedExercises.joinToString(", ")}", style = AppType.caption, color = P.warningText)
+        }
+        if (photo != null && workout.photoPath != null) {
+            Spacer(Modifier.height(12.dp))
+            Image(
+                bitmap = photo,
+                contentDescription = "Workout photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .pressable(pressedScale = 0.98f) { onViewPhoto(workout.photoPath) }
+            )
+        }
+    }
+}

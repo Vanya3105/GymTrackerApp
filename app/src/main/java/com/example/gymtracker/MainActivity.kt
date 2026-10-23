@@ -19,37 +19,57 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            GymTrackerRoot(activity = this)
-        }
+        setContent { GymTrackerRoot(activity = this) }
     }
 }
 
@@ -58,142 +78,118 @@ fun GymTrackerRoot(activity: Activity) {
     val context = LocalContext.current
     val view = LocalView.current
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
         ensureNotificationChannelCreated(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
     var settings by remember { mutableStateOf(LocalStorage.loadSettings(context)) }
-    val palette = when (settings.themeChoice) {
-        "ARCTIC" -> LightEditorialPalette
-        "CYBERPUNK" -> CyberpunkNeonPalette
-        "OLED" -> MidnightOledPalette
-        else -> DarkLuxuryPalette
-    }
+    val palette = paletteFor(settings.themeChoice, isSystemInDarkTheme())
 
-    LaunchedEffect(settings.targetFps, settings.isDarkMode) {
-        applyDisplayRefreshRate(activity, settings.targetFps)
-        val window = activity.window
-        WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = !settings.isDarkMode
-            isAppearanceLightNavigationBars = !settings.isDarkMode
+    LaunchedEffect(settings.targetFps) { applyDisplayRefreshRate(activity, settings.targetFps) }
+    SideEffect {
+        WindowCompat.getInsetsController(activity.window, view).apply {
+            isAppearanceLightStatusBars = !palette.isDark
+            isAppearanceLightNavigationBars = !palette.isDark
         }
     }
 
-    val triggerHaptic = remember(settings.hapticsEnabled, view) {
-        {
-            if (settings.hapticsEnabled) {
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            }
-        }
+    val haptics = remember(settings.hapticsEnabled, view) {
+        Haptics(enabled = settings.hapticsEnabled, view = view)
     }
 
-    CompositionLocalProvider(LocalPalette provides palette) {
-        MaterialTheme(
-            colorScheme = if (palette.isDark) {
-                darkColorScheme(
-                    background = palette.bgPrimary,
-                    surface = palette.bgCard,
-                    primary = palette.accentPrimary
-                )
-            } else {
-                lightColorScheme(
-                    background = palette.bgPrimary,
-                    surface = palette.bgCard,
-                    primary = palette.accentPrimary
-                )
-            }
-        ) {
-            Surface(modifier = Modifier.fillMaxSize(), color = palette.bgPrimary) {
-                GymTrackerApp(
-                    activity = activity,
-                    settings = settings,
-                    onUpdateSettings = { newSettings ->
-                        settings = newSettings
-                        LocalStorage.saveSettings(context, newSettings)
-                        triggerHaptic()
-                    },
-                    onHaptic = triggerHaptic
-                )
-            }
+    GymTheme(palette) {
+        Box(Modifier.fillMaxSize().background(palette.bgPrimary)) {
+            GymTrackerApp(
+                activity = activity,
+                settings = settings,
+                haptics = haptics,
+                onUpdateSettings = { newSettings ->
+                    settings = newSettings
+                    LocalStorage.saveSettings(context, newSettings)
+                    haptics.tick()
+                }
+            )
         }
     }
 }
 
-private fun screenDepth(key: String): Int = when (key) {
-    "ONBOARDING" -> 0
-    "HOME" -> 1
-    "WEIGHT_TRACKER", "WEEKLY", "SETTINGS", "ACTIVE_WORKOUT" -> 2
-    "CALENDAR", "EDIT_PAST" -> 3
-    else -> 1
+/** Small wrapper so screens can ask for "tick" vs "confirm" feedback without checking the setting. */
+class Haptics(private val enabled: Boolean, private val view: android.view.View) {
+    fun tick() {
+        if (enabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    fun confirm() {
+        if (!enabled) return
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
+        view.performHapticFeedback(type)
+    }
+}
+
+enum class AppTab(val label: String, val icon: ImageVector) {
+    TODAY("Today", Icons.Rounded.Home),
+    HISTORY("History", Icons.Rounded.CalendarMonth),
+    PROGRESS("Progress", Icons.Rounded.Insights),
+    PROFILE("Profile", Icons.Rounded.Person)
+}
+
+private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
+    toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
+
+/** Builds the logbook entry; PRs are judged only against workouts logged before this one. */
+private fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): CompletedWorkout {
+    val performed = exercises.filter { !it.isSkipped }
+    val stats = computeWorkoutStats(performed, history.filter { it.id < base.id })
+    return base.copy(exercises = performed, totalVolumeKg = stats.volumeKg, prsHit = stats.prCount)
 }
 
 @Composable
 fun GymTrackerApp(
     activity: Activity,
     settings: AppSettings,
-    onUpdateSettings: (AppSettings) -> Unit,
-    onHaptic: () -> Unit
+    haptics: Haptics,
+    onUpdateSettings: (AppSettings) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val P = LocalPalette.current
 
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
-
-    val activeProgram = remember(userProfile.splitProgram) {
-        SPLIT_PROGRAMS[userProfile.splitProgram] ?: SPLIT_PROGRAMS["PPL_ARNOLD"]!!
-    }
+    val activeProgram = remember(userProfile.splitProgram) { programFor(userProfile.splitProgram) }
     val splits = activeProgram.splits
 
-    var showOnboardingScreen by remember {
-        mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f)
-    }
-    var showWeightTrackerScreen by remember { mutableStateOf(false) }
-    var showWeeklySummaryScreen by remember { mutableStateOf(false) }
-    var showMonthlyCalendarScreen by remember { mutableStateOf(false) }
-    var showSettingsScreen by remember { mutableStateOf(false) }
+    var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
-    var selectedWorkout by remember {
-        mutableStateOf(initialActive?.let { pair ->
-            splits.find { it.title == pair.first } ?: WorkoutSplit(pair.first, "", "01")
-        })
+    var activeSplit by remember {
+        mutableStateOf(initialActive?.let { (title, _) -> splits.find { it.title == title } ?: WorkoutSplit(title, "", "01") })
     }
-    var currentExercises by remember {
-        mutableStateOf(initialActive?.second ?: emptyList())
-    }
-
-    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+    var currentExercises by remember { mutableStateOf(initialActive?.second ?: emptyList()) }
+    // The live workout is either open full-screen or minimized to the "Resume" bar.
+    var workoutExpanded by remember { mutableStateOf(initialActive != null) }
+    var lastBackPress by remember { mutableLongStateOf(0L) }
 
     val reloadFromDisk = rememberUpdatedState {
-        val latestActive = LocalStorage.loadActiveSession(context)
-        if (latestActive != null && editingPastWorkout == null) {
-            selectedWorkout = splits.find { it.title == latestActive.first }
-                ?: WorkoutSplit(latestActive.first, "", "01")
-            currentExercises = latestActive.second
+        val latest = LocalStorage.loadActiveSession(context)
+        if (latest != null && editingPastWorkout == null) {
+            activeSplit = splits.find { it.title == latest.first } ?: WorkoutSplit(latest.first, "", "01")
+            currentExercises = latest.second
         }
     }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                reloadFromDisk.value()
-            }
+            if (event == Lifecycle.Event.ON_RESUME) reloadFromDisk.value()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -201,9 +197,7 @@ fun GymTrackerApp(
 
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                reloadFromDisk.value()
-            }
+            override fun onReceive(ctx: Context?, intent: Intent?) = reloadFromDisk.value()
         }
         val filter = IntentFilter(ACTION_SESSION_SYNC)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -212,352 +206,399 @@ fun GymTrackerApp(
             @Suppress("UnspecifiedRegisterReceiverFlag")
             context.registerReceiver(receiver, filter)
         }
-        onDispose {
-            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
-        }
+        onDispose { try { context.unregisterReceiver(receiver) } catch (_: Exception) {} }
     }
 
-    val isWorkoutScreenOpen = selectedWorkout != null || editingPastWorkout != null
-    LaunchedEffect(isWorkoutScreenOpen, settings.keepScreenAwake) {
-        if (isWorkoutScreenOpen && settings.keepScreenAwake) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    val workoutVisible = (activeSplit != null && workoutExpanded) || editingPastWorkout != null
+    LaunchedEffect(workoutVisible, settings.keepScreenAwake) {
+        if (workoutVisible && settings.keepScreenAwake) activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    BackHandler(enabled = !workoutVisible && !showOnboarding) {
+        if (selectedTab != AppTab.TODAY) {
+            selectedTab = AppTab.TODAY
         } else {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
-
-    val currentScreenKey = when {
-        showOnboardingScreen -> "ONBOARDING"
-        editingPastWorkout != null -> "EDIT_PAST"
-        selectedWorkout != null -> "ACTIVE_WORKOUT"
-        showWeightTrackerScreen -> "WEIGHT_TRACKER"
-        showSettingsScreen -> "SETTINGS"
-        showMonthlyCalendarScreen -> "CALENDAR"
-        showWeeklySummaryScreen -> "WEEKLY"
-        else -> "HOME"
-    }
-
-    // System Edge-Swipe Back Navigation for all non-workout screens
-    // (Active Workout & Edit Past handle their own BackHandler inside ActiveWorkoutScreen)
-    BackHandler(enabled = currentScreenKey != "ACTIVE_WORKOUT" && currentScreenKey != "EDIT_PAST") {
-        onHaptic()
-        when (currentScreenKey) {
-            "CALENDAR" -> showMonthlyCalendarScreen = false
-            "WEEKLY" -> showWeeklySummaryScreen = false
-            "SETTINGS" -> showSettingsScreen = false
-            "WEIGHT_TRACKER" -> showWeightTrackerScreen = false
-            "ONBOARDING" -> {
-                if (userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f) {
-                    showOnboardingScreen = false
-                } else {
-                    val now = System.currentTimeMillis()
-                    if (now - lastBackPressTime < 2000L) {
-                        activity.finish()
-                    } else {
-                        lastBackPressTime = now
-                        Toast.makeText(context, "Swipe back again to exit", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-            "HOME" -> {
-                val now = System.currentTimeMillis()
-                if (now - lastBackPressTime < 2000L) {
-                    activity.finish()
-                } else {
-                    lastBackPressTime = now
-                    Toast.makeText(context, "Swipe back again to exit", Toast.LENGTH_SHORT).show()
-                }
+            val now = System.currentTimeMillis()
+            if (now - lastBackPress < 2000L) activity.finish()
+            else {
+                lastBackPress = now
+                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     fun startWorkout(split: WorkoutSplit) {
-        onHaptic()
-        val savedTemplate = LocalStorage.loadTemplateForSplit(context, split.title)
-        val entries = savedTemplate.map { (exName, muscle) ->
-            val dummy = ExerciseEntry(exName, muscle)
-            val advice = evaluateSplitIsolatedAi(split.title, dummy, history, settings.weightStepKg)
-            val workWeight = advice?.suggestedWeight?.ifBlank { "40" } ?: "40"
-            val warmupWeight = ((workWeight.toFloatOrNull() ?: 40f) * 0.5f).toInt().toString()
-            val exRest = LocalStorage.getExerciseDefaultRest(context, exName, settings.restTimerSeconds)
-
-            ExerciseEntry(
-                name = exName,
-                targetMuscle = muscle,
-                restSeconds = exRest,
-                isSkipped = false,
-                sets = listOf(
-                    SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, restSeconds = minOf(60, exRest)),
-                    SetEntry(2, weight = workWeight, reps = "8", isWarmup = false, restSeconds = exRest),
-                    SetEntry(3, weight = workWeight, reps = "8", isWarmup = false, restSeconds = exRest)
-                )
-            )
+        haptics.confirm()
+        if (activeSplit != null) {
+            // A workout is already running — just bring it back.
+            workoutExpanded = true
+            return
         }
-
-        selectedWorkout = split
+        val entries = LocalStorage.loadTemplateForSplit(context, split.title).map { (exName, muscle) ->
+            newExerciseEntry(context, split.title, exName, muscle, history, settings)
+        }
+        activeSplit = split
         currentExercises = entries
+        workoutExpanded = true
         LocalStorage.saveActiveSession(context, split.title, entries)
     }
 
-    AnimatedContent(
-        targetState = currentScreenKey,
-        transitionSpec = {
-            val isForward = screenDepth(targetState) >= screenDepth(initialState)
-            val slideSpec = tween<androidx.compose.ui.unit.IntOffset>(
-                durationMillis = 280,
-                easing = FastOutSlowInEasing
-            )
-            val fadeSpec = tween<Float>(durationMillis = 220)
+    fun openPastWorkout(workout: CompletedWorkout) {
+        haptics.tick()
+        currentExercises = workout.exercises
+        editingPastWorkout = workout
+    }
 
-            if (isForward) {
-                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth / 4 } + fadeIn(fadeSpec))
-                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 5 } + fadeOut(fadeSpec))
-            } else {
-                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 5 } + fadeIn(fadeSpec))
-                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth / 4 } + fadeOut(fadeSpec))
-            }.using(SizeTransform(clip = false))
-        },
-        label = "screen_transition"
-    ) { screen ->
-        when (screen) {
-            "ONBOARDING" -> {
+    fun deletePastWorkout(id: Long) {
+        haptics.tick()
+        LocalStorage.deleteWorkoutFromHistory(context, id)
+        history = LocalStorage.loadHistory(context)
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = {
+                    val forward = targetState.ordinal > initialState.ordinal
+                    (fadeIn(tween(220, delayMillis = 60)) + slideInHorizontallyBy(if (forward) 0.06f else -0.06f))
+                        .togetherWith(fadeOut(tween(120)))
+                },
+                modifier = Modifier.weight(1f),
+                label = "tab_content"
+            ) { tab ->
+                when (tab) {
+                    AppTab.TODAY -> HomeScreen(
+                        splits = splits,
+                        history = history,
+                        userProfile = userProfile,
+                        programName = activeProgram.name,
+                        activeSplitTitle = activeSplit?.title,
+                        onStartWorkout = { startWorkout(it) },
+                        onOpenProgress = { selectedTab = AppTab.PROGRESS },
+                        onOpenHistory = { selectedTab = AppTab.HISTORY }
+                    )
+                    AppTab.HISTORY -> HistoryScreen(
+                        history = history,
+                        userProfile = userProfile,
+                        onOpenWorkout = { openPastWorkout(it) },
+                        onDeleteWorkout = { deletePastWorkout(it) }
+                    )
+                    AppTab.PROGRESS -> ProgressScreen(
+                        history = history,
+                        userProfile = userProfile,
+                        weightHistory = weightHistory,
+                        haptics = haptics,
+                        onLogWeight = { kg ->
+                            weightHistory = LocalStorage.addWeightLog(context, kg)
+                            userProfile = LocalStorage.loadUserProfile(context)
+                        },
+                        onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) }
+                    )
+                    AppTab.PROFILE -> SettingsScreen(
+                        settings = settings,
+                        userProfile = userProfile,
+                        onUpdateSettings = onUpdateSettings,
+                        onUpdateProfile = { updated ->
+                            userProfile = updated
+                            LocalStorage.saveUserProfile(context, updated)
+                        },
+                        onOpenOnboarding = { showOnboarding = true },
+                        onReplayTips = { selectedTab = AppTab.TODAY },
+                        onDataRestored = {
+                            history = LocalStorage.loadHistory(context)
+                            userProfile = LocalStorage.loadUserProfile(context)
+                            weightHistory = LocalStorage.loadWeightHistory(context)
+                            onUpdateSettings(LocalStorage.loadSettings(context))
+                        }
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = activeSplit != null && !workoutExpanded && editingPastWorkout == null,
+                enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
+            ) {
+                ResumeWorkoutBar(
+                    splitTitle = activeSplit?.title.orEmpty(),
+                    exercises = currentExercises,
+                    onResume = {
+                        haptics.tick()
+                        workoutExpanded = true
+                    }
+                )
+            }
+
+            BottomNavBar(selected = selectedTab, onSelect = {
+                if (it != selectedTab) haptics.tick()
+                selectedTab = it
+            })
+        }
+
+        // Full-screen workout (live or editing a past one) slides up over the tabs.
+        AnimatedVisibility(
+            visible = workoutVisible,
+            enter = slideInVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(tween(150)),
+            exit = slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200, delayMillis = 60))
+        ) {
+            val editing = editingPastWorkout
+            val split = editing?.let { e -> splits.find { it.title == e.splitTitle } ?: WorkoutSplit(e.splitTitle, "", "01") }
+                ?: activeSplit
+            if (split != null) {
+                Box(Modifier.fillMaxSize().background(P.bgPrimary)) {
+                    if (editing != null) {
+                        ActiveWorkoutScreen(
+                            split = split,
+                            exercises = currentExercises,
+                            history = remember(history, editing.id) { history.filter { it.id < editing.id } },
+                            settings = settings,
+                            userProfile = userProfile,
+                            isEditingPastWorkout = true,
+                            initialDurationSeconds = editing.durationSeconds,
+                            initialPhotoPath = editing.photoPath,
+                            haptics = haptics,
+                            hasUnsavedEdits = currentExercises != editing.exercises,
+                            onUpdateExercises = { currentExercises = it },
+                            onReorderExercises = { from, to -> currentExercises = currentExercises.moved(from, to) },
+                            onAddExercise = { _, _ -> },
+                            onRemoveExercisePermanently = { exName ->
+                                currentExercises = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
+                            },
+                            onMinimize = {
+                                editingPastWorkout = null
+                                currentExercises = LocalStorage.loadActiveSession(context)?.second ?: emptyList()
+                            },
+                            onDiscardWorkout = {
+                                editingPastWorkout = null
+                                currentExercises = LocalStorage.loadActiveSession(context)?.second ?: emptyList()
+                            },
+                            onFinishWorkout = { _, photoPath, skipped ->
+                                haptics.confirm()
+                                val updated = buildCompletedWorkout(
+                                    editing.copy(photoPath = photoPath, skippedExercises = skipped),
+                                    currentExercises,
+                                    history
+                                )
+                                LocalStorage.updateCompletedWorkout(context, updated)
+                                history = LocalStorage.loadHistory(context)
+                                editingPastWorkout = null
+                                currentExercises = LocalStorage.loadActiveSession(context)?.second ?: emptyList()
+                            }
+                        )
+                    } else {
+                        ActiveWorkoutScreen(
+                            split = split,
+                            exercises = currentExercises,
+                            history = history,
+                            settings = settings,
+                            userProfile = userProfile,
+                            isEditingPastWorkout = false,
+                            initialPhotoPath = null,
+                            haptics = haptics,
+                            onUpdateExercises = { updated ->
+                                currentExercises = updated
+                                LocalStorage.saveActiveSession(context, split.title, updated)
+                            },
+                            onReorderExercises = { from, to ->
+                                val reordered = currentExercises.moved(from, to)
+                                currentExercises = reordered
+                                LocalStorage.saveActiveSession(context, split.title, reordered)
+                                LocalStorage.saveTemplateForSplit(context, split.title, reordered.map { it.name to it.targetMuscle })
+                            },
+                            onAddExercise = { name, muscle -> LocalStorage.addExerciseToSplitTemplate(context, split.title, name, muscle) },
+                            onRemoveExercisePermanently = { exName ->
+                                LocalStorage.removeExerciseFromSplitTemplate(context, split.title, exName)
+                                val updated = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
+                                currentExercises = updated
+                                LocalStorage.saveActiveSession(context, split.title, updated)
+                            },
+                            onMinimize = { workoutExpanded = false },
+                            onDiscardWorkout = {
+                                haptics.tick()
+                                LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+                                LocalStorage.saveActiveSession(context, null, emptyList())
+                                workoutExpanded = false
+                                activeSplit = null
+                                currentExercises = emptyList()
+                            },
+                            onFinishWorkout = { durationSecs, photoPath, skipped ->
+                                haptics.confirm()
+                                val now = Date()
+                                val completed = buildCompletedWorkout(
+                                    CompletedWorkout(
+                                        id = now.time,
+                                        splitTitle = split.title,
+                                        dateKey = DateUtils.formatDayKey(now),
+                                        displayDate = DateUtils.formatDisplayDate(now),
+                                        durationSeconds = durationSecs,
+                                        bodyWeightKg = userProfile.currentWeightKg,
+                                        photoPath = photoPath,
+                                        skippedExercises = skipped,
+                                        exercises = emptyList()
+                                    ),
+                                    currentExercises,
+                                    history
+                                )
+                                LocalStorage.saveCompletedWorkout(context, completed)
+                                history = LocalStorage.loadHistory(context)
+                                workoutExpanded = false
+                                activeSplit = null
+                                currentExercises = emptyList()
+                                selectedTab = AppTab.TODAY
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showOnboarding,
+            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.98f),
+            exit = fadeOut(tween(250))
+        ) {
+            Box(Modifier.fillMaxSize().background(P.bgPrimary)) {
                 OnboardingScreen(
                     initialProfile = userProfile,
-                    onHaptic = onHaptic,
+                    canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
+                    haptics = haptics,
+                    onBack = { showOnboarding = false },
                     onSaveProfile = { newProfile ->
+                        val weightChanged = newProfile.currentWeightKg != userProfile.currentWeightKg
                         userProfile = newProfile
                         LocalStorage.saveUserProfile(context, newProfile)
-                        weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
-                        showOnboardingScreen = false
+                        if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
+                        showOnboarding = false
                     }
                 )
             }
-            "WEIGHT_TRACKER" -> {
-                WeightTrackerScreen(
-                    userProfile = userProfile,
-                    weightHistory = weightHistory,
-                    onHaptic = onHaptic,
-                    onLogWeight = { newKg ->
-                        onHaptic()
-                        weightHistory = LocalStorage.addWeightLog(context, newKg)
-                        userProfile = LocalStorage.loadUserProfile(context)
-                    },
-                    onDeleteWeight = { id ->
-                        onHaptic()
-                        weightHistory = LocalStorage.deleteWeightLog(context, id)
-                    },
-                    onBack = {
-                        onHaptic()
-                        showWeightTrackerScreen = false
+        }
+    }
+}
+
+/** Creates a fresh exercise for today: one warm-up plus two work sets at the suggested weight. */
+fun newExerciseEntry(
+    context: Context,
+    splitTitle: String,
+    name: String,
+    muscle: String,
+    history: List<CompletedWorkout>,
+    settings: AppSettings
+): ExerciseEntry {
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStepKg)
+    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: "40"
+    val warmupWeight = formatKgClean(((workWeight.toFloatOrNull() ?: 40f) * 0.5f).let { (it / 2.5f).toInt() * 2.5f })
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    return ExerciseEntry(
+        name = name,
+        targetMuscle = muscle,
+        restSeconds = rest,
+        sets = listOf(
+            SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest)),
+            SetEntry(2, weight = workWeight, reps = "8", restSeconds = rest),
+            SetEntry(3, weight = workWeight, reps = "8", restSeconds = rest)
+        )
+    )
+}
+
+private fun slideInHorizontallyBy(fraction: Float) =
+    androidx.compose.animation.slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) {
+        (it * fraction).toInt()
+    }
+
+@Composable
+private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
+    val P = LocalPalette.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .shadow(if (P.isDark) 0.dp else 16.dp, spotColor = P.shadow.copy(alpha = 0.12f), ambientColor = P.shadow.copy(alpha = 0.06f))
+            .background(P.bgCard)
+    ) {
+        if (P.isDark) Box(Modifier.fillMaxWidth().height(1.dp).background(P.borderSubtle))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            AppTab.entries.forEach { tab ->
+                val isSelected = tab == selected
+                val iconColor by animateColorAsState(if (isSelected) P.accentPrimary else P.textSecondary, label = "nav_icon")
+                val pillColor by animateColorAsState(if (isSelected) P.accentSoft else P.bgCard.copy(alpha = 0f), label = "nav_pill")
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .pressable(pressedScale = 0.92f, role = Role.Tab) { onSelect(tab) }
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(pillColor)
+                            .padding(horizontal = 18.dp, vertical = 5.dp)
+                    ) {
+                        Icon(tab.icon, contentDescription = tab.label, tint = iconColor, modifier = Modifier.size(24.dp))
                     }
-                )
-            }
-            "EDIT_PAST" -> {
-                val target = editingPastWorkout
-                if (target != null) {
-                    val splitObj = splits.find { it.title == target.splitTitle }
-                        ?: WorkoutSplit(target.splitTitle, "", "01")
-                    ActiveWorkoutScreen(
-                        split = splitObj,
-                        exercises = currentExercises,
-                        history = history,
-                        settings = settings,
-                        userProfile = userProfile,
-                        isEditingPastWorkout = true,
-                        initialPhotoPath = target.photoPath,
-                        onHaptic = onHaptic,
-                        onUpdateExercises = { updated -> currentExercises = updated },
-                        onReorderExercises = { fromIdx, toIdx ->
-                            val mutable = currentExercises.toMutableList()
-                            val moved = mutable.removeAt(fromIdx)
-                            mutable.add(toIdx, moved)
-                            currentExercises = mutable
-                        },
-                        onAddCustomExercise = {},
-                        onRemoveExercisePermanently = { exName ->
-                            currentExercises = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
-                        },
-                        onCancelWorkout = {
-                            onHaptic()
-                            editingPastWorkout = null
-                            currentExercises = emptyList()
-                        },
-                        onFinishWorkout = { _, updatedPhotoPath, skippedList ->
-                            onHaptic()
-                            val performedOnly = currentExercises.filter { !it.isSkipped }
-                            val updatedWorkout = target.copy(
-                                photoPath = updatedPhotoPath,
-                                skippedExercises = skippedList,
-                                exercises = performedOnly
-                            )
-                            LocalStorage.updateCompletedWorkout(context, updatedWorkout)
-                            history = LocalStorage.loadHistory(context)
-                            editingPastWorkout = null
-                            currentExercises = emptyList()
-                        }
-                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(tab.label, style = AppType.caption, color = if (isSelected) P.textPrimary else P.textSecondary)
                 }
             }
-            "ACTIVE_WORKOUT" -> {
-                val activeSplit = selectedWorkout
-                if (activeSplit != null) {
-                    ActiveWorkoutScreen(
-                        split = activeSplit,
-                        exercises = currentExercises,
-                        history = history,
-                        settings = settings,
-                        userProfile = userProfile,
-                        isEditingPastWorkout = false,
-                        initialPhotoPath = null,
-                        onHaptic = onHaptic,
-                        onUpdateExercises = { updated ->
-                            currentExercises = updated
-                            LocalStorage.saveActiveSession(context, activeSplit.title, updated)
-                        },
-                        onReorderExercises = { fromIdx, toIdx ->
-                            val mutable = currentExercises.toMutableList()
-                            val moved = mutable.removeAt(fromIdx)
-                            mutable.add(toIdx, moved)
-                            currentExercises = mutable
-                            LocalStorage.saveActiveSession(context, activeSplit.title, mutable)
-                            LocalStorage.saveTemplateForSplit(
-                                context,
-                                activeSplit.title,
-                                mutable.map { it.name to it.targetMuscle }
-                            )
-                        },
-                        onAddCustomExercise = { customName ->
-                            LocalStorage.addExerciseToSplitTemplate(context, activeSplit.title, customName)
-                        },
-                        onRemoveExercisePermanently = { exName ->
-                            LocalStorage.removeExerciseFromSplitTemplate(context, activeSplit.title, exName)
-                            val updated = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
-                            currentExercises = updated
-                            LocalStorage.saveActiveSession(context, activeSplit.title, updated)
-                        },
-                        onCancelWorkout = {
-                            onHaptic()
-                            selectedWorkout = null
-                            currentExercises = emptyList()
-                            LocalStorage.saveActiveSession(context, null, emptyList())
-                        },
-                        onFinishWorkout = { durationSecs, photoPath, skippedList ->
-                            onHaptic()
-                            val now = Date()
-                            val performedOnly = currentExercises.filter { !it.isSkipped }
-                            val completed = CompletedWorkout(
-                                id = System.currentTimeMillis(),
-                                splitTitle = activeSplit.title,
-                                dateKey = DateUtils.formatDayKey(now),
-                                displayDate = DateUtils.formatDisplayDate(now),
-                                durationSeconds = durationSecs,
-                                bodyWeightKg = userProfile.currentWeightKg,
-                                photoPath = photoPath,
-                                skippedExercises = skippedList,
-                                exercises = performedOnly
-                            )
-                            LocalStorage.saveCompletedWorkout(context, completed)
-                            history = LocalStorage.loadHistory(context)
-                            selectedWorkout = null
-                            currentExercises = emptyList()
-                        }
-                    )
-                }
+        }
+    }
+}
+
+@Composable
+private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>, onResume: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val startTime = remember(splitTitle) { LocalStorage.getActiveSessionStartTime(context) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var restLeft by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            restLeft = ((LocalStorage.getRestEndTimeMillis(context) - now) / 1000L).coerceAtLeast(0L)
+            delay(1000L)
+        }
+    }
+    val active = exercises.filter { !it.isSkipped }
+    val total = active.sumOf { it.sets.size }
+    val done = active.sumOf { ex -> ex.sets.count { it.isCompleted } }
+
+    AppCard(
+        modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp).fillMaxWidth(),
+        elevated = true,
+        onClick = onResume,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProgressRing(
+                progress = if (total == 0) 0f else done / total.toFloat(),
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 4.dp
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(P.accentPrimary))
             }
-            "SETTINGS" -> {
-                SettingsScreen(
-                    settings = settings,
-                    userProfile = userProfile,
-                    onUpdateSettings = onUpdateSettings,
-                    onUpdateProfile = { updatedProf ->
-                        onHaptic()
-                        userProfile = updatedProf
-                        LocalStorage.saveUserProfile(context, updatedProf)
-                    },
-                    onOpenOnboarding = {
-                        onHaptic()
-                        showSettingsScreen = false
-                        showOnboardingScreen = true
-                    },
-                    onDataRestored = {
-                        history = LocalStorage.loadHistory(context)
-                        userProfile = LocalStorage.loadUserProfile(context)
-                        weightHistory = LocalStorage.loadWeightHistory(context)
-                        onUpdateSettings(LocalStorage.loadSettings(context))
-                    },
-                    onBack = {
-                        onHaptic()
-                        showSettingsScreen = false
-                    }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("$splitTitle in progress", style = AppType.bodyStrong, color = P.textPrimary)
+                Text(
+                    "${formatClock((now - startTime) / 1000L)} · $done of $total sets",
+                    style = AppType.caption.copy(fontFeatureSettings = "tnum"),
+                    color = P.textSecondary
                 )
             }
-            "CALENDAR" -> {
-                HistoryCalendarScreen(
-                    history = history,
-                    onEditWorkout = { workoutToEdit ->
-                        onHaptic()
-                        currentExercises = workoutToEdit.exercises
-                        editingPastWorkout = workoutToEdit
-                    },
-                    onDeleteWorkout = { id ->
-                        onHaptic()
-                        LocalStorage.deleteWorkoutFromHistory(context, id)
-                        history = LocalStorage.loadHistory(context)
-                    },
-                    onBackToWeekly = {
-                        onHaptic()
-                        showMonthlyCalendarScreen = false
-                    }
-                )
+            if (restLeft > 0) {
+                Pill(formatClock(restLeft), color = P.accentSecondary, container = P.accentSecondarySoft, icon = Icons.Rounded.Timer)
+                Spacer(Modifier.width(8.dp))
             }
-            "WEEKLY" -> {
-                WeeklySummaryScreen(
-                    history = history,
-                    userProfile = userProfile,
-                    onEditWorkout = { workoutToEdit ->
-                        onHaptic()
-                        currentExercises = workoutToEdit.exercises
-                        editingPastWorkout = workoutToEdit
-                    },
-                    onDeleteWorkout = { id ->
-                        onHaptic()
-                        LocalStorage.deleteWorkoutFromHistory(context, id)
-                        history = LocalStorage.loadHistory(context)
-                    },
-                    onBackHome = {
-                        onHaptic()
-                        showWeeklySummaryScreen = false
-                    },
-                    onOpenMonthlyCalendar = {
-                        onHaptic()
-                        showMonthlyCalendarScreen = true
-                    }
-                )
-            }
-            else -> {
-                val currentWeekSummary = remember(history, userProfile.splitProgram) {
-                    computeWeekSummary(history, weekOffset = 0, splitProgramId = userProfile.splitProgram)
-                }
-                HomeScreen(
-                    splits = splits,
-                    currentWeek = currentWeekSummary,
-                    userProfile = userProfile,
-                    activeProgramName = activeProgram.name,
-                    onSelectWorkout = { startWorkout(it) },
-                    onOpenWeightTracker = {
-                        onHaptic()
-                        showWeightTrackerScreen = true
-                    },
-                    onOpenWeeklySummary = {
-                        onHaptic()
-                        showWeeklySummaryScreen = true
-                    },
-                    onOpenSettings = {
-                        onHaptic()
-                        showSettingsScreen = true
-                    }
-                )
-            }
+            Text("Resume", style = AppType.label, color = P.accentPrimary)
         }
     }
 }

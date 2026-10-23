@@ -14,7 +14,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.GymTracker">
 
         <activity
             android:name=".MainActivity"
@@ -28,7 +28,7 @@
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.Material.NoActionBar">
+            android:theme="@style/Theme.GymTracker">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
@@ -38,11 +38,11 @@
             android:name=".RestAlarmReceiver"
             android:exported="false" />
 
-        <!-- WIDGET 1: Interactive Active Workout Widget -->
+        <!-- Widget 1: interactive workout -->
         <receiver
             android:name=".GymWidgetProvider"
             android:exported="true"
-            android:label="Gym Tracker">
+            android:label="@string/widget_label_workout">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.example.gymtracker.ACTION_WEIGHT_MINUS" />
@@ -56,11 +56,11 @@
                 android:resource="@xml/gym_widget_info" />
         </receiver>
 
-        <!-- WIDGET 2: AI Muscle Fatigue & Recovery Matrix (4x2) -->
+        <!-- Widget 2: muscle recovery -->
         <receiver
             android:name=".MuscleFatigueWidgetProvider"
             android:exported="true"
-            android:label="Gym AI • Muscle Recovery">
+            android:label="@string/widget_label_recovery">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -69,11 +69,11 @@
                 android:resource="@xml/fatigue_widget_info" />
         </receiver>
 
-        <!-- WIDGET 3: Square 2x2 Weekly Pulse & Volume Ring -->
+        <!-- Widget 3: this week -->
         <receiver
             android:name=".SquarePulseWidgetProvider"
             android:exported="true"
-            android:label="Gym AI • Square Pulse (2x2)">
+            android:label="@string/widget_label_weekly">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -82,7 +82,7 @@
                 android:resource="@xml/square_widget_info" />
         </receiver>
 
-        <!-- Required for sharing Pump Photos to Instagram/WhatsApp -->
+        <!-- Shares workout images and photos with other apps -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

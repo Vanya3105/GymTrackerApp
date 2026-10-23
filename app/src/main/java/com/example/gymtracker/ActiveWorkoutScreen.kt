@@ -1,16 +1,22 @@
 package com.example.gymtracker
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -19,7 +25,42 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DragIndicator
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,110 +68,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.Locale
-import kotlin.math.roundToInt
 
-// ============================================================================
-// 1. WORKOUT HEADER CLOCK, PR BANNER & SUPERSET HELPERS
-// ============================================================================
+private const val EXERCISE_KEY_PREFIX = "ex:"
 
-@Composable
-fun ElapsedWorkoutClock(startTimeMillis: Long, userProfile: UserProfile) {
-    val P = LocalPalette.current
-    var elapsedSec by remember {
-        mutableLongStateOf(((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L))
-    }
-
-    LaunchedEffect(startTimeMillis) {
-        while (true) {
-            delay(1000L)
-            elapsedSec = ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
-        }
-    }
-
-    val mins = elapsedSec / 60
-    val secs = elapsedSec % 60
-    Text(
-        text = String.format(
-            Locale.US,
-            "⏱ %d:%02d • BW: ${formatKgClean(userProfile.currentWeightKg)}kg • DRAG ⠿",
-            mins,
-            secs
-        ),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        color = P.accentSecondary
-    )
-}
-
-@Composable
-fun PrCelebrationBanner(message: String) {
-    val P = LocalPalette.current
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        color = P.successSurface,
-        border = BorderStroke(1.dp, P.successText),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text("🏆", fontSize = 22.sp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "NEW ALL-TIME PERSONAL RECORD!",
-                    color = P.successText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    text = message,
-                    color = P.textPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-// Finds all active exercise indices that belong to the same connected Superset chain
-internal fun getConnectedSupersetActiveIndices(
-    activeExercisesList: List<Pair<ExerciseEntry, Int>>,
-    currentActiveIndex: Int
-): IntRange {
-    if (currentActiveIndex !in activeExercisesList.indices) return currentActiveIndex..currentActiveIndex
-    var start = currentActiveIndex
-    while (start > 0 && activeExercisesList[start - 1].first.isSuperset) {
-        start--
-    }
-    var end = currentActiveIndex
-    while (end < activeExercisesList.lastIndex && activeExercisesList[end].first.isSuperset) {
-        end++
-    }
-    return start..end
-}
-
-// ============================================================================
-// 2. ACTIVE WORKOUT SCREEN
-// ============================================================================
+private data class Banner(val message: String, val icon: ImageVector, val isPr: Boolean)
 
 @Composable
 fun ActiveWorkoutScreen(
@@ -142,1911 +93,1234 @@ fun ActiveWorkoutScreen(
     isEditingPastWorkout: Boolean,
     initialDurationSeconds: Long = 0L,
     initialPhotoPath: String?,
-    onHaptic: () -> Unit,
+    haptics: Haptics,
+    hasUnsavedEdits: Boolean = false,
     onUpdateExercises: (List<ExerciseEntry>) -> Unit,
     onReorderExercises: (Int, Int) -> Unit,
-    onAddCustomExercise: (String) -> Unit,
+    onAddExercise: (name: String, muscle: String) -> Unit,
     onRemoveExercisePermanently: (String) -> Unit,
-    onCancelWorkout: () -> Unit,
-    onFinishWorkout: (Long, String?, List<String>) -> Unit
+    onMinimize: () -> Unit,
+    onDiscardWorkout: () -> Unit,
+    onFinishWorkout: (durationSec: Long, photoPath: String?, skipped: List<String>) -> Unit
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-
+    val latestExercises by rememberUpdatedState(exercises)
     val startTimeMillis = remember { LocalStorage.getActiveSessionStartTime(context) }
-    var restRemainingSec by remember { mutableIntStateOf(0) }
 
-    var showCompletionModal by remember { mutableStateOf(false) }
-    var inspectedExerciseIndex by remember { mutableStateOf<Int?>(null) }
-    var showAddExerciseModal by remember { mutableStateOf(false) }
-    var finalDurationSeconds by remember { mutableLongStateOf(initialDurationSeconds) }
-
-    // Interactive Spotlight Tutorial State for Active Workout Screen
-    val workoutTutorialBounds = remember { mutableStateMapOf<String, Rect>() }
-    var showWorkoutTutorial by remember(TutorialPrefs.replayGeneration) {
-        mutableStateOf(!isEditingPastWorkout && !TutorialPrefs.hasSeenWorkoutTutorial(context))
-    }
-    var workoutTutorialStepIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
-
-    val workoutTutorialSteps = remember {
-        listOf(
-            TutorialStepInfo(
-                key = "WORKOUT_CARD_HEADER",
-                title = "Reorder (⠿) & Connected Supersets (🔗)",
-                description = "Drag '⠿' to reorder exercises. Tap '🔗 Superset' to pair two exercises together—their rest timers connect so rest only starts after you finish a set of BOTH exercises!"
-            ),
-            TutorialStepInfo(
-                key = "WORKOUT_AI_BAR",
-                title = "Evidence-Based AI & Smart Deload",
-                description = "Monitors Double Progression and intra-workout rep drop-offs. Tap '⚡ Apply AI Target' or '🛡️ Smart Deload -10%' to auto-adjust your working sets."
-            ),
-            TutorialStepInfo(
-                key = "WORKOUT_SET_ACTIONS",
-                title = "Warmups, Drop Sets & Rest-Pause",
-                description = "Tap any set badge (W, S1, DROP, R-P) to cycle set types, or tap '🔥 + DROP SET' to add an instant -20% drop set!"
-            )
-        )
-    }
-
-    var showExitPrompt by remember { mutableStateOf(false) }
-    BackHandler(enabled = true) {
-        onHaptic()
-        if (showWorkoutTutorial) {
-            TutorialPrefs.markWorkoutTutorialSeen(context)
-            showWorkoutTutorial = false
-        } else if (showCompletionModal) {
-            showCompletionModal = false
-        } else if (inspectedExerciseIndex != null) {
-            inspectedExerciseIndex = null
-        } else if (showAddExerciseModal) {
-            showAddExerciseModal = false
-        } else if (restRemainingSec == 0) {
-            val dur = if (isEditingPastWorkout) {
-                history.find { it.splitTitle == split.title }?.durationSeconds ?: 0L
-            } else {
-                ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
-            }
-            finalDurationSeconds = dur
-            showCompletionModal = true
-        } else {
-            showExitPrompt = true
+    var showPicker by remember { mutableStateOf(false) }
+    var showFinish by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+    var detailsFor by remember { mutableStateOf<String?>(null) }
+    var removeCandidate by remember { mutableStateOf<String?>(null) }
+    var noteVersion by remember { mutableIntStateOf(0) }
+    var photoPath by remember { mutableStateOf(initialPhotoPath) }
+    var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
+    var banner by remember { mutableStateOf<Banner?>(null) }
+    LaunchedEffect(banner) {
+        if (banner != null) {
+            delay(2800)
+            banner = null
         }
     }
 
-    if (showExitPrompt) {
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
+        bmp?.let { PhotoStorage.saveBitmapToInternalStorage(context, it)?.let { path -> photoPath = path } }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { PhotoStorage.copyUriToInternalStorage(context, it)?.let { path -> photoPath = path } }
+    }
+
+    // First-run tips
+    val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
+    var showTips by remember(TutorialPrefs.replayGeneration) {
+        mutableStateOf(!isEditingPastWorkout && !TutorialPrefs.hasSeenWorkoutTutorial(context))
+    }
+    var tipIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
+    val tips = remember {
+        listOf(
+            TutorialStepInfo("HANDLE", "Change the order", "Hold and drag the handle to move an exercise up or down."),
+            TutorialStepInfo("SUGGESTION", "Weight suggestions", "Based on your last sessions. Tap \"Use\" to fill in the suggested weight."),
+            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set number to mark it as a warm-up or drop set, change its rest, or delete it.")
+        )
+    }
+    fun finishTips() {
+        TutorialPrefs.markWorkoutTutorialSeen(context)
+        showTips = false
+    }
+
+    fun openFinish() {
+        finalDuration = if (isEditingPastWorkout) initialDurationSeconds
+        else ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
+        showFinish = true
+    }
+
+    BackHandler {
+        when {
+            showTips -> finishTips()
+            isEditingPastWorkout && hasUnsavedEdits -> confirmDiscard = true
+            isEditingPastWorkout -> onDiscardWorkout()
+            else -> onMinimize()
+        }
+    }
+
+    val active = exercises.withIndex().filter { !it.value.isSkipped }
+    val skipped = exercises.withIndex().filter { it.value.isSkipped }
+    val totalSets = active.sumOf { it.value.sets.size }
+    val doneSets = active.sumOf { ex -> ex.value.sets.count { it.isCompleted } }
+    val previousSplitWorkout = remember(split.title, history) {
+        history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
+    }
+
+    fun supersetRange(pos: Int): IntRange {
+        if (pos !in active.indices) return pos..pos
+        var start = pos
+        while (start > 0 && active[start - 1].value.isSuperset) start--
+        var end = pos
+        while (end < active.lastIndex && active[end].value.isSuperset) end++
+        return start..end
+    }
+
+    fun updateAt(exIdx: Int, transform: (ExerciseEntry) -> ExerciseEntry) {
+        val list = latestExercises.toMutableList()
+        if (exIdx !in list.indices) return
+        list[exIdx] = transform(list[exIdx])
+        onUpdateExercises(list)
+    }
+
+    fun toggleSet(pos: Int, setIdx: Int) {
+        val (exIdx, exercise) = active[pos]
+        val setEntry = exercise.sets.getOrNull(setIdx) ?: return
+        val nowDone = !setEntry.isCompleted
+        val updatedSet = setEntry.copy(isCompleted = nowDone)
+        val next = latestExercises.toMutableList()
+        next[exIdx] = exercise.copy(sets = exercise.sets.toMutableList().also { it[setIdx] = updatedSet })
+        onUpdateExercises(next)
+        if (!nowDone) {
+            haptics.tick()
+            return
+        }
+        haptics.confirm()
+
+        if (isSetPersonalRecord(updatedSet, computeExerciseRecords(exercise.name, history))) {
+            banner = Banner("New best: ${exercise.name}, ${updatedSet.weight} kg × ${updatedSet.reps}", Icons.Rounded.EmojiEvents, isPr = true)
+        }
+        if (isEditingPastWorkout) return
+
+        val range = supersetRange(pos)
+        if (range.first < range.last) {
+            // Superset: rest only once every exercise in the group has done this round.
+            val waitingOn = range.firstNotNullOfOrNull { p ->
+                val ex = next[active[p].index]
+                val s = ex.sets.getOrNull(setIdx) ?: ex.sets.lastOrNull()
+                if (s != null && !s.isCompleted) ex.name else null
+            }
+            if (waitingOn == null) {
+                val rest = range.maxOf { p ->
+                    val ex = next[active[p].index]
+                    ex.sets.getOrNull(setIdx)?.restSeconds?.takeIf { it >= 0 } ?: ex.restSeconds.takeIf { it > 0 } ?: settings.restTimerSeconds
+                }
+                if (rest > 0) LocalStorage.setRestEndTimeMillis(context, System.currentTimeMillis() + rest * 1000L, fromWidget = true)
+            } else {
+                if (banner?.isPr != true) banner = Banner("Superset: go straight to $waitingOn", Icons.Rounded.Link, isPr = false)
+            }
+        } else {
+            val rest = setEntry.restSeconds.takeIf { it >= 0 } ?: exercise.restSeconds
+            if (rest > 0) LocalStorage.setRestEndTimeMillis(context, System.currentTimeMillis() + rest * 1000L, fromWidget = true)
+        }
+    }
+
+    fun addFromLibrary(name: String, muscle: String) {
+        if (latestExercises.any { it.name.equals(name, ignoreCase = true) }) return
+        haptics.tick()
+        onAddExercise(name, muscle)
+        onUpdateExercises(latestExercises + newExerciseEntry(context, split.title, name, muscle, history, settings))
+    }
+
+    val listState = rememberLazyListState()
+    val dragState = rememberDragDropState(
+        listState = listState,
+        canReorder = { key -> key is String && key.startsWith(EXERCISE_KEY_PREFIX) },
+        onMove = { fromKey, toKey ->
+            val from = latestExercises.indexOfFirst { EXERCISE_KEY_PREFIX + it.name == fromKey }
+            val to = latestExercises.indexOfFirst { EXERCISE_KEY_PREFIX + it.name == toKey }
+            if (from >= 0 && to >= 0) onReorderExercises(from, to)
+        },
+        onSwap = { haptics.tick() }
+    )
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            WorkoutTopBar(
+                title = split.title,
+                isEditing = isEditingPastWorkout,
+                startTimeMillis = startTimeMillis,
+                doneSets = doneSets,
+                totalSets = totalSets,
+                canCopyLast = !isEditingPastWorkout && previousSplitWorkout != null,
+                onClose = {
+                    if (isEditingPastWorkout && hasUnsavedEdits) confirmDiscard = true
+                    else if (isEditingPastWorkout) onDiscardWorkout()
+                    else onMinimize()
+                },
+                onFinish = { openFinish() },
+                onCopyLast = {
+                    val prev = previousSplitWorkout ?: return@WorkoutTopBar
+                    haptics.tick()
+                    onUpdateExercises(latestExercises.map { cur -> copyFromPrevious(cur, prev, settings) })
+                },
+                onDiscard = { confirmDiscard = true }
+            )
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!isEditingPastWorkout && previousSplitWorkout != null && doneSets == 0) {
+                    item(key = "copy_last") {
+                        AppCard(
+                            Modifier.fillMaxWidth().animateItem(),
+                            onClick = {
+                                haptics.tick()
+                                onUpdateExercises(latestExercises.map { copyFromPrevious(it, previousSplitWorkout, settings) })
+                            },
+                            contentPadding = PaddingValues(14.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(38.dp).clip(CircleShape).background(P.accentSecondarySoft), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.ContentCopy, null, tint = P.accentSecondary, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Use last time's numbers", style = AppType.bodyStrong, color = P.textPrimary)
+                                    Text(
+                                        "Fill in weights and reps from ${previousSplitWorkout.displayDate.substringBefore(",")}",
+                                        style = AppType.caption,
+                                        color = P.textSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                itemsIndexed(active, key = { _, iv -> EXERCISE_KEY_PREFIX + iv.value.name }) { pos, (exIdx, exercise) ->
+                    val key = EXERCISE_KEY_PREFIX + exercise.name
+                    val range = supersetRange(pos)
+                    val partners = if (range.first < range.last) range.filter { it != pos }.map { active[it].value.name } else emptyList()
+                    val records = remember(exercise.name, history) { computeExerciseRecords(exercise.name, history) }
+                    val suggestion = remember(exercise, history, settings.weightStepKg) {
+                        suggestNextWeight(split.title, exercise, history, settings.weightStepKg)
+                    }
+                    val lastTime = remember(exercise.name, previousSplitWorkout) {
+                        previousSplitWorkout?.exercises
+                            ?.find { it.name.equals(exercise.name, ignoreCase = true) && !it.isSkipped }
+                            ?.sets?.filter { it.isValidWorkSet }
+                            ?.joinToString("  ·  ") { "${it.weight}×${it.reps}" }
+                            ?.takeIf { it.isNotEmpty() }
+                    }
+                    val note = remember(exercise.name, noteVersion) { LocalStorage.getExerciseNote(context, exercise.name) }
+
+                    DraggableItem(dragState, key) { isDragging ->
+                        ExerciseCard(
+                            exercise = exercise,
+                            partners = partners,
+                            canLinkNext = pos < active.lastIndex || exercise.isSuperset,
+                            records = records,
+                            suggestion = suggestion,
+                            lastTime = lastTime,
+                            note = note,
+                            isDragging = isDragging,
+                            splitTitle = split.title,
+                            settings = settings,
+                            handleModifier = Modifier
+                                .dragHandle(dragState, key, onStart = { haptics.confirm() })
+                                .then(if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["HANDLE"] = it.boundsInRoot() } else Modifier),
+                            suggestionModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SUGGESTION"] = it.boundsInRoot() } else Modifier,
+                            firstBadgeModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SET_BADGE"] = it.boundsInRoot() } else Modifier,
+                            haptics = haptics,
+                            onUpdate = { transform -> updateAt(exIdx, transform) },
+                            onToggleSet = { setIdx -> toggleSet(pos, setIdx) },
+                            onSetRest = { setIdx, sec ->
+                                haptics.tick()
+                                if (range.first < range.last) {
+                                    val list = latestExercises.toMutableList()
+                                    range.forEach { p ->
+                                        val i = active[p].index
+                                        list[i] = list[i].copy(sets = list[i].sets.mapIndexed { si, s -> if (si == setIdx) s.copy(restSeconds = sec) else s })
+                                    }
+                                    onUpdateExercises(list)
+                                } else {
+                                    updateAt(exIdx) { ex -> ex.copy(sets = ex.sets.mapIndexed { si, s -> if (si == setIdx) s.copy(restSeconds = sec) else s }) }
+                                }
+                            },
+                            onSetExerciseRest = { sec ->
+                                haptics.tick()
+                                val list = latestExercises.toMutableList()
+                                range.forEach { p ->
+                                    val i = active[p].index
+                                    list[i] = list[i].copy(restSeconds = sec, sets = list[i].sets.map { s -> if (s.intensityType == "DROP") s else s.copy(restSeconds = sec) })
+                                    LocalStorage.saveExerciseDefaultRest(context, list[i].name, sec)
+                                }
+                                onUpdateExercises(list)
+                            },
+                            onToggleSuperset = {
+                                haptics.tick()
+                                val list = latestExercises.toMutableList()
+                                val linking = !exercise.isSuperset
+                                list[exIdx] = exercise.copy(isSuperset = linking)
+                                if (linking && pos + 1 in active.indices) {
+                                    // Partners share one rest timer.
+                                    val pi = active[pos + 1].index
+                                    list[pi] = list[pi].copy(restSeconds = exercise.restSeconds, sets = list[pi].sets.map { it.copy(restSeconds = exercise.restSeconds) })
+                                }
+                                onUpdateExercises(list)
+                            },
+                            onSkip = {
+                                haptics.tick()
+                                updateAt(exIdx) { it.copy(isSkipped = true, isSuperset = false) }
+                            },
+                            onOpenDetails = { detailsFor = exercise.name },
+                            onRemove = { removeCandidate = exercise.name }
+                        )
+                    }
+                }
+
+                if (skipped.isNotEmpty()) {
+                    item(key = "skipped") {
+                        AppCard(Modifier.fillMaxWidth().animateItem()) {
+                            Text("Skipped today", style = AppType.headline, color = P.textPrimary)
+                            skipped.forEach { (idx, ex) ->
+                                Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(ex.name, style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
+                                    SecondaryButton("Bring back", {
+                                        haptics.tick()
+                                        updateAt(idx) { it.copy(isSkipped = false) }
+                                    }, icon = Icons.AutoMirrored.Rounded.Undo, height = 36.dp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(key = "add") {
+                    SecondaryButton(
+                        "Add exercise",
+                        { haptics.tick(); showPicker = true },
+                        Modifier.fillMaxWidth().animateItem(),
+                        icon = Icons.Rounded.Add,
+                        contentColor = P.accentPrimary,
+                        height = 52.dp
+                    )
+                }
+            }
+        }
+
+        // Transient banner (new best / superset hint)
+        AnimatedVisibility(
+            visible = banner != null,
+            enter = slideInVertically(spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) { -it } + fadeIn(),
+            exit = slideOutVertically(tween(200)) { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp)
+        ) {
+            val b = banner
+            if (b != null) {
+                AppCard(
+                    Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                    elevated = true,
+                    color = if (b.isPr) P.warningSurface else P.bgElevated,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(b.icon, null, tint = if (b.isPr) P.warningText else P.accentSecondary, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(b.message, style = AppType.bodyStrong, color = P.textPrimary)
+                    }
+                }
+            }
+        }
+
+        if (!isEditingPastWorkout) {
+            RestTimerBar(
+                exercises = exercises,
+                haptics = haptics,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        if (showTips) {
+            SpotlightTutorialOverlay(
+                steps = tips,
+                currentStepIndex = tipIndex,
+                targetBounds = tutorialBounds,
+                onNext = { if (tipIndex < tips.lastIndex) tipIndex++ else finishTips() },
+                onPrev = { if (tipIndex > 0) tipIndex-- },
+                onSkip = { finishTips() }
+            )
+        }
+    }
+
+    if (showPicker) {
+        ExercisePickerSheet(
+            existingNames = exercises.map { it.name }.toSet(),
+            onPick = { info -> addFromLibrary(info.name, info.muscle) },
+            onCreateCustom = { name -> addFromLibrary(name, "") },
+            onDismiss = { showPicker = false }
+        )
+    }
+
+    detailsFor?.let { name ->
+        val idx = exercises.indexOfFirst { it.name == name }
+        if (idx == -1) detailsFor = null
+        else ExerciseDetailsSheet(
+            exercise = exercises[idx],
+            history = history,
+            canMoveUp = idx > 0,
+            canMoveDown = idx < exercises.lastIndex,
+            onMoveUp = { haptics.tick(); onReorderExercises(idx, idx - 1) },
+            onMoveDown = { haptics.tick(); onReorderExercises(idx, idx + 1) },
+            onSaveNote = { text ->
+                LocalStorage.saveExerciseNote(context, name, text)
+                noteVersion++
+            },
+            onRemove = { detailsFor = null; removeCandidate = name },
+            splitTitle = split.title,
+            onDismiss = { detailsFor = null }
+        )
+    }
+
+    removeCandidate?.let { name ->
         AlertDialog(
-            onDismissRequest = { showExitPrompt = false },
-            containerColor = P.bgCard,
-            titleContentColor = P.textPrimary,
-            title = { Text("Abort Workout?", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { removeCandidate = null },
+            containerColor = P.bgElevated,
+            title = { Text("Remove $name?", style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
-                    text = "Are you sure you want to exit? Your progress for this session will be lost.",
+                    if (isEditingPastWorkout) "It will be removed from this logged workout."
+                    else "It won't show up in future ${split.title} workouts. You can add it back any time.",
+                    style = AppType.body,
                     color = P.textSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showExitPrompt = false
-                    LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-                    onCancelWorkout()
-                }) {
-                    Text("Abort", color = P.dangerText, fontWeight = FontWeight.Bold)
-                }
+                    haptics.tick()
+                    onRemoveExercisePermanently(name)
+                    removeCandidate = null
+                }) { Text("Remove", color = P.dangerText, style = AppType.label) }
             },
-            dismissButton = {
-                TextButton(onClick = { showExitPrompt = false }) {
-                    Text("Resume", color = P.textSecondary)
-                }
-            }
+            dismissButton = { TextButton(onClick = { removeCandidate = null }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
         )
     }
 
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            containerColor = P.bgElevated,
+            title = { Text(if (isEditingPastWorkout) "Discard changes?" else "Discard this workout?", style = AppType.headline, color = P.textPrimary) },
+            text = {
+                Text(
+                    if (isEditingPastWorkout) "Your edits to this workout won't be saved." else "Nothing from today's session will be saved.",
+                    style = AppType.body,
+                    color = P.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscard = false; onDiscardWorkout() }) {
+                    Text("Discard", color = P.dangerText, style = AppType.label)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep going", color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+
+    if (showFinish) {
+        FinishSheet(
+            split = split,
+            exercises = exercises,
+            skipped = skipped.map { it.value },
+            history = history,
+            userProfile = userProfile,
+            isEditing = isEditingPastWorkout,
+            durationSeconds = finalDuration,
+            photoPath = photoPath,
+            onUnskipAll = {
+                onUpdateExercises(latestExercises.map { it.copy(isSkipped = false) })
+                showFinish = false
+            },
+            onClearPhoto = { photoPath = null },
+            onCamera = { cameraLauncher.launch(null) },
+            onGallery = { galleryLauncher.launch("image/*") },
+            onSave = {
+                showFinish = false
+                onFinishWorkout(finalDuration, photoPath, skipped.map { it.value.name })
+            },
+            onDismiss = { showFinish = false }
+        )
+    }
+}
+
+private fun copyFromPrevious(current: ExerciseEntry, previous: CompletedWorkout, settings: AppSettings): ExerciseEntry {
+    val prev = previous.exercises.find { it.name.equals(current.name, ignoreCase = true) } ?: return current
+    return current.copy(
+        sets = prev.sets.mapIndexed { idx, s ->
+            s.copy(
+                setNumber = idx + 1,
+                isCompleted = false,
+                restSeconds = s.restSeconds.takeIf { it >= 0 } ?: current.restSeconds.takeIf { it > 0 } ?: settings.restTimerSeconds
+            )
+        }
+    )
+}
+
+// ============================================================================
+// TOP BAR
+// ============================================================================
+
+@Composable
+private fun WorkoutTopBar(
+    title: String,
+    isEditing: Boolean,
+    startTimeMillis: Long,
+    doneSets: Int,
+    totalSets: Int,
+    canCopyLast: Boolean,
+    onClose: () -> Unit,
+    onFinish: () -> Unit,
+    onCopyLast: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    val P = LocalPalette.current
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().background(P.bgPrimary).statusBarsPadding()) {
+        Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircleIconButton(
+                if (isEditing) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.KeyboardArrowDown,
+                if (isEditing) "Back" else "Minimize workout",
+                onClose,
+                container = Color.Transparent
+            )
+            Spacer(Modifier.width(4.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = AppType.title, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (isEditing) Text("Editing a logged workout", style = AppType.caption, color = P.textSecondary)
+                else ElapsedClock(startTimeMillis)
+            }
+            PrimaryButton(if (isEditing) "Save" else "Finish", onFinish, height = 40.dp)
+            Box {
+                CircleIconButton(Icons.Rounded.MoreVert, "More options", { menuOpen = true }, container = Color.Transparent, tint = P.textSecondary)
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
+                    if (canCopyLast) {
+                        DropdownMenuItem(
+                            text = { Text("Use last time's numbers", style = AppType.body) },
+                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
+                            onClick = { menuOpen = false; onCopyLast() }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (isEditing) "Discard changes" else "Discard workout", style = AppType.body, color = P.dangerText) },
+                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
+                        onClick = { menuOpen = false; onDiscard() }
+                    )
+                }
+            }
+        }
+        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedProgressBar(
+                progress = if (totalSets == 0) 0f else doneSets / totalSets.toFloat(),
+                modifier = Modifier.weight(1f),
+                height = 5.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Text("$doneSets of $totalSets sets", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+        }
+    }
+}
+
+@Composable
+private fun ElapsedClock(startTimeMillis: Long) {
+    val P = LocalPalette.current
+    var elapsed by remember { mutableLongStateOf(((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)) }
+    LaunchedEffect(startTimeMillis) {
+        while (true) {
+            delay(1000L)
+            elapsed = ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
+        }
+    }
+    Text(formatClock(elapsed), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+}
+
+// ============================================================================
+// EXERCISE CARD
+// ============================================================================
+
+@Composable
+private fun ExerciseCard(
+    exercise: ExerciseEntry,
+    partners: List<String>,
+    canLinkNext: Boolean,
+    records: ExerciseRecords,
+    suggestion: Suggestion,
+    lastTime: String?,
+    note: String,
+    isDragging: Boolean,
+    splitTitle: String,
+    settings: AppSettings,
+    handleModifier: Modifier,
+    suggestionModifier: Modifier,
+    firstBadgeModifier: Modifier,
+    haptics: Haptics,
+    onUpdate: ((ExerciseEntry) -> ExerciseEntry) -> Unit,
+    onToggleSet: (Int) -> Unit,
+    onSetRest: (setIdx: Int, sec: Int) -> Unit,
+    onSetExerciseRest: (Int) -> Unit,
+    onToggleSuperset: () -> Unit,
+    onSkip: () -> Unit,
+    onOpenDetails: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val P = LocalPalette.current
+    val inSuperset = partners.isNotEmpty()
+    var menuOpen by remember { mutableStateOf(false) }
+    val borderColor by animateColorAsState(
+        when {
+            isDragging -> P.accentPrimary
+            inSuperset -> P.accentSecondary.copy(alpha = 0.6f)
+            else -> Color.Transparent
+        }, label = "card_border"
+    )
+
+    AppCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.5.dp, borderColor, CardShape)
+            .animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+        elevated = isDragging,
+        contentPadding = PaddingValues(start = 6.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)
+    ) {
+        if (inSuperset) {
+            Row(Modifier.padding(start = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Link, null, tint = P.accentSecondary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Superset with ${partners.joinToString(", ")}", style = AppType.caption, color = P.accentSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+
+        // Header: handle · name · menu
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                handleModifier.size(36.dp, 44.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.DragIndicator, "Drag to reorder", tint = if (isDragging) P.accentPrimary else P.textTertiary)
+            }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .pressable(pressedScale = 0.99f, onClick = onOpenDetails)
+                    .padding(vertical = 2.dp, horizontal = 2.dp)
+            ) {
+                Text(exercise.name, style = AppType.headline, color = P.textPrimary, maxLines = 2)
+                val sub = buildList {
+                    if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
+                    if (records.bestSetText != "—") add("Best ${records.bestSetText.replace("kg ×", " kg ×")}")
+                }.joinToString(" · ")
+                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary)
+            }
+            Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable {
+                onSetExerciseRest(cycleRestPreset(exercise.restSeconds))
+            })
+            Box {
+                CircleIconButton(Icons.Rounded.MoreVert, "Exercise options", { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
+                    DropdownMenuItem(
+                        text = { Text("Notes & history", style = AppType.body) },
+                        leadingIcon = { Icon(Icons.Rounded.Info, null) },
+                        onClick = { menuOpen = false; onOpenDetails() }
+                    )
+                    if (canLinkNext) {
+                        DropdownMenuItem(
+                            text = { Text(if (exercise.isSuperset) "Unlink from next" else "Superset with next", style = AppType.body) },
+                            leadingIcon = { Icon(if (exercise.isSuperset) Icons.Rounded.LinkOff else Icons.Rounded.Link, null) },
+                            onClick = { menuOpen = false; onToggleSuperset() }
+                        )
+                    }
+                    RestChooser("Rest between sets", exercise.restSeconds) { menuOpen = false; onSetExerciseRest(it) }
+                    HorizontalDivider(color = P.borderSubtle)
+                    DropdownMenuItem(
+                        text = { Text("Skip for today", style = AppType.body) },
+                        leadingIcon = { Icon(Icons.Rounded.SkipNext, null) },
+                        onClick = { menuOpen = false; onSkip() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Remove from $splitTitle", style = AppType.body, color = P.dangerText) },
+                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
+                        onClick = { menuOpen = false; onRemove() }
+                    )
+                }
+            }
+        }
+
+        Column(Modifier.padding(start = 10.dp)) {
+            if (lastTime != null) {
+                Text("Last time  $lastTime", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.padding(top = 2.dp))
+            }
+            if (note.isNotBlank()) {
+                Row(
+                    Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(P.bgControl).pressable(onClick = onOpenDetails).padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.PushPin, null, tint = P.textSecondary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(note, style = AppType.caption, color = P.textPrimary)
+                }
+            }
+
+            SuggestionBox(
+                suggestion = suggestion,
+                modifier = suggestionModifier.padding(top = 10.dp),
+                onUse = {
+                    haptics.tick()
+                    onUpdate { ex -> ex.copy(sets = ex.sets.map { s -> if (s.isCompleted || s.isWarmupSet) s else s.copy(weight = suggestion.suggestedWeight) }) }
+                },
+                onLighter = {
+                    haptics.tick()
+                    onUpdate { ex ->
+                        ex.copy(sets = ex.sets.map { s ->
+                            if (s.isCompleted || s.isWarmupSet) s
+                            else s.copy(weight = formatKgClean((parseWeightClean(s.weight, 20f) * 0.9f).coerceAtLeast(2.5f)))
+                        })
+                    }
+                }
+            )
+
+            Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Set", style = AppType.caption, color = P.textTertiary, modifier = Modifier.width(40.dp))
+                Text("kg", style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1.25f).padding(start = 12.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Reps", style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                Spacer(Modifier.width(52.dp))
+            }
+
+            var workNumber = 0
+            exercise.sets.forEachIndexed { setIdx, set ->
+                if (set.intensityType == "NORMAL" && !set.isWarmup) workNumber++
+                SetRow(
+                    set = set,
+                    workNumber = workNumber,
+                    isPr = isSetPersonalRecord(set, records),
+                    canDelete = exercise.sets.size > 1,
+                    badgeModifier = if (setIdx == 0) firstBadgeModifier else Modifier,
+                    stepKg = settings.weightStepKg,
+                    onChange = { transform ->
+                        onUpdate { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[setIdx] = transform(it[setIdx]) }) }
+                    },
+                    onSetType = { type ->
+                        haptics.tick()
+                        onUpdate { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[setIdx] = it[setIdx].copy(intensityType = type, isWarmup = type == "WARMUP") }) }
+                    },
+                    onSetRest = { sec -> onSetRest(setIdx, sec) },
+                    onDelete = {
+                        haptics.tick()
+                        onUpdate { ex -> ex.copy(sets = ex.sets.filterIndexed { i, _ -> i != setIdx }.mapIndexed { i, s -> s.copy(setNumber = i + 1) }) }
+                    },
+                    onToggle = { onToggleSet(setIdx) },
+                    haptics = haptics
+                )
+            }
+
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton("Add set", {
+                    haptics.tick()
+                    onUpdate { ex ->
+                        val last = ex.sets.lastOrNull()
+                        ex.copy(sets = ex.sets + SetEntry(
+                            setNumber = ex.sets.size + 1,
+                            weight = last?.weight ?: "20",
+                            reps = last?.reps ?: "8",
+                            restSeconds = last?.restSeconds?.takeIf { it >= 0 && last.intensityType != "DROP" } ?: ex.restSeconds
+                        ))
+                    }
+                }, Modifier.weight(1f), icon = Icons.Rounded.Add, height = 40.dp)
+                SecondaryButton("Drop set", {
+                    haptics.tick()
+                    onUpdate { ex ->
+                        val last = ex.sets.lastOrNull()
+                        val dropWeight = formatKgClean((parseWeightClean(last?.weight ?: "20", 20f) * 0.8f).coerceAtLeast(2.5f))
+                        ex.copy(sets = ex.sets + SetEntry(
+                            setNumber = ex.sets.size + 1,
+                            weight = dropWeight,
+                            reps = last?.reps ?: "8",
+                            intensityType = "DROP",
+                            restSeconds = 0
+                        ))
+                    }
+                }, Modifier.weight(1f), icon = Icons.Rounded.LocalFireDepartment, height = 40.dp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestChooser(label: String, current: Int, onPick: (Int) -> Unit) {
+    val P = LocalPalette.current
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(label, style = AppType.caption, color = P.textSecondary)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            REST_PRESETS.forEach { sec ->
+                val sel = sec == current
+                Text(
+                    formatRestShort(sec),
+                    style = AppType.caption.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (sel) P.onAccentPrimary else P.textPrimary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (sel) P.accentPrimary else P.bgControl)
+                        .pressable(pressedScale = 0.9f) { onPick(sec) }
+                        .padding(horizontal = 9.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuggestionBox(suggestion: Suggestion, modifier: Modifier, onUse: () -> Unit, onLighter: () -> Unit) {
+    val P = LocalPalette.current
+    val (bg, fg) = toneColors(suggestion.tone, P)
+    val icon = when (suggestion.tone) {
+        SuggestionTone.GOOD -> Icons.AutoMirrored.Rounded.TrendingUp
+        SuggestionTone.CAUTION -> Icons.AutoMirrored.Rounded.TrendingDown
+        SuggestionTone.NEUTRAL -> Icons.Rounded.Lightbulb
+    }
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(bg).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp).padding(top = 1.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(suggestion.message, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
+        }
+        Row(Modifier.padding(top = 10.dp, start = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (suggestion.suggestedWeight.isNotBlank()) {
+                Text(
+                    "Use ${suggestion.suggestedWeight} kg",
+                    style = AppType.label,
+                    color = fg,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(P.bgCard.copy(alpha = if (P.isDark) 0.35f else 0.8f)).pressable(onClick = onUse).padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+            Text(
+                "Go lighter",
+                style = AppType.label,
+                color = P.textSecondary,
+                modifier = Modifier.clip(RoundedCornerShape(50)).pressable(onClick = onLighter).padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetRow(
+    set: SetEntry,
+    workNumber: Int,
+    isPr: Boolean,
+    canDelete: Boolean,
+    badgeModifier: Modifier,
+    stepKg: Float,
+    onChange: ((SetEntry) -> SetEntry) -> Unit,
+    onSetType: (String) -> Unit,
+    onSetRest: (Int) -> Unit,
+    onDelete: () -> Unit,
+    onToggle: () -> Unit,
+    haptics: Haptics
+) {
+    val P = LocalPalette.current
+    val rowBg by animateColorAsState(if (set.isCompleted) P.successSurface else Color.Transparent, tween(250), label = "set_row")
+    var menuOpen by remember { mutableStateOf(false) }
+    val (badgeText, badgeFg, badgeBg) = when {
+        set.isWarmupSet -> Triple("W", P.warningText, P.warningSurface)
+        set.intensityType == "DROP" -> Triple("D", P.dangerText, P.dangerSurface)
+        set.intensityType == "REST_PAUSE" -> Triple("RP", P.accentSecondary, P.accentSecondarySoft)
+        else -> Triple("$workNumber", P.textPrimary, P.bgControl)
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(rowBg)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(badgeModifier.width(40.dp)) {
+            Box(
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(badgeBg)
+                    .pressable(pressedScale = 0.88f) { haptics.tick(); menuOpen = true },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isPr && set.intensityType == "NORMAL") Icon(Icons.Rounded.EmojiEvents, "Personal best", tint = P.warningText, modifier = Modifier.size(16.dp))
+                else Text(badgeText, style = AppType.label.copy(fontWeight = FontWeight.SemiBold), color = badgeFg)
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
+                listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up", "DROP" to "Drop set", "REST_PAUSE" to "Rest-pause").forEach { (type, label) ->
+                    val selected = if (type == "WARMUP") set.isWarmupSet else set.intensityType == type && !set.isWarmupSet
+                    DropdownMenuItem(
+                        text = { Text(label, style = AppType.body) },
+                        trailingIcon = { if (selected) Icon(Icons.Rounded.Check, null, tint = P.accentPrimary) },
+                        onClick = { menuOpen = false; onSetType(type) }
+                    )
+                }
+                HorizontalDivider(color = P.borderSubtle)
+                RestChooser("Rest after this set", set.restSeconds) { menuOpen = false; onSetRest(it) }
+                if (canDelete) {
+                    HorizontalDivider(color = P.borderSubtle)
+                    DropdownMenuItem(
+                        text = { Text("Delete set", style = AppType.body, color = P.dangerText) },
+                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
+                        onClick = { menuOpen = false; onDelete() }
+                    )
+                }
+            }
+        }
+
+        NumberStepper(
+            value = set.weight,
+            onValueChange = { v -> sanitizeDecimalInput(v)?.let { w -> onChange { it.copy(weight = w) } } },
+            onMinus = {
+                haptics.tick()
+                val next = (parseWeightClean(set.weight, 20f) - stepKg).coerceAtLeast(0f)
+                onChange { it.copy(weight = formatKgClean(next)) }
+            },
+            onPlus = {
+                haptics.tick()
+                val next = parseWeightClean(set.weight, 20f) + stepKg
+                onChange { it.copy(weight = formatKgClean(next)) }
+            },
+            modifier = Modifier.weight(1.25f)
+        )
+        Spacer(Modifier.width(8.dp))
+        NumberStepper(
+            value = set.reps,
+            onValueChange = { v -> onChange { it.copy(reps = v.filter(Char::isDigit).take(3)) } },
+            onMinus = {
+                haptics.tick()
+                onChange { it.copy(reps = "${maxOf(0, parseRepsClean(set.reps, 8) - 1)}") }
+            },
+            onPlus = {
+                haptics.tick()
+                onChange { it.copy(reps = "${parseRepsClean(set.reps, 8) + 1}") }
+            },
+            keyboardType = KeyboardType.Number,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        CheckButton(done = set.isCompleted, onClick = onToggle)
+    }
+}
+
+@Composable
+private fun CheckButton(done: Boolean, onClick: () -> Unit) {
+    val P = LocalPalette.current
+    val bg by animateColorAsState(if (done) P.accentPrimary else P.bgControl, tween(200), label = "check_bg")
+    val fg by animateColorAsState(if (done) P.onAccentPrimary else P.textTertiary, tween(200), label = "check_fg")
+    val pop = remember { Animatable(1f) }
+    var previous by remember { mutableStateOf(done) }
+    LaunchedEffect(done) {
+        if (done && !previous) {
+            pop.animateTo(1.18f, spring(stiffness = Spring.StiffnessHigh))
+            pop.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMedium))
+        }
+        previous = done
+    }
+    Box(
+        Modifier
+            .size(44.dp, 40.dp)
+            .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .pressable(pressedScale = 0.88f, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Rounded.Check, if (done) "Mark set not done" else "Mark set done", tint = fg, modifier = Modifier.size(22.dp))
+    }
+}
+
+// ============================================================================
+// REST TIMER
+// ============================================================================
+
+/** Floating rest countdown. Reads the shared rest end time, so widget and lock-screen changes show here too. */
+@Composable
+private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    var endMillis by remember { mutableLongStateOf(0L) }
+    var totalMillis by remember { mutableLongStateOf(1L) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
     LaunchedEffect(Unit) {
         while (true) {
-            val endMillis = LocalStorage.getRestEndTimeMillis(context)
-            if (endMillis > 0) {
-                val left = Math.ceil((endMillis - System.currentTimeMillis()) / 1000.0).toInt()
-                if (left > 0) {
-                    restRemainingSec = left
-                } else {
-                    restRemainingSec = 0
-                    LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-                }
-            } else {
-                restRemainingSec = 0
+            val end = LocalStorage.getRestEndTimeMillis(context)
+            val t = System.currentTimeMillis()
+            if (end != endMillis) {
+                // Extending a running rest grows the total, so the ring doesn't jump back to full.
+                totalMillis = if (endMillis > t && end > t) totalMillis + (end - endMillis) else (end - t).coerceAtLeast(1L)
+                endMillis = end
             }
-            delay(500)
+            now = t
+            delay(100)
         }
     }
 
-    var newExerciseName by remember { mutableStateOf("") }
-    var confirmRemoveExerciseName by remember { mutableStateOf<String?>(null) }
-    var noteDraftText by remember { mutableStateOf("") }
-    var noteRefreshTrigger by remember { mutableIntStateOf(0) }
-    var attachedPhotoPath by remember { mutableStateOf(initialPhotoPath) }
-
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
-        bmp?.let { PhotoStorage.saveBitmapToInternalStorage(context, it)?.let { path -> attachedPhotoPath = path } }
-    }
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { PhotoStorage.copyUriToInternalStorage(context, it)?.let { path -> attachedPhotoPath = path } }
-    }
-
-    var prCelebrationMessage by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(prCelebrationMessage) {
-        if (prCelebrationMessage != null) {
-            delay(2600)
-            prCelebrationMessage = null
+    val remaining = (endMillis - now).coerceAtLeast(0L)
+    val visible = remaining > 0L
+    val next = remember(exercises) {
+        exercises.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }?.let { ex ->
+            val s = ex.sets.first { !it.isCompleted }
+            "${ex.name} · ${s.weight} kg × ${s.reps}"
         }
     }
 
-    val previousSplitWorkout = remember(split.title, history) {
-        history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
-    }
-
-    val activeExercisesList = exercises.mapIndexed { idx, ex -> ex to idx }.filter { !it.first.isSkipped }
-    val skippedExercisesList = exercises.mapIndexed { idx, ex -> ex to idx }.filter { it.first.isSkipped }
-
-    val totalSetsCount = maxOf(1, activeExercisesList.sumOf { it.first.sets.size })
-    val completedSetsCount = activeExercisesList.sumOf { it.first.sets.count { s -> s.isCompleted } }
-    val progressPct = (completedSetsCount.toFloat() / totalSetsCount.toFloat()).coerceIn(0f, 1f)
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
+        exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(180)),
+        modifier = modifier
+    ) {
+        AppCard(
+            Modifier.navigationBarsPadding().padding(12.dp).fillMaxWidth(),
+            elevated = true,
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            // TOP HEADER BAR (Share button removed; only timer/abort controls remain)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isEditingPastWorkout) "EDIT ${split.title.uppercase()}" else split.title.uppercase(),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        color = P.textPrimary
-                    )
-                    if (!isEditingPastWorkout) {
-                        ElapsedWorkoutClock(startTimeMillis, userProfile)
-                    } else {
-                        Text(
-                            text = "EDITING ARCHIVED WORKOUT",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = P.accentPrimary
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProgressRing(
+                    progress = remaining / totalMillis.toFloat(),
+                    modifier = Modifier.size(56.dp),
+                    strokeWidth = 5.dp,
+                    color = P.accentSecondary
                 ) {
-                    if (restRemainingSec > 0) {
-                        SpringButton(
-                            onClick = {
-                                onHaptic()
-                                val newSec = restRemainingSec + 15
-                                val nextEnd = System.currentTimeMillis() + (newSec * 1000L)
-                                LocalStorage.setRestEndTimeMillis(context, nextEnd, fromWidget = true)
-                            }
-                        ) {
-                            Surface(
-                                color = P.bgControl,
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, P.borderStrong)
-                            ) {
-                                Text(
-                                    text = "+15s",
-                                    color = P.textPrimary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp)
-                                )
-                            }
-                        }
-                        SpringButton(
-                            onClick = {
-                                onHaptic()
-                                LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-                            }
-                        ) {
-                            Surface(color = P.accentSecondary, shape = RoundedCornerShape(8.dp)) {
-                                val rMins = restRemainingSec / 60
-                                val rSecs = restRemainingSec % 60
-                                Text(
-                                    text = String.format(Locale.US, "REST %d:%02d ✕", rMins, rSecs),
-                                    color = Color(0xFF07080A),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Black,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    SpringButton(onClick = {
-                        onHaptic()
-                        showExitPrompt = true
-                    }) {
-                        Text("ABORT", color = P.dangerText, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                    }
+                    Text(formatClock((remaining + 999) / 1000), style = AppType.caption.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = P.textPrimary)
                 }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Resting", style = AppType.bodyStrong, color = P.textPrimary)
+                    if (next != null) Text("Next: $next", style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text(
+                    "−15",
+                    style = AppType.label,
+                    color = P.textPrimary,
+                    modifier = Modifier.clip(CircleShape).background(P.bgControl).pressable {
+                        haptics.tick()
+                        val newEnd = endMillis - 15_000L
+                        LocalStorage.setRestEndTimeMillis(context, if (newEnd - System.currentTimeMillis() < 1000) 0L else newEnd, fromWidget = true)
+                    }.padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "+15",
+                    style = AppType.label,
+                    color = P.textPrimary,
+                    modifier = Modifier.clip(CircleShape).background(P.bgControl).pressable {
+                        haptics.tick()
+                        LocalStorage.setRestEndTimeMillis(context, endMillis + 15_000L, fromWidget = true)
+                    }.padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                CircleIconButton(Icons.Rounded.SkipNext, "Skip rest", {
+                    haptics.tick()
+                    LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+                }, size = 36.dp, container = P.accentSecondarySoft, tint = P.accentSecondary)
             }
-
-            Box(modifier = Modifier.padding(horizontal = 18.dp)) {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "$completedSetsCount / $totalSetsCount ACTIVE SETS COMPLETED${if (skippedExercisesList.isNotEmpty()) " • ${skippedExercisesList.size} SKIPPED" else ""}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = P.textSecondary
-                        )
-                        Text(
-                            text = "${(progressPct * 100).toInt()}%",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = P.accentPrimary
-                        )
-                    }
-                    AnimatedProgressBar(
-                        progress = progressPct,
-                        height = 5.dp,
-                        bgColor = P.bgControl,
-                        fillColor = P.accentPrimary,
-                        modifier = Modifier.padding(top = 5.dp)
-                    )
-                }
-            }
-
-            if (prCelebrationMessage != null) {
-                PrCelebrationBanner(prCelebrationMessage!!)
-            }
-
-            val listState = rememberLazyListState()
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item { Spacer(modifier = Modifier.height(4.dp)) }
-
-                item {
-                    AiMuscleFatigueCard(
-                        history = history,
-                        P = P,
-                        compact = true
-                    )
-                }
-
-                if (!isEditingPastWorkout && previousSplitWorkout != null) {
-                    item {
-                        SpringButton(
-                            scaleTo = 0.97f,
-                            onClick = {
-                                onHaptic()
-                                val copied = exercises.map { cur ->
-                                    val prev = previousSplitWorkout.exercises.find { it.name.equals(cur.name, ignoreCase = true) }
-                                    if (prev == null) cur else cur.copy(
-                                        sets = prev.sets.mapIndexed { idx, s ->
-                                            s.copy(
-                                                setNumber = idx + 1,
-                                                isWarmup = if (idx == 0) s.isWarmup else false,
-                                                isCompleted = false,
-                                                restSeconds = s.restSeconds.takeIf { it >= 0 } ?: cur.restSeconds.takeIf { it > 0 } ?: settings.restTimerSeconds
-                                            )
-                                        }
-                                    )
-                                }
-                                onUpdateExercises(copied)
-                            }
-                        ) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = P.bgCard,
-                                border = BorderStroke(1.dp, P.borderStrong),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text("⚡", color = P.accentPrimary, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "CLONE LAST ${split.title.uppercase()} NUMBERS",
-                                            color = P.textPrimary,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                        Text(
-                                            text = "Load weights & reps from ${previousSplitWorkout.displayDate.substringBefore('•').trim()}",
-                                            color = P.textSecondary,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    Text("→", color = P.accentPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                itemsIndexed(
-                    items = activeExercisesList,
-                    key = { _, pair -> pair.first.name }
-                ) { index, (exercise, exIdx) ->
-                    val supersetRange = getConnectedSupersetActiveIndices(activeExercisesList, index)
-                    val isPartOfSuperset = supersetRange.first < supersetRange.last
-                    val isSupersetWithNext = exercise.isSuperset && index < activeExercisesList.lastIndex
-                    val supersetOrderChar = ('A' + (index - supersetRange.first))
-                    val supersetPartnerNames = if (isPartOfSuperset) {
-                        supersetRange.filter { it != index }.joinToString(" + ") { activeExercisesList[it].first.name }
-                    } else ""
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateItem()
-                    ) {
-                        val aiAdvice = evaluateSmartAiAndDeload(split.title, exercise, history, settings.weightStepKg)
-                        val records = computeExerciseRecords(exercise.name, history)
-                        val pinnedNote = remember(exercise.name, noteRefreshTrigger) {
-                            LocalStorage.getExerciseNote(context, exercise.name)
-                        }
-                        val exDefaultRest = exercise.restSeconds.takeIf { it > 0 } ?: settings.restTimerSeconds
-                        var workSetCounter = 0
-
-                        val dragOffsetY = remember { Animatable(0f) }
-                        var isDraggingThis by remember { mutableStateOf(false) }
-                        val cardScale by animateFloatAsState(
-                            targetValue = if (isDraggingThis) 1.03f else 1f,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy),
-                            label = "card_drag_scale"
-                        )
-                        val coroutineScope = rememberCoroutineScope()
-                        val currentExIdx by rememberUpdatedState(exIdx)
-                        val currentExercisesCount by rememberUpdatedState(exercises.size)
-
-                        val borderColor = when {
-                            isDraggingThis -> P.accentPrimary
-                            isPartOfSuperset -> P.accentSecondary
-                            else -> P.borderSubtle
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .graphicsLayer {
-                                    translationY = dragOffsetY.value
-                                    scaleX = cardScale
-                                    scaleY = cardScale
-                                }
-                                .zIndex(if (isDraggingThis) 10f else 0f),
-                            color = if (isDraggingThis) P.bgControl else P.bgCard,
-                            border = BorderStroke(
-                                if (isDraggingThis || isPartOfSuperset) 2.dp else 1.dp,
-                                borderColor
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            shadowElevation = if (isDraggingThis) 20.dp else 0.dp
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                if (isPartOfSuperset) {
-                                    Surface(
-                                        color = P.accentSecondary.copy(alpha = 0.16f),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 8.dp)
-                                    ) {
-                                        Text(
-                                            text = "🔗 SUPERSET $supersetOrderChar • Connected Rest (${formatRestShort(exDefaultRest)}) with $supersetPartnerNames",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = P.accentSecondary,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = if (index == 0) {
-                                        Modifier.onGloballyPositioned { coords ->
-                                            workoutTutorialBounds["WORKOUT_CARD_HEADER"] = coords.boundsInRoot()
-                                        }
-                                    } else Modifier,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Surface(
-                                        modifier = Modifier
-                                            .size(34.dp, 38.dp)
-                                            .pointerInput(restRemainingSec == 0) {
-                                                if (restRemainingSec > 0) return@pointerInput
-                                                val swapThresholdPx = 145.dp.toPx()
-                                                detectVerticalDragGestures(
-                                                    onDragStart = {
-                                                        onHaptic()
-                                                        isDraggingThis = true
-                                                    },
-                                                    onDragEnd = {
-                                                        isDraggingThis = false
-                                                        coroutineScope.launch {
-                                                            dragOffsetY.animateTo(
-                                                                0f,
-                                                                spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioNoBouncy)
-                                                            )
-                                                        }
-                                                    },
-                                                    onDragCancel = {
-                                                        isDraggingThis = false
-                                                        coroutineScope.launch {
-                                                            dragOffsetY.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
-                                                        }
-                                                    },
-                                                    onVerticalDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        val nextY = dragOffsetY.value + dragAmount
-                                                        coroutineScope.launch {
-                                                            dragOffsetY.snapTo(nextY)
-                                                            if (nextY < -swapThresholdPx && currentExIdx > 0) {
-                                                                onHaptic()
-                                                                onReorderExercises(currentExIdx, currentExIdx - 1)
-                                                                dragOffsetY.snapTo(nextY + swapThresholdPx)
-                                                            } else if (nextY > swapThresholdPx && currentExIdx < currentExercisesCount - 1) {
-                                                                onHaptic()
-                                                                onReorderExercises(currentExIdx, currentExIdx + 1)
-                                                                dragOffsetY.snapTo(nextY - swapThresholdPx)
-                                                            }
-                                                        }
-                                                    }
-                                                )
-                                            },
-                                        color = if (isDraggingThis) P.accentPrimary else P.bgControl,
-                                        border = BorderStroke(1.dp, if (isDraggingThis) P.accentPrimary else P.borderSubtle),
-                                        shape = RoundedCornerShape(9.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("⠿", color = if (isDraggingThis) P.onAccentPrimary else P.accentPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                                        }
-                                    }
-
-                                    SpringButton(
-                                        scaleTo = 0.97f,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            onHaptic()
-                                            noteDraftText = pinnedNote
-                                            inspectedExerciseIndex = exIdx
-                                        }
-                                    ) {
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            Text(exercise.name, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
-                                            Text(
-                                                text = "${exercise.targetMuscle.ifBlank { "Custom" }}${if (records.bestSetText != "—") " • PR: ${records.bestSetText}" else ""} • Stats ›",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = P.textSecondary
-                                            )
-                                        }
-                                    }
-
-                                    if (index < activeExercisesList.lastIndex || exercise.isSuperset) {
-                                        SpringButton(
-                                            disabled = restRemainingSec > 0,
-                                            scaleTo = 0.9f,
-                                            onClick = {
-                                                onHaptic()
-                                                val toggled = !exercise.isSuperset
-                                                val nextEx = exercises.toMutableList()
-                                                nextEx[exIdx] = exercise.copy(isSuperset = toggled)
-                                                if (toggled && index + 1 in activeExercisesList.indices) {
-                                                    val partnerOrigIdx = activeExercisesList[index + 1].second
-                                                    val partnerEx = nextEx[partnerOrigIdx]
-                                                    nextEx[partnerOrigIdx] = partnerEx.copy(
-                                                        restSeconds = exDefaultRest,
-                                                        sets = partnerEx.sets.map { it.copy(restSeconds = exDefaultRest) }
-                                                    )
-                                                }
-                                                onUpdateExercises(nextEx)
-                                            }
-                                        ) {
-                                            Surface(
-                                                color = if (exercise.isSuperset) P.accentSecondary else P.bgControl,
-                                                border = BorderStroke(1.dp, P.accentSecondary),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Text(
-                                                    text = if (exercise.isSuperset) "🔗 Linked" else "🔗 Superset",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Black,
-                                                    color = if (exercise.isSuperset) Color(0xFF07080A) else P.accentSecondary,
-                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    SpringButton(
-                                        disabled = restRemainingSec > 0,
-                                        scaleTo = 0.9f,
-                                        onClick = {
-                                            onHaptic()
-                                            val nextRest = cycleRestPreset(exDefaultRest)
-                                            val nextEx = exercises.toMutableList()
-                                            for (activeIdx in supersetRange) {
-                                                val origIdx = activeExercisesList[activeIdx].second
-                                                val target = nextEx[origIdx]
-                                                nextEx[origIdx] = target.copy(
-                                                    restSeconds = nextRest,
-                                                    sets = target.sets.map { it.copy(restSeconds = nextRest) }
-                                                )
-                                                LocalStorage.saveExerciseDefaultRest(context, target.name, nextRest)
-                                            }
-                                            onUpdateExercises(nextEx)
-                                        }
-                                    ) {
-                                        Surface(
-                                            color = P.bgControl,
-                                            border = BorderStroke(1.dp, P.borderStrong),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text(
-                                                text = "⏱ ${formatRestShort(exDefaultRest)}",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = P.accentSecondary,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
-                                            )
-                                        }
-                                    }
-
-                                    SpringButton(
-                                        disabled = restRemainingSec > 0,
-                                        scaleTo = 0.9f,
-                                        onClick = {
-                                            onHaptic()
-                                            val nextEx = exercises.toMutableList()
-                                            nextEx[exIdx] = exercise.copy(isSkipped = true, isSuperset = false)
-                                            onUpdateExercises(nextEx)
-                                        }
-                                    ) {
-                                        Surface(
-                                            color = P.warningSurface,
-                                            border = BorderStroke(1.dp, P.warningText),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text(
-                                                text = "Skip",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = P.warningText,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (pinnedNote.isNotBlank()) {
-                                    SpringButton(
-                                        scaleTo = 0.98f,
-                                        onClick = {
-                                            noteDraftText = pinnedNote
-                                            inspectedExerciseIndex = exIdx
-                                        },
-                                        modifier = Modifier.padding(top = 8.dp)
-                                    ) {
-                                        Surface(color = P.bgControl, shape = RoundedCornerShape(8.dp)) {
-                                            Text(
-                                                text = "📌 $pinnedNote",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = P.textPrimary,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Surface(
-                                    color = if (aiAdvice.isPositive) P.successSurface else if (aiAdvice.isWarning) P.warningSurface else P.bgControl,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp)
-                                        .then(
-                                            if (index == 0) {
-                                                Modifier.onGloballyPositioned { coords ->
-                                                    workoutTutorialBounds["WORKOUT_AI_BAR"] = coords.boundsInRoot()
-                                                }
-                                            } else Modifier
-                                        )
-                                ) {
-                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                                        Text(
-                                            text = aiAdvice.message,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (aiAdvice.isPositive) P.successText else if (aiAdvice.isWarning) P.warningText else P.accentPrimary
-                                        )
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 6.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            if (aiAdvice.suggestedWeight.isNotBlank()) {
-                                                SpringButton(
-                                                    disabled = restRemainingSec > 0,
-                                                    scaleTo = 0.94f,
-                                                    onClick = {
-                                                        onHaptic()
-                                                        val updatedSets = exercise.sets.map { s ->
-                                                            if (s.isCompleted || s.isWarmup || s.intensityType == "WARMUP") s
-                                                            else s.copy(weight = aiAdvice.suggestedWeight)
-                                                        }
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = updatedSets)
-                                                        onUpdateExercises(nextEx)
-                                                    }
-                                                ) {
-                                                    Surface(
-                                                        color = P.bgCard,
-                                                        border = BorderStroke(1.dp, P.accentPrimary.copy(alpha = 0.6f)),
-                                                        shape = RoundedCornerShape(6.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "⚡ Apply AI Target (${aiAdvice.suggestedWeight}kg)",
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.ExtraBold,
-                                                            color = P.accentPrimary,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-
-                                            SpringButton(
-                                                disabled = restRemainingSec > 0,
-                                                scaleTo = 0.94f,
-                                                onClick = {
-                                                    onHaptic()
-                                                    val updatedSets = exercise.sets.map { s ->
-                                                        if (s.isCompleted || s.isWarmup || s.intensityType == "WARMUP") s
-                                                        else {
-                                                            val curW = parseWeightClean(s.weight, 20f)
-                                                            val deloadW = formatKgClean((curW * 0.9f).coerceAtLeast(2.5f))
-                                                            s.copy(weight = deloadW)
-                                                        }
-                                                    }
-                                                    val nextEx = exercises.toMutableList()
-                                                    nextEx[exIdx] = exercise.copy(sets = updatedSets)
-                                                    onUpdateExercises(nextEx)
-                                                    Toast.makeText(context, "Smart Deload (-10%) applied to ${exercise.name}", Toast.LENGTH_SHORT).show()
-                                                }
-                                            ) {
-                                                Surface(
-                                                    color = P.bgCard,
-                                                    border = BorderStroke(1.dp, P.warningText.copy(alpha = 0.6f)),
-                                                    shape = RoundedCornerShape(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "🛡️ Smart Deload -10%",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        color = P.warningText,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 12.dp, bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("TYPE", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp, color = P.textSecondary, modifier = Modifier.width(44.dp))
-                                    Text("KG", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1.15f))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("REPS", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("REST", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.width(48.dp))
-                                    Spacer(modifier = Modifier.width(38.dp))
-                                }
-
-                                exercise.sets.forEachIndexed { setIdx, setEntry ->
-                                    if (setEntry.intensityType == "NORMAL" && !setEntry.isWarmup) workSetCounter++
-                                    val isPr = isSetPersonalRecord(setEntry, records)
-
-                                    val badgeLabel = when {
-                                        setEntry.isWarmup || setEntry.intensityType == "WARMUP" -> "W"
-                                        setEntry.intensityType == "DROP" -> "DROP"
-                                        setEntry.intensityType == "REST_PAUSE" -> "R-P"
-                                        isPr -> "🏆"
-                                        else -> "S$workSetCounter"
-                                    }
-                                    val badgeBg = when {
-                                        setEntry.isWarmup || setEntry.intensityType == "WARMUP" -> P.warningSurface
-                                        setEntry.intensityType == "DROP" -> P.dangerSurface
-                                        setEntry.intensityType == "REST_PAUSE" -> P.accentSecondary.copy(alpha = 0.2f)
-                                        else -> P.bgControl
-                                    }
-                                    val badgeColor = when {
-                                        setEntry.isWarmup || setEntry.intensityType == "WARMUP" -> P.warningText
-                                        setEntry.intensityType == "DROP" -> P.dangerText
-                                        setEntry.intensityType == "REST_PAUSE" -> P.accentSecondary
-                                        else -> P.textPrimary
-                                    }
-                                    val setRestSec = setEntry.restSeconds.takeIf { it >= 0 } ?: exDefaultRest
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 2.dp)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (setEntry.isCompleted) P.successSurface else Color.Transparent)
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(modifier = Modifier.width(44.dp)) {
-                                            SpringButton(
-                                                scaleTo = 0.85f,
-                                                disabled = restRemainingSec > 0,
-                                                onClick = {
-                                                    onHaptic()
-                                                    val nextType = when (setEntry.intensityType) {
-                                                        "NORMAL" -> "WARMUP"
-                                                        "WARMUP" -> "DROP"
-                                                        "DROP" -> "REST_PAUSE"
-                                                        else -> "NORMAL"
-                                                    }
-                                                    val nextSets = exercise.sets.toMutableList()
-                                                    nextSets[setIdx] = setEntry.copy(
-                                                        intensityType = nextType,
-                                                        isWarmup = (nextType == "WARMUP")
-                                                    )
-                                                    val nextEx = exercises.toMutableList()
-                                                    nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                    onUpdateExercises(nextEx)
-                                                }
-                                            ) {
-                                                Surface(
-                                                    modifier = Modifier.size(40.dp, 34.dp),
-                                                    color = badgeBg,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Text(badgeLabel, fontSize = 10.sp, fontWeight = FontWeight.Black, color = badgeColor)
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Box(modifier = Modifier.weight(1.15f)) {
-                                            if (restRemainingSec > 0) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(34.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .background(P.bgControl)
-                                                        .border(1.dp, P.borderSubtle, RoundedCornerShape(8.dp)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text("${setEntry.weight}kg", color = P.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                                                }
-                                            } else {
-                                                StepperControl(
-                                                    value = setEntry.weight,
-                                                    allowKeyboardTyping = true,
-                                                    onValueChange = { v ->
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(weight = v)
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    onStepDown = {
-                                                        onHaptic()
-                                                        val cur = parseWeightClean(setEntry.weight, 20f)
-                                                        val next = (cur - settings.weightStepKg).coerceAtLeast(0f)
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(weight = formatKgClean(next))
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    onStepUp = {
-                                                        onHaptic()
-                                                        val cur = parseWeightClean(setEntry.weight, 20f)
-                                                        val next = cur + settings.weightStepKg
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(weight = formatKgClean(next))
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    P = P
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(6.dp))
-
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            if (restRemainingSec > 0) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(34.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .background(P.bgControl)
-                                                        .border(1.dp, P.borderSubtle, RoundedCornerShape(8.dp)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text("${setEntry.reps} reps", color = P.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                                                }
-                                            } else {
-                                                StepperControl(
-                                                    value = setEntry.reps,
-                                                    allowKeyboardTyping = true,
-                                                    onValueChange = { v ->
-                                                        val filtered = v.filter { it.isDigit() }
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(reps = filtered)
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    onStepDown = {
-                                                        onHaptic()
-                                                        val cur = parseRepsClean(setEntry.reps, 8)
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(reps = "${maxOf(0, cur - 1)}")
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    onStepUp = {
-                                                        onHaptic()
-                                                        val cur = parseRepsClean(setEntry.reps, 8)
-                                                        val nextSets = exercise.sets.toMutableList()
-                                                        nextSets[setIdx] = setEntry.copy(reps = "${cur + 1}")
-                                                        val nextEx = exercises.toMutableList()
-                                                        nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                        onUpdateExercises(nextEx)
-                                                    },
-                                                    P = P
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.width(6.dp))
-
-                                        SpringButton(
-                                            disabled = restRemainingSec > 0,
-                                            scaleTo = 0.86f,
-                                            onClick = {
-                                                onHaptic()
-                                                val cycledRest = cycleRestPreset(setRestSec)
-                                                val nextEx = exercises.toMutableList()
-                                                if (isPartOfSuperset) {
-                                                    for (activeIdx in supersetRange) {
-                                                        val origIdx = activeExercisesList[activeIdx].second
-                                                        val target = nextEx[origIdx]
-                                                        nextEx[origIdx] = target.copy(
-                                                            restSeconds = cycledRest,
-                                                            sets = target.sets.mapIndexed { sIdx, s ->
-                                                                if (sIdx == setIdx) s.copy(restSeconds = cycledRest) else s
-                                                            }
-                                                        )
-                                                    }
-                                                } else {
-                                                    val nextSets = exercise.sets.toMutableList()
-                                                    nextSets[setIdx] = setEntry.copy(restSeconds = cycledRest)
-                                                    nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                }
-                                                onUpdateExercises(nextEx)
-                                            }
-                                        ) {
-                                            val restDisplayLabel = when {
-                                                isSupersetWithNext -> "🔗→${('A' + (index - supersetRange.first + 1))}"
-                                                isPartOfSuperset -> "🔗${formatRestShort(setRestSec)}"
-                                                else -> formatRestShort(setRestSec)
-                                            }
-                                            Surface(
-                                                modifier = Modifier.size(48.dp, 34.dp),
-                                                color = P.bgControl,
-                                                border = BorderStroke(1.dp, if (isPartOfSuperset) P.accentSecondary.copy(alpha = 0.5f) else P.borderSubtle),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Text(
-                                                        text = restDisplayLabel,
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        color = if (setRestSec > 0 || isPartOfSuperset) P.accentSecondary else P.textSecondary
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Box(
-                                            modifier = Modifier.width(38.dp),
-                                            contentAlignment = Alignment.CenterEnd
-                                        ) {
-                                            SpringButton(
-                                                disabled = restRemainingSec > 0,
-                                                scaleTo = 0.82f,
-                                                onClick = {
-                                                    onHaptic()
-                                                    val nextCompleted = !setEntry.isCompleted
-                                                    val updatedSet = setEntry.copy(isCompleted = nextCompleted)
-
-                                                    val nextSets = exercise.sets.toMutableList()
-                                                    nextSets[setIdx] = updatedSet
-                                                    val nextEx = exercises.toMutableList()
-                                                    nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                    onUpdateExercises(nextEx)
-
-                                                    if (nextCompleted) {
-                                                        if (isSetPersonalRecord(updatedSet, records)) {
-                                                            prCelebrationMessage = "${exercise.name} • ${updatedSet.weight}kg × ${updatedSet.reps}"
-                                                        }
-
-                                                        if (isPartOfSuperset) {
-                                                            val unfinishedPartnerName = supersetRange.firstNotNullOfOrNull { activeIdx ->
-                                                                val origIdx = activeExercisesList[activeIdx].second
-                                                                val partnerEx = nextEx[origIdx]
-                                                                val partnerSet = partnerEx.sets.getOrNull(setIdx) ?: partnerEx.sets.lastOrNull()
-                                                                if (partnerSet != null && !partnerSet.isCompleted) partnerEx.name else null
-                                                            }
-
-                                                            if (unfinishedPartnerName == null) {
-                                                                val connectedRestSec = supersetRange.maxOf { activeIdx ->
-                                                                    val origIdx = activeExercisesList[activeIdx].second
-                                                                    val partnerEx = nextEx[origIdx]
-                                                                    partnerEx.sets.getOrNull(setIdx)?.restSeconds?.takeIf { it >= 0 }
-                                                                        ?: partnerEx.restSeconds.takeIf { it > 0 }
-                                                                        ?: settings.restTimerSeconds
-                                                                }
-                                                                if (!isEditingPastWorkout) {
-                                                                    sendSetDoneNotification(context, "Superset Round ${setIdx + 1}", updatedSet.weight, updatedSet.reps, connectedRestSec)
-                                                                    if (connectedRestSec > 0) {
-                                                                        val newRestEnd = System.currentTimeMillis() + (connectedRestSec * 1000L)
-                                                                        LocalStorage.setRestEndTimeMillis(context, newRestEnd, fromWidget = true)
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                if (!isEditingPastWorkout) {
-                                                                    sendSetDoneNotification(context, exercise.name, updatedSet.weight, updatedSet.reps, 0)
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "🔗 Superset: No rest yet! Go straight to $unfinishedPartnerName (Set ${setIdx + 1})",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-                                                            }
-                                                        } else {
-                                                            if (!isEditingPastWorkout) {
-                                                                sendSetDoneNotification(context, exercise.name, updatedSet.weight, updatedSet.reps, setRestSec)
-                                                                if (setRestSec > 0) {
-                                                                    val newRestEnd = System.currentTimeMillis() + (setRestSec * 1000L)
-                                                                    LocalStorage.setRestEndTimeMillis(context, newRestEnd, fromWidget = true)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            ) {
-                                                Surface(
-                                                    modifier = Modifier.size(32.dp, 34.dp),
-                                                    color = if (setEntry.isCompleted) P.accentPrimary else P.bgControl,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Text(
-                                                            text = "✓",
-                                                            fontSize = 14.sp,
-                                                            fontWeight = FontWeight.Black,
-                                                            color = if (setEntry.isCompleted) P.onAccentPrimary else P.textSecondary
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 10.dp)
-                                        .then(
-                                            if (index == 0) {
-                                                Modifier.onGloballyPositioned { coords ->
-                                                    workoutTutorialBounds["WORKOUT_SET_ACTIONS"] = coords.boundsInRoot()
-                                                }
-                                            } else Modifier
-                                        ),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    SpringButton(
-                                        disabled = restRemainingSec > 0,
-                                        scaleTo = 0.96f,
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            onHaptic()
-                                            val lastSet = exercise.sets.last()
-                                            val nextSets = exercise.sets + SetEntry(
-                                                setNumber = exercise.sets.size + 1,
-                                                weight = lastSet.weight,
-                                                reps = lastSet.reps,
-                                                isWarmup = false,
-                                                intensityType = "NORMAL",
-                                                isCompleted = false,
-                                                restSeconds = lastSet.restSeconds.takeIf { it >= 0 } ?: exDefaultRest
-                                            )
-                                            val nextEx = exercises.toMutableList()
-                                            nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                            onUpdateExercises(nextEx)
-                                        }
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(32.dp),
-                                            color = P.bgControl,
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text("+ ADD SET", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = P.textPrimary)
-                                            }
-                                        }
-                                    }
-
-                                    SpringButton(
-                                        disabled = restRemainingSec > 0,
-                                        scaleTo = 0.96f,
-                                        modifier = Modifier.weight(1.15f),
-                                        onClick = {
-                                            onHaptic()
-                                            val lastSet = exercise.sets.last()
-                                            val lastW = parseWeightClean(lastSet.weight, 20f)
-                                            val dropWeight = formatKgClean((lastW * 0.8f).coerceAtLeast(2.5f))
-                                            val nextSets = exercise.sets + SetEntry(
-                                                setNumber = exercise.sets.size + 1,
-                                                weight = dropWeight,
-                                                reps = lastSet.reps,
-                                                isWarmup = false,
-                                                intensityType = "DROP",
-                                                isCompleted = false,
-                                                restSeconds = 0
-                                            )
-                                            val nextEx = exercises.toMutableList()
-                                            nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                            onUpdateExercises(nextEx)
-                                        }
-                                    ) {
-                                        Surface(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(32.dp),
-                                            color = P.dangerSurface,
-                                            border = BorderStroke(1.dp, P.dangerText.copy(alpha = 0.5f)),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text("🔥 + DROP SET", fontSize = 11.sp, fontWeight = FontWeight.Black, color = P.dangerText)
-                                            }
-                                        }
-                                    }
-
-                                    if (exercise.sets.size > 1) {
-                                        SpringButton(
-                                            disabled = restRemainingSec > 0,
-                                            scaleTo = 0.94f,
-                                            onClick = {
-                                                onHaptic()
-                                                val nextSets = exercise.sets.dropLast(1)
-                                                val nextEx = exercises.toMutableList()
-                                                nextEx[exIdx] = exercise.copy(sets = nextSets)
-                                                onUpdateExercises(nextEx)
-                                            }
-                                        ) {
-                                            Surface(
-                                                modifier = Modifier.size(64.dp, 32.dp),
-                                                color = P.bgControl,
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Text("− SET", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = P.textSecondary)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    if (skippedExercisesList.isNotEmpty()) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp),
-                            color = P.bgCard,
-                            border = BorderStroke(1.dp, P.warningText),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = "SKIPPED FOR TODAY (${skippedExercisesList.size})",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 1.2.sp,
-                                    color = P.warningText,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                skippedExercisesList.forEach { (ex, originalIndex) ->
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 6.dp),
-                                        color = P.bgControl,
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column {
-                                                Text(ex.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = P.textSecondary, textDecoration = TextDecoration.LineThrough)
-                                                Text(ex.targetMuscle, fontSize = 11.sp, color = P.textSecondary)
-                                            }
-                                            SpringButton(
-                                                disabled = restRemainingSec > 0,
-                                                scaleTo = 0.92f,
-                                                onClick = {
-                                                    onHaptic()
-                                                    val nextEx = exercises.toMutableList()
-                                                    nextEx[originalIndex] = ex.copy(isSkipped = false)
-                                                    onUpdateExercises(nextEx)
-                                                }
-                                            ) {
-                                                Surface(color = P.accentPrimary, shape = RoundedCornerShape(8.dp)) {
-                                                    Text(
-                                                        text = "UNDO SKIP",
-                                                        fontSize = 11.sp,
-                                                        fontWeight = FontWeight.Black,
-                                                        color = P.onAccentPrimary,
-                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    SpringButton(
-                        disabled = restRemainingSec > 0,
-                        scaleTo = 0.97f,
-                        onClick = {
-                            onHaptic()
-                            newExerciseName = ""
-                            showAddExerciseModal = true
-                        }
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            color = P.bgCard,
-                            border = BorderStroke(1.dp, P.borderSubtle),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "+ ADD EXERCISE TO ${split.title.uppercase()}",
-                                    color = P.accentPrimary,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(28.dp))
-                }
-            }
-
-            Surface(modifier = Modifier.fillMaxWidth(), color = P.bgPrimary) {
-                SpringButton(
-                    disabled = restRemainingSec > 0,
-                    scaleTo = 0.96f,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                    onClick = {
-                        onHaptic()
-                        val dur = if (isEditingPastWorkout) {
-                            history.find { it.splitTitle == split.title }?.durationSeconds ?: 0L
-                        } else {
-                            ((System.currentTimeMillis() - startTimeMillis) / 1000L).coerceAtLeast(0L)
-                        }
-                        finalDurationSeconds = dur
-                        showCompletionModal = true
-                    }
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        color = if (restRemainingSec > 0) P.bgControl else P.accentPrimary,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = if (isEditingPastWorkout) "SAVE WORKOUT UPDATES" else "FINISH & REVIEW WORKOUT",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                color = if (restRemainingSec > 0) P.textSecondary else P.onAccentPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // --- Extracted Modals ---
-
-        if (inspectedExerciseIndex != null && inspectedExerciseIndex!! in exercises.indices) {
-            val exIdx = inspectedExerciseIndex!!
-            ExerciseInspectionModal(
-                splitTitle = split.title,
-                exIdx = exIdx,
-                totalExercisesCount = exercises.size,
-                targetEx = exercises[exIdx],
-                history = history,
-                restRemainingSec = restRemainingSec,
-                noteDraftText = noteDraftText,
-                onNoteDraftChange = { noteDraftText = it },
-                P = P,
-                onHaptic = onHaptic,
-                onMoveUp = {
-                    onReorderExercises(exIdx, exIdx - 1)
-                    inspectedExerciseIndex = exIdx - 1
-                },
-                onMoveDown = {
-                    onReorderExercises(exIdx, exIdx + 1)
-                    inspectedExerciseIndex = exIdx + 1
-                },
-                onRequestRemove = {
-                    confirmRemoveExerciseName = exercises[exIdx].name
-                    inspectedExerciseIndex = null
-                },
-                onSaveAndClose = {
-                    LocalStorage.saveExerciseNote(context, exercises[exIdx].name, noteDraftText)
-                    noteRefreshTrigger += 1
-                    inspectedExerciseIndex = null
-                },
-                onDismiss = { inspectedExerciseIndex = null }
-            )
-        }
-
-        if (confirmRemoveExerciseName != null) {
-            AlertDialog(
-                onDismissRequest = { confirmRemoveExerciseName = null },
-                containerColor = P.bgCard,
-                titleContentColor = P.textPrimary,
-                title = { Text("Remove Exercise?", fontWeight = FontWeight.Bold) },
-                text = {
-                    Text(
-                        text = "Remove \"${confirmRemoveExerciseName}\" from ${split.title}? It won't appear on future ${split.title} sessions unless you add it back.",
-                        color = P.textSecondary,
-                        fontSize = 14.sp
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        onHaptic()
-                        onRemoveExercisePermanently(confirmRemoveExerciseName!!)
-                        confirmRemoveExerciseName = null
-                    }) {
-                        Text("Remove", color = P.dangerText, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmRemoveExerciseName = null }) {
-                        Text("Cancel", color = P.textSecondary)
-                    }
-                }
-            )
-        }
-
-        if (showAddExerciseModal) {
-            AlertDialog(
-                onDismissRequest = { showAddExerciseModal = false },
-                containerColor = P.bgCard,
-                titleContentColor = P.textPrimary,
-                title = { Text("Add Exercise", fontWeight = FontWeight.Bold) },
-                text = {
-                    OutlinedTextField(
-                        value = newExerciseName,
-                        onValueChange = { newExerciseName = it },
-                        placeholder = { Text("Exercise name", color = P.textSecondary) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = P.accentPrimary,
-                            unfocusedBorderColor = P.borderStrong,
-                            focusedTextColor = P.textPrimary,
-                            unfocusedTextColor = P.textPrimary
-                        )
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (newExerciseName.isNotBlank()) {
-                            onHaptic()
-                            val trimmed = newExerciseName.trim()
-                            onAddCustomExercise(trimmed)
-                            onUpdateExercises(
-                                exercises + ExerciseEntry(
-                                    name = trimmed,
-                                    targetMuscle = "Custom",
-                                    restSeconds = settings.restTimerSeconds,
-                                    sets = listOf(
-                                        SetEntry(1, weight = "20", reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = 60),
-                                        SetEntry(2, weight = "40", reps = "8", isWarmup = false, intensityType = "NORMAL", restSeconds = settings.restTimerSeconds),
-                                        SetEntry(3, weight = "40", reps = "8", isWarmup = false, intensityType = "NORMAL", restSeconds = settings.restTimerSeconds)
-                                    )
-                                )
-                            )
-                            newExerciseName = ""
-                            showAddExerciseModal = false
-                        }
-                    }) {
-                        Text("Add", color = P.accentPrimary, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showAddExerciseModal = false }) {
-                        Text("Cancel", color = P.textSecondary)
-                    }
-                }
-            )
-        }
-
-        if (showCompletionModal) {
-            WorkoutCompletionModal(
-                split = split,
-                exercises = exercises,
-                skippedExercisesList = skippedExercisesList,
-                history = history,
-                userProfile = userProfile,
-                isEditingPastWorkout = isEditingPastWorkout,
-                finalDurationSeconds = finalDurationSeconds,
-                attachedPhotoPath = attachedPhotoPath,
-                P = P,
-                onHaptic = onHaptic,
-                onUnskipAll = {
-                    onUpdateExercises(exercises.map { it.copy(isSkipped = false) })
-                    showCompletionModal = false
-                },
-                onClearPhoto = { attachedPhotoPath = null },
-                onLaunchCamera = { cameraLauncher.launch(null) },
-                onLaunchGallery = { galleryLauncher.launch("image/*") },
-                onConfirmFinish = {
-                    showCompletionModal = false
-                    onFinishWorkout(
-                        finalDurationSeconds,
-                        attachedPhotoPath,
-                        skippedExercisesList.map { it.first.name }
-                    )
-                },
-                onDismiss = { showCompletionModal = false }
-            )
-        }
-
-        if (showWorkoutTutorial) {
-            SpotlightTutorialOverlay(
-                steps = workoutTutorialSteps,
-                currentStepIndex = workoutTutorialStepIndex,
-                targetBounds = workoutTutorialBounds,
-                P = P,
-                onNext = {
-                    if (workoutTutorialStepIndex < workoutTutorialSteps.lastIndex) {
-                        workoutTutorialStepIndex++
-                    } else {
-                        TutorialPrefs.markWorkoutTutorialSeen(context)
-                        showWorkoutTutorial = false
-                    }
-                },
-                onPrev = {
-                    if (workoutTutorialStepIndex > 0) workoutTutorialStepIndex--
-                },
-                onSkip = {
-                    TutorialPrefs.markWorkoutTutorialSeen(context)
-                    showWorkoutTutorial = false
-                }
-            )
         }
     }
 }
 
 // ============================================================================
-// 3. MODULARIZED WORKOUT DIALOGS (STATS MODAL & COMPLETION MODAL)
+// SHEETS
 // ============================================================================
 
 @Composable
-private fun ExerciseInspectionModal(
-    splitTitle: String,
-    exIdx: Int,
-    totalExercisesCount: Int,
-    targetEx: ExerciseEntry,
+private fun ExerciseDetailsSheet(
+    exercise: ExerciseEntry,
     history: List<CompletedWorkout>,
-    restRemainingSec: Int,
-    noteDraftText: String,
-    onNoteDraftChange: (String) -> Unit,
-    P: GymPalette,
-    onHaptic: () -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    splitTitle: String,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
-    onRequestRemove: () -> Unit,
-    onSaveAndClose: () -> Unit,
+    onSaveNote: (String) -> Unit,
+    onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val rec = remember(targetEx.name, history) { computeExerciseRecords(targetEx.name, history) }
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val rec = remember(exercise.name, history) { computeExerciseRecords(exercise.name, history) }
+    var note by remember(exercise.name) { mutableStateOf(LocalStorage.getExerciseNote(context, exercise.name)) }
+    val info = remember(exercise.name) { ExerciseDatabase.find(exercise.name) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = P.bgCard,
-        titleContentColor = P.textPrimary,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(targetEx.name, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                    if (targetEx.targetMuscle.isNotBlank()) {
-                        Text(targetEx.targetMuscle, fontSize = 12.sp, color = P.textSecondary)
-                    }
+    AppBottomSheet(onDismiss = { onSaveNote(note); onDismiss() }) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(exercise.name, style = AppType.title, color = P.textPrimary)
+                    val sub = listOfNotNull(exercise.targetMuscle.ifBlank { info?.muscle }, info?.equipment).joinToString(" · ")
+                    if (sub.isNotBlank()) Text(sub, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textSecondary)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Surface(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(enabled = exIdx > 0 && restRemainingSec == 0) {
-                                onHaptic()
-                                onMoveUp()
-                            },
-                        color = if (exIdx > 0 && restRemainingSec == 0) P.bgControl else P.bgControl.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("↑", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(enabled = exIdx < totalExercisesCount - 1 && restRemainingSec == 0) {
-                                onHaptic()
-                                onMoveDown()
-                            },
-                        color = if (exIdx < totalExercisesCount - 1 && restRemainingSec == 0) P.bgControl else P.bgControl.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("↓", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                        }
+                CircleIconButton(Icons.Rounded.ArrowUpward, "Move up", onMoveUp, enabled = canMoveUp, size = 36.dp)
+                Spacer(Modifier.width(6.dp))
+                CircleIconButton(Icons.Rounded.ArrowDownward, "Move down", onMoveDown, enabled = canMoveDown, size = 36.dp)
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile(if (rec.bestEstimated1Rm > 0) "${rec.bestEstimated1Rm} kg" else "—", "Est. 1-rep max", Modifier.weight(1f))
+                StatTile(if (rec.maxWeightKg > 0f) "${formatKgClean(rec.maxWeightKg)} kg" else "—", "Heaviest", Modifier.weight(1f))
+                StatTile(rec.bestSetText.replace("kg ×", " ×"), "Best set", Modifier.weight(1f))
+            }
+            if (rec.chartPoints.size >= 2) {
+                Spacer(Modifier.height(16.dp))
+                Text("Top weight per session", style = AppType.label, color = P.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                TrendChart(rec.chartPoints)
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("Setup note (seat height, grip…)") },
+                leadingIcon = { Icon(Icons.Rounded.PushPin, null) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = P.accentPrimary,
+                    unfocusedBorderColor = P.borderStrong,
+                    focusedLabelColor = P.accentPrimary,
+                    unfocusedLabelColor = P.textSecondary
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("Recent sessions", style = AppType.label, color = P.textSecondary)
+            if (rec.recentHistory.isEmpty()) {
+                Text("Nothing logged yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 6.dp))
+            } else {
+                rec.recentHistory.forEach { (label, sets) ->
+                    Column(Modifier.padding(top = 10.dp)) {
+                        Text(label, style = AppType.caption, color = P.textTertiary)
+                        Text(sets.replace("kg ×", " ×").replace(" • ", "  ·  "), style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                     }
                 }
             }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val maxWFormatted = if (rec.maxWeightKg % 1f == 0f) "${rec.maxWeightKg.toInt()}kg" else "${rec.maxWeightKg}kg"
-                    listOf(
-                        "${rec.bestEstimated1Rm}kg" to "Est. 1RM",
-                        maxWFormatted to "Max Weight",
-                        rec.bestSetText to "Best Set"
-                    ).forEach { (statVal, statLabel) ->
-                        Surface(
-                            modifier = Modifier.weight(1f),
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(statVal, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                                Text(statLabel, fontSize = 10.sp, color = P.textSecondary)
-                            }
-                        }
-                    }
-                }
-
-                if (rec.chartPoints.size >= 2) {
-                    TrendLineMiniChart(title = "Top Weight Progression", points = rec.chartPoints, P = P)
-                }
-
-                OutlinedTextField(
-                    value = noteDraftText,
-                    onValueChange = onNoteDraftChange,
-                    label = { Text("Pinned Setup Note (seat, cable pin)", color = P.textSecondary) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = P.accentPrimary,
-                        unfocusedBorderColor = P.borderStrong,
-                        focusedTextColor = P.textPrimary,
-                        unfocusedTextColor = P.textPrimary
-                    )
-                )
-
-                Text("Recent History", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = P.textPrimary)
-
-                if (rec.recentHistory.isEmpty()) {
-                    Text("No previous sessions logged yet.", fontSize = 12.sp, color = P.textSecondary)
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        rec.recentHistory.take(4).forEach { (dateLabel, setsLine) ->
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = P.bgControl,
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(dateLabel, fontSize = 10.sp, color = P.textSecondary)
-                                    Text(setsLine, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = P.textPrimary)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                TextButton(
-                    onClick = {
-                        if (restRemainingSec == 0) {
-                            onHaptic()
-                            onRequestRemove()
-                        }
-                    },
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text = "Remove from $splitTitle",
-                        color = if (restRemainingSec == 0) P.dangerText else P.textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onHaptic()
-                onSaveAndClose()
-            }) {
-                Text("Save & Close", color = P.accentPrimary, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = P.textSecondary)
-            }
+            Spacer(Modifier.height(20.dp))
+            SecondaryButton("Remove from $splitTitle", onRemove, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteOutline, contentColor = P.dangerText)
         }
-    )
+    }
 }
 
 @Composable
-private fun WorkoutCompletionModal(
+private fun FinishSheet(
     split: WorkoutSplit,
     exercises: List<ExerciseEntry>,
-    skippedExercisesList: List<Pair<ExerciseEntry, Int>>,
+    skipped: List<ExerciseEntry>,
     history: List<CompletedWorkout>,
     userProfile: UserProfile,
-    isEditingPastWorkout: Boolean,
-    finalDurationSeconds: Long,
-    attachedPhotoPath: String?,
-    P: GymPalette,
-    onHaptic: () -> Unit,
+    isEditing: Boolean,
+    durationSeconds: Long,
+    photoPath: String?,
     onUnskipAll: () -> Unit,
     onClearPhoto: () -> Unit,
-    onLaunchCamera: () -> Unit,
-    onLaunchGallery: () -> Unit,
-    onConfirmFinish: () -> Unit,
+    onCamera: () -> Unit,
+    onGallery: () -> Unit,
+    onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val P = LocalPalette.current
     val context = LocalContext.current
-    val performed = exercises.filter { !it.isSkipped }
-    var workSetsDone = 0
-    var totalVolFloat = 0f
-    var prCount = 0
-    for (ex in performed) {
-        val rec = computeExerciseRecords(ex.name, history)
-        for (s in ex.sets) {
-            if (!s.isWarmup && s.intensityType != "WARMUP") {
-                val r = parseRepsClean(s.reps, 0)
-                val kg = parseWeightClean(s.weight, 0f)
-                if (r > 0) workSetsDone++
-                totalVolFloat += (kg * r)
+    val stats = remember(exercises, history) { computeWorkoutStats(exercises, history) }
+
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(if (isEditing) "Save changes" else "Nice work", style = AppType.display, color = P.textPrimary)
+            Text(
+                if (isEditing) split.title else "That's ${split.title} done.",
+                style = AppType.body,
+                color = P.textSecondary
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile(formatDuration(durationSeconds), "Time", Modifier.weight(1f))
+                StatTile("${stats.workSets}", "Sets", Modifier.weight(1f))
             }
-            if (isSetPersonalRecord(s, rec)) prCount++
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile(formatVolume(stats.volumeKg), "Volume", Modifier.weight(1f))
+                StatTile("${stats.prCount}", "New bests", Modifier.weight(1f), valueColor = if (stats.prCount > 0) P.warningText else null)
+            }
+
+            if (skipped.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(P.warningSurface).padding(14.dp)) {
+                    Text("You skipped ${skipped.size}: ${skipped.joinToString(", ") { it.name }}", style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
+                    Text(
+                        "Do them now",
+                        style = AppType.label,
+                        color = P.warningText,
+                        modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).pressable(onClick = onUnskipAll).padding(vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            val preview = remember(photoPath) { PhotoStorage.loadImageBitmap(photoPath) }
+            if (preview != null) {
+                Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(16.dp))) {
+                    Image(preview, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    CircleIconButton(
+                        Icons.Rounded.Close, "Remove photo", onClearPhoto,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        size = 32.dp, container = Color.Black.copy(alpha = 0.55f), tint = Color.White
+                    )
+                }
+            } else {
+                Text("Add a photo (optional)", style = AppType.label, color = P.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton("Camera", onCamera, Modifier.weight(1f), icon = Icons.Rounded.PhotoCamera)
+                    SecondaryButton("Gallery", onGallery, Modifier.weight(1f), icon = Icons.Rounded.Image)
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton(if (isEditing) "Save changes" else "Save workout", onSave, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check)
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(
+                "Share",
+                {
+                    shareWorkoutCardImage(context, split.title, durationSeconds, exercises, history, userProfile.currentWeightKg, photoPath)
+                },
+                Modifier.fillMaxWidth(),
+                icon = Icons.Rounded.IosShare
+            )
         }
     }
-    val totalVol = totalVolFloat.roundToInt()
-    val mins = finalDurationSeconds / 60
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = P.bgCard,
-        titleContentColor = P.textPrimary,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isEditingPastWorkout) "UPDATE WORKOUT" else "SESSION COMPLETE ⚡",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        color = P.textPrimary
-                    )
-                    Text(
-                        text = split.title.uppercase(),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = P.accentPrimary
-                    )
-                }
-                Surface(
-                    color = P.bgControl,
-                    border = BorderStroke(1.dp, P.accentSecondary),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Text("⚖️ BW", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = P.textSecondary)
-                        Text("${formatKgClean(userProfile.currentWeightKg)}kg", fontSize = 13.sp, fontWeight = FontWeight.Black, color = P.accentSecondary)
-                    }
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SpringButton(
-                    scaleTo = 0.96f,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        onHaptic()
-                        shareAiWorkoutReport(
-                            context = context,
-                            splitTitle = split.title,
-                            durationSeconds = finalDurationSeconds,
-                            exercises = exercises,
-                            history = history,
-                            bodyWeightKg = userProfile.currentWeightKg,
-                            photoPath = attachedPhotoPath
-                        )
-                    }
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        color = P.bgControl,
-                        border = BorderStroke(1.5.dp, P.accentSecondary),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "📤 SHARE STRAVA STORY CARD",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black,
-                                color = P.accentSecondary
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        "${mins}m" to "TIME",
-                        "$workSetsDone" to "SETS",
-                        "${totalVol}kg" to "VOLUME",
-                        "🏆 $prCount" to "PRs"
-                    ).forEach {
-                        Surface(
-                            modifier = Modifier.weight(1f),
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = 10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(it.first, fontSize = 13.sp, fontWeight = FontWeight.Black, color = P.textPrimary)
-                                Text(it.second, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = P.textSecondary)
-                            }
-                        }
-                    }
-                }
-
-                if (skippedExercisesList.isNotEmpty()) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = P.warningSurface,
-                        border = BorderStroke(1.dp, P.warningText),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "⏭ EXERCISES SKIPPED TODAY (${skippedExercisesList.size})",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black,
-                                color = P.warningText
-                            )
-                            Column(
-                                modifier = Modifier.padding(top = 6.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                skippedExercisesList.forEach { (ex, _) ->
-                                    Text("• ${ex.name} (${ex.targetMuscle})", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                                }
-                            }
-                            SpringButton(
-                                scaleTo = 0.96f,
-                                onClick = {
-                                    onHaptic()
-                                    onUnskipAll()
-                                },
-                                modifier = Modifier.padding(top = 10.dp)
-                            ) {
-                                Surface(modifier = Modifier.fillMaxWidth(), color = P.bgCard, shape = RoundedCornerShape(8.dp)) {
-                                    Box(modifier = Modifier.padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
-                                        Text("↩ UNSKIP & DO THESE EXERCISES NOW", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = P.warningText)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (attachedPhotoPath != null) {
-                    val previewBitmap = remember(attachedPhotoPath) { PhotoStorage.loadImageBitmap(attachedPhotoPath) }
-                    if (previewBitmap != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(140.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        ) {
-                            Image(
-                                bitmap = previewBitmap,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            SpringButton(
-                                onClick = onClearPhoto,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                            ) {
-                                Surface(color = Color(0xBF000000), shape = CircleShape) {
-                                    Text(
-                                        text = "✕",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SpringButton(
-                        scaleTo = 0.95f,
-                        modifier = Modifier.weight(1f),
-                        onClick = onLaunchCamera
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp),
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("📷 Take Pump Photo", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                            }
-                        }
-                    }
-                    SpringButton(
-                        scaleTo = 0.95f,
-                        modifier = Modifier.weight(1f),
-                        onClick = onLaunchGallery
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp),
-                            color = P.bgControl,
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("🖼 Gallery", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = P.textPrimary)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirmFinish,
-                colors = ButtonDefaults.buttonColors(containerColor = P.accentPrimary),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("SAVE TO LOGBOOK", color = P.onAccentPrimary, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Back", color = P.textSecondary)
-            }
-        }
-    )
 }
