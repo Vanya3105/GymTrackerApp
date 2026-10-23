@@ -38,7 +38,10 @@ data class ExerciseEntity(
     val note: String = "",
     val defaultRestSeconds: Int? = null,
     /** [ExerciseType] name. */
-    @ColumnInfo(defaultValue = "WEIGHT_REPS") val type: String = ExerciseType.WEIGHT_REPS.name
+    @ColumnInfo(defaultValue = "WEIGHT_REPS") val type: String = ExerciseType.WEIGHT_REPS.name,
+    /** Training max for percentage programs, and when it was set. */
+    val trainingMaxKg: Float? = null,
+    val trainingMaxSetAt: Long? = null
 )
 
 @Entity(tableName = "workouts")
@@ -163,6 +166,7 @@ interface GymDao {
     @Query("UPDATE exercises SET defaultRestSeconds = :sec WHERE id = :id") fun setExerciseRest(id: Long, sec: Int?)
     @Query("UPDATE exercises SET name = :name, nameKey = :key WHERE id = :id") fun renameExercise(id: Long, name: String, key: String)
     @Query("UPDATE exercises SET type = :type WHERE id = :id") fun setExerciseType(id: Long, type: String)
+    @Query("UPDATE exercises SET trainingMaxKg = :kg, trainingMaxSetAt = :setAt WHERE id = :id") fun setTrainingMax(id: Long, kg: Float?, setAt: Long?)
     @Query("SELECT COUNT(*) FROM workout_exercises WHERE exerciseId = :id") fun loggedCount(id: Long): Int
     @Query("SELECT COUNT(*) FROM workout_sets s JOIN workout_exercises e ON s.workoutExerciseId = e.id WHERE e.exerciseId = :id AND CAST(s.weight AS REAL) > 0")
     fun weightedSetCount(id: Long): Int
@@ -205,10 +209,10 @@ interface GymDao {
         ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseEntity::class, WorkoutSetEntity::class,
         BodyWeightEntity::class, SplitTemplateItemEntity::class, ProgramEntity::class, ProgramSplitEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
-    // v3 only adds tables and v4 only adds nullable columns, which Room can migrate by itself.
-    autoMigrations = [AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)]
+    // v3 only adds tables, v4 and v5 only add nullable columns: Room migrates those by itself.
+    autoMigrations = [AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)]
 )
 @TypeConverters(Converters::class)
 abstract class GymDatabase : RoomDatabase() {
@@ -287,7 +291,9 @@ data class StoreData(
     /** The user's own programs, in display order. */
     val programs: List<SplitProgramInfo> = emptyList(),
     /** Day title → [exerciseKey] → target, for exercises on that day's list that have one. */
-    val targets: Map<String, Map<String, ExerciseTarget>> = emptyMap()
+    val targets: Map<String, Map<String, ExerciseTarget>> = emptyMap(),
+    /** [exerciseKey] → training max, for lifts that have one. */
+    val trainingMaxes: Map<String, TrainingMax> = emptyMap()
 )
 
 fun exerciseKey(name: String): String = name.trim().lowercase(Locale.US)
@@ -355,7 +361,11 @@ object RoomStore {
             restDefaults = exercises.values.mapNotNull { e -> e.defaultRestSeconds?.let { e.nameKey to it } }.toMap(),
             types = exercises.values.associate { it.nameKey to ExerciseType.fromKey(it.type) },
             programs = loadPrograms(db),
-            targets = targets
+            targets = targets,
+            trainingMaxes = exercises.values.mapNotNull { e ->
+                val kg = e.trainingMaxKg ?: return@mapNotNull null
+                e.nameKey to TrainingMax(kg, e.trainingMaxSetAt ?: 0L)
+            }.toMap()
         )
     }
 
@@ -376,6 +386,7 @@ object RoomStore {
         data.notes.forEach { (key, note) -> setNote(db, key, note) }
         data.restDefaults.forEach { (key, sec) -> setDefaultRest(db, key, sec) }
         data.programs.forEachIndexed { i, p -> saveProgram(db, p, i) }
+        data.trainingMaxes.forEach { (key, tm) -> setTrainingMax(db, key, tm) }
         val types = data.types
         if (types != null) {
             types.forEach { (key, type) -> setType(db, key, type) }
@@ -505,6 +516,9 @@ object RoomStore {
         }
         if (!keepHistory) dao.renameWorkoutSplit(old, new)
     }
+
+    fun setTrainingMax(db: GymDatabase, name: String, tm: TrainingMax?) =
+        db.dao().setTrainingMax(exerciseId(db, name), tm?.kg, tm?.setAtMillis)
 
     fun setType(db: GymDatabase, name: String, type: ExerciseType) =
         db.dao().setExerciseType(exerciseId(db, name, type = type), type.name)

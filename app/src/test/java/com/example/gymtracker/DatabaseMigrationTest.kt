@@ -87,9 +87,22 @@ class DatabaseMigrationTest {
     }
 
     @Test
-    fun v1ToV4_inOneGo() {
+    fun v4ToV5_addsTrainingMaxColumns() {
+        helper.createDatabase(dbName, 4).use { db ->
+            db.execSQL("INSERT INTO exercises (id, name, nameKey, muscle, note, type) VALUES (1, 'Back Squat', 'back squat', '', '', 'WEIGHT_REPS')")
+        }
+        helper.runMigrationsAndValidate(dbName, 5, true).use { db ->
+            db.query("SELECT trainingMaxKg, trainingMaxSetAt FROM exercises").use { c ->
+                c.moveToFirst()
+                assertTrue(c.isNull(0) && c.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun v1ToV5_inOneGo() {
         helper.createDatabase(dbName, 1).close()
-        helper.runMigrationsAndValidate(dbName, 4, true, MIGRATION_1_2).close()
+        helper.runMigrationsAndValidate(dbName, 5, true, MIGRATION_1_2).close()
     }
 
     @Test

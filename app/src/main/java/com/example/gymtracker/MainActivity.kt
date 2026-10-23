@@ -565,9 +565,43 @@ fun newExerciseEntry(
     history: List<CompletedWorkout>,
     settings: AppSettings
 ): ExerciseEntry {
+    val plan = liftPlanFor(splitTitle, name)
+        ?: return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
+
+    // A percentage program's main lift: its sets come from the training max.
+    val tm = LocalStorage.getTrainingMax(context, name)
+        ?: return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
+            .copy(planNote = "Set a training max (tap the name) to get your ${plan.scheme.label} weights")
     val type = LocalStorage.exerciseType(context, name)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
-    // A target sets how many work sets to lay out and the reps to aim for (the top of the range).
+    val day = planLiftDay(plan, tm, history)
+    return ExerciseEntry(
+        name = name, targetMuscle = muscle, restSeconds = rest, type = type, programmed = true,
+        planNote = "${day.title} · TM ${formatWeightKg(day.trainingMaxKg)} · last set: as many reps as you can",
+        sets = day.sets.mapIndexed { i, p ->
+            SetEntry(
+                setNumber = i + 1,
+                weight = percentWeight(day.trainingMaxKg, p.percent),
+                reps = "${p.reps}",
+                isWarmup = p.warmup,
+                intensityType = if (p.warmup) "WARMUP" else "NORMAL",
+                restSeconds = if (p.warmup) minOf(60, rest) else rest
+            )
+        }
+    )
+}
+
+/** A new entry without a percentage program: targets, last session, or plain defaults. */
+private fun newExerciseEntryDefault(
+    context: Context,
+    splitTitle: String,
+    name: String,
+    muscle: String,
+    history: List<CompletedWorkout>,
+    settings: AppSettings
+): ExerciseEntry {
+    val type = LocalStorage.exerciseType(context, name)
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     val target = LocalStorage.getTarget(context, splitTitle, name)
     val workSetCount = target?.sets
     val targetReps = target?.repMax?.toString()

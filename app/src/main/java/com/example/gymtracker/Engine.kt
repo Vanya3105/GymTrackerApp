@@ -178,6 +178,18 @@ val SPLIT_PROGRAMS = mapOf(
             WorkoutSplit("Lower B", "Glutes, hamstrings, quads", "04")
         )
     ),
+    "WENDLER_531" to SplitProgramInfo(
+        id = "WENDLER_531",
+        name = "5/3/1",
+        tagline = "Four big lifts in four-week waves of a training max",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("5/3/1 Squat", "Back squat, then legs", "01"),
+            WorkoutSplit("5/3/1 Bench", "Bench press, then back and arms", "02"),
+            WorkoutSplit("5/3/1 Deadlift", "Deadlift, then legs and core", "03"),
+            WorkoutSplit("5/3/1 Press", "Overhead press, then back and arms", "04")
+        )
+    ),
     "FULL_BODY" to SplitProgramInfo(
         id = "FULL_BODY",
         name = "Full body",
@@ -455,6 +467,10 @@ fun defaultTemplateForSplit(splitTitle: String): List<Pair<String, String>> {
         "Pull" -> listOf("Lat Pulldown", "T-Bar Row", "Face Pull", "Preacher Curl")
         "Legs", "Lower A" -> listOf("Hack Squat", "Romanian Deadlift", "Leg Extension", "Seated Leg Curl", "Standing Calf Raise")
         "Lower B" -> listOf("Leg Press", "Lying Leg Curl", "Bulgarian Split Squat", "Seated Calf Raise")
+        "5/3/1 Squat" -> listOf("Back Squat", "Leg Press", "Lying Leg Curl", "Hanging Leg Raise")
+        "5/3/1 Bench" -> listOf("Barbell Bench Press", "Dumbbell Row", "Tricep Pushdown", "Face Pull")
+        "5/3/1 Deadlift" -> listOf("Deadlift", "Bulgarian Split Squat", "Ab Wheel Rollout")
+        "5/3/1 Press" -> listOf("Overhead Press", "Chin-Up", "Dips", "Face Pull")
         "Arms & Shoulders" -> listOf(
             "Seated Dumbbell Shoulder Press", "Cable Lateral Raise", "Incline Dumbbell Curl",
             "Overhead Cable Tricep Extension", "Hammer Curl"

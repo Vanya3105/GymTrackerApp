@@ -206,6 +206,33 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun trainingMax_persists_andLaysOut531Days() {
+        // No training max yet: a normal entry with a prompt.
+        val before = newExerciseEntry(context, "5/3/1 Squat", "Back Squat", "Quads", emptyList(), AppSettings())
+        assertFalse(before.programmed)
+        assertTrue(before.planNote!!.contains("training max"))
+
+        LocalStorage.setTrainingMax(context, "Back Squat", 100f)
+        restart()
+        assertEquals(100f, LocalStorage.getTrainingMax(context, "back squat")!!.kg)
+
+        val entry = newExerciseEntry(context, "5/3/1 Squat", "Back Squat", "Quads", LocalStorage.loadHistory(context), AppSettings())
+        assertTrue(entry.programmed)
+        assertEquals(listOf("40", "50", "60", "65", "75", "85"), entry.sets.map { it.weight })
+        assertEquals(3, entry.sets.count { it.isWarmupSet })
+        assertTrue(entry.planNote!!.startsWith("5/3/1 · Week 1 of 4"))
+
+        // Other days and other exercises are untouched.
+        assertFalse(newExerciseEntry(context, "Legs", "Back Squat", "Quads", emptyList(), AppSettings()).programmed)
+
+        // It's in backups too.
+        val backup = LocalStorage.exportJsonBackupString(context)
+        LocalStorage.setTrainingMax(context, "Back Squat", null)
+        assertTrue(LocalStorage.importJsonBackupString(context, backup))
+        assertEquals(100f, LocalStorage.getTrainingMax(context, "Back Squat")!!.kg)
+    }
+
+    @Test
     fun freshInstall_startsEmpty() {
         storeFile.delete()
         assertTrue(LocalStorage.loadHistory(context).isEmpty())

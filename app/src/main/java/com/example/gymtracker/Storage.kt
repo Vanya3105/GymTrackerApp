@@ -37,7 +37,7 @@ object LocalStorage {
     private const val SURFACE_REFRESH_DEBOUNCE_MS = 250L
 
     /** JSON sections that moved to Room. Old store files and backups still carry them. */
-    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults", "exerciseTypes", "programs", "splitTargets")
+    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults", "exerciseTypes", "programs", "splitTargets", "trainingMaxes")
 
     private val lock = Any()
     private var cachedRoot: JSONObject? = null
@@ -492,6 +492,21 @@ object LocalStorage {
         }
     }
 
+    fun getTrainingMax(context: Context, exerciseName: String): TrainingMax? =
+        data(context).trainingMaxes[exerciseKey(exerciseName)]
+
+    /**
+     * Sets (or clears) a lift's training max. Setting it starts its program over at week 1,
+     * because the week is counted from sessions after this moment.
+     */
+    fun setTrainingMax(context: Context, exerciseName: String, kg: Float?) {
+        val key = exerciseKey(exerciseName)
+        val tm = kg?.let { TrainingMax(it, System.currentTimeMillis()) }
+        editData(context, { d -> d.copy(trainingMaxes = if (tm == null) d.trainingMaxes - key else d.trainingMaxes + (key to tm)) }) {
+            RoomStore.setTrainingMax(it, exerciseName, tm)
+        }
+    }
+
     fun getTarget(context: Context, splitTitle: String, exerciseName: String): ExerciseTarget? =
         data(context).targets[splitTitle]?.get(exerciseKey(exerciseName))
 
@@ -590,7 +605,8 @@ fun StoreData.mergedOver(base: StoreData): StoreData {
         // Unknown on either side (data from before types) means the merge can't know them either.
         types = types?.let { mine -> base.types?.let { it + mine } },
         programs = programs + base.programs.filter { b -> programs.none { it.id == b.id } },
-        targets = base.targets + targets
+        targets = base.targets + targets,
+        trainingMaxes = base.trainingMaxes + trainingMaxes
     )
 }
 
@@ -642,6 +658,8 @@ internal object StoreCodec {
                 put("restSeconds", ex.restSeconds)
                 put("isSkipped", ex.isSkipped)
                 put("isSuperset", ex.isSuperset)
+                ex.planNote?.let { put("planNote", it) }
+                if (ex.programmed) put("programmed", true)
                 ex.target?.let { t ->
                     put("targetSets", t.sets)
                     put("repMin", t.repMin)
@@ -696,6 +714,8 @@ internal object StoreCodec {
                 isSkipped = exObj.optBoolean("isSkipped", false),
                 sets = sets,
                 isSuperset = exObj.optBoolean("isSuperset", false),
+                planNote = exObj.optString("planNote").ifBlank { null },
+                programmed = exObj.optBoolean("programmed", false),
                 target = if (exObj.has("targetSets")) {
                     ExerciseTarget(exObj.optInt("targetSets", 3), exObj.optInt("repMin", 8), exObj.optInt("repMax", 12))
                 } else null
@@ -728,6 +748,12 @@ internal object StoreCodec {
             obj.keys().asSequence().associate { exerciseKey(it) to ExerciseType.fromKey(obj.optString(it)) }
         },
         programs = parsePrograms(root.optJSONArray("programs")),
+        trainingMaxes = root.optJSONObject("trainingMaxes")?.let { obj ->
+            obj.keys().asSequence().mapNotNull { key ->
+                val t = obj.optJSONObject(key) ?: return@mapNotNull null
+                exerciseKey(key) to TrainingMax(t.optDouble("kg", 0.0).toFloat(), t.optLong("setAt", 0L))
+            }.filter { it.second.kg > 0f }.toMap()
+        }.orEmpty(),
         targets = root.optJSONObject("splitTargets")?.let { days ->
             days.keys().asSequence().associateWith { day ->
                 val obj = days.optJSONObject(day) ?: JSONObject()
@@ -780,6 +806,9 @@ internal object StoreCodec {
         root.put("exerciseNotes", JSONObject().apply { data.notes.forEach { (k, v) -> put(k, v) } })
         root.put("exerciseRestDefaults", JSONObject().apply { data.restDefaults.forEach { (k, v) -> put(k, v) } })
         data.types?.let { types -> root.put("exerciseTypes", JSONObject().apply { types.forEach { (k, v) -> put(k, v.name) } }) }
+        root.put("trainingMaxes", JSONObject().apply {
+            data.trainingMaxes.forEach { (key, tm) -> put(key, JSONObject().put("kg", tm.kg.toDouble()).put("setAt", tm.setAtMillis)) }
+        })
         root.put("splitTargets", JSONObject().apply {
             data.targets.forEach { (day, byExercise) ->
                 put(day, JSONObject().apply {

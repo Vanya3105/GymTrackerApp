@@ -62,7 +62,11 @@ data class ExerciseEntry(
     /** Copied from the exercise's definition when loaded; not stored per workout. */
     val type: ExerciseType = ExerciseType.WEIGHT_REPS,
     /** The day's plan for this exercise, if one is set; guides set count, reps and coaching. */
-    val target: ExerciseTarget? = null
+    val target: ExerciseTarget? = null,
+    /** A program's word on this exercise today, e.g. "5/3/1 · Week 2 of 4 (3s) · TM 100 kg". */
+    val planNote: String? = null,
+    /** Sets are laid out by a percentage program, so weight suggestions stay out of the way. */
+    val programmed: Boolean = false
 )
 
 /** A planned "sets × rep range" for an exercise on one day of a program. */

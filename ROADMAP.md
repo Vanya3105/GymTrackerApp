@@ -9,9 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 4 in progress on branch `phase-4-routines`. Steps 1 (own programs) and 2 (targets) are committed.
-Step 2 still needs an emulator check of the target dialog (Profile > Edit program > a day > tap an exercise) and of a new workout using a target; unit tests cover the logic.
-Next: **Phase 4, step 3**: built-in percentage programs (5/3/1, GZCLP, nSuns) with a training max per lift.
+Phase 4 in progress on branch `phase-4-routines`. Own programs, targets and 5/3/1 are committed and checked on the emulator.
+Next: **Phase 4, GZCLP and nSuns** on the same engine (`PercentPrograms.kt`): add a `PercentScheme`, its week/progression rule in `planLiftDay`, `PROGRAM_LIFTS` entries and a built-in program with default day templates. GZCLP's T1 stages (5×3+ → 6×2+ → 10×1+) can be derived from history like 5/3/1's weeks.
 
 ---
 
@@ -54,7 +53,8 @@ Next: **Phase 4, step 3**: built-in percentage programs (5/3/1, GZCLP, nSuns) wi
 - [x] Your own programs (Room v3, auto-migrated): Profile lists built-in + yours; "Customize" copies a built-in, "New program" starts blank; the editor sets name, workouts per week and days (add, rename, reorder, remove) and each day's exercise list. Built-in programs stay read-only presets
 - [x] Days are identified by title, shared across programs. Renaming a day moves its history unless another of *your* programs uses the old title, and copies its exercise list if any other program (built-ins included) still uses it
 - [x] Per-exercise targets on a day (sets × rep range; Room v4 auto-migrated, backup `splitTargets`): new workouts lay out that many sets at the top of the range, the workout card shows "Plan 3 × 8–12", coaching moves up at the top and down below the bottom of the range (defaults unchanged without a target). Rest stays per exercise as before
-- [ ] Built-in programs: 5/3/1, GZCLP, nSuns (percentage-based, with training max)
+- [x] 5/3/1 (`PercentPrograms.kt`, Room v5 for training maxes): four days built around Squat/Bench/Deadlift/Press; warm-ups 40/50/60% + the week's sets rounded down to plates, last set "as many as you can"; week and cycle derived from sessions since the TM was set; +2.5/5 kg (5/10 lb) per cycle. TM is set from the exercise page or Notes & history (prefilled at 90% of best e1RM) and re-lays out an untouched exercise mid-workout
+- [ ] GZCLP and nSuns on the same engine
 
 ## Phase 5 — Gym tools
 - [ ] Plate calculator (bar weight, available plates, kg/lb)

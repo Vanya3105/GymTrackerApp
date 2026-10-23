@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,6 +141,9 @@ fun ExerciseDetailScreen(
         }
 
         item { ExerciseTypeRow(stats.type, onChangeType) }
+        if (programLiftFor(exerciseName) != null) {
+            item { TrainingMaxRow(exerciseName, history, stats.best1RmKg) }
+        }
 
         item { ProgressChartCard(stats, haptics, Modifier.enterAnimation(0)) }
 
@@ -392,6 +396,93 @@ private fun SessionCard(session: ExerciseSession) {
             Spacer(Modifier.height(6.dp))
             Text(footer, style = AppType.caption, color = P.textTertiary)
         }
+    }
+}
+
+/** The percentage-program plan that uses this exercise as its main lift, if any. */
+fun programLiftFor(exerciseName: String): LiftPlan? =
+    PROGRAM_LIFTS.values.firstOrNull { exerciseKey(it.exercise) == exerciseKey(exerciseName) }
+
+/**
+ * "Training max: 100 kg" for lifts a percentage program uses. Shows today's value (cycles add
+ * to it); editing sets a new one and starts the program over at week 1.
+ */
+@Composable
+fun TrainingMaxRow(
+    exerciseName: String,
+    history: List<CompletedWorkout>,
+    best1RmKg: Float,
+    modifier: Modifier = Modifier,
+    onChanged: () -> Unit = {}
+) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val plan = programLiftFor(exerciseName) ?: return
+    var version by remember { mutableIntStateOf(0) }
+    val tm = remember(exerciseName, version) { LocalStorage.getTrainingMax(context, exerciseName) }
+    val today = remember(tm, history) { tm?.let { planLiftDay(plan, it, history) } }
+    var editing by remember { mutableStateOf(false) }
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(P.bgControl)
+            .pressable(pressedScale = 0.99f) { editing = true }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Training max · ${plan.scheme.label}", style = AppType.caption, color = P.textSecondary)
+            Text(today?.let { formatWeightKg(it.trainingMaxKg) } ?: "Not set", style = AppType.bodyStrong, color = P.textPrimary)
+            if (today != null) Text(today.title, style = AppType.caption, color = P.textSecondary)
+        }
+        Icon(Icons.Rounded.Edit, "Change", tint = P.textSecondary, modifier = Modifier.size(20.dp))
+    }
+
+    if (editing) {
+        var value by remember {
+            mutableStateOf((today?.trainingMaxKg ?: suggestedTrainingMaxKg(best1RmKg).takeIf { it > 0f } ?: 0f).let { if (it > 0f) it.toString() else "" })
+        }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            containerColor = P.bgElevated,
+            title = { Text("Training max", style = AppType.headline, color = P.textPrimary) },
+            text = {
+                Column {
+                    Text(
+                        "Your ${plan.scheme.label} weights are percentages of this. A good start is 90% of your best estimated 1-rep max" +
+                            (if (best1RmKg > 0f) " (${formatWeightKg(suggestedTrainingMaxKg(best1RmKg))})." else ".") +
+                            " Saving starts the program again at week 1.",
+                        style = AppType.caption,
+                        color = P.textSecondary
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    WeightStepper(storedKg = value, onChange = { value = it }, step = Units.current.defaultStep, fallbackKg = 0f, height = 52.dp)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = (value.toFloatOrNull() ?: 0f) > 0f,
+                    onClick = {
+                        LocalStorage.setTrainingMax(context, exerciseName, value.toFloatOrNull())
+                        version++
+                        editing = false
+                        onChanged()
+                    }
+                ) { Text("Save", color = P.accentPrimary, style = AppType.label) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (tm != null) {
+                        LocalStorage.setTrainingMax(context, exerciseName, null)
+                        version++
+                        onChanged()
+                    }
+                    editing = false
+                }) { Text(if (tm != null) "Clear" else "Cancel", color = P.textSecondary, style = AppType.label) }
+            }
+        )
     }
 }
 
