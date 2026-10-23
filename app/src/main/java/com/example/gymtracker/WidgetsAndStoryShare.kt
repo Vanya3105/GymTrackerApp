@@ -102,11 +102,16 @@ fun widgetKindFor(context: Context, appWidgetId: Int): String =
 // 1. LIVE SESSION (shared by the workout widget and the lock-screen card)
 // ============================================================================
 
+/**
+ * The set the widget is showing. The two +/- boxes show [primary] and [secondary], which depend
+ * on the exercise type (weight and reps, reps only, time only, distance and time…).
+ */
 private class NextSetInfo(
     val exerciseName: String,
     val label: String,
-    val weightLabel: String,
-    val reps: Int,
+    val summary: String,
+    val primary: String,
+    val secondary: String?,
     val setNumber: Int,
     val setCount: Int
 )
@@ -132,8 +137,20 @@ private class LiveSession(
                 set.intensityType == "DROP" -> "Drop set"
                 else -> "Set $workNum"
             },
-            weightLabel = formatWeightNumber(parseWeightClean(set.weight, 20f)),
-            reps = parseRepsClean(set.reps, 8),
+            summary = formatSet(set, ex.type),
+            primary = when (ex.type) {
+                ExerciseType.WEIGHT_REPS -> formatWeightKg(parseWeightClean(set.weight, 20f))
+                ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(set.weightKg)}"
+                ExerciseType.ASSISTED -> "−${formatWeightKg(set.weightKg)}"
+                ExerciseType.BODYWEIGHT -> "${parseRepsClean(set.reps, 8)} reps"
+                ExerciseType.DURATION -> formatClock(set.secondCount.toLong())
+                ExerciseType.DISTANCE_TIME -> formatDistance(set.distanceMeters)
+            },
+            secondary = when (ex.type) {
+                ExerciseType.BODYWEIGHT, ExerciseType.DURATION -> null
+                ExerciseType.DISTANCE_TIME -> formatClock(set.secondCount.toLong())
+                else -> "${parseRepsClean(set.reps, 8)}"
+            },
             setNumber = idx + 1,
             setCount = ex.sets.size
         )
@@ -219,7 +236,7 @@ fun buildWorkoutWidgetViews(
             views.setTextViewText(R.id.widget_split_title, next.exerciseName)
             views.setTextViewText(
                 R.id.widget_subtitle,
-                if (live.isResting) "Next: ${next.weightLabel} ${Units.current.label} × ${next.reps}"
+                if (live.isResting) "Next: ${next.summary}"
                 else "${live.totalSetsLeft} sets left today"
             )
             views.setViewVisibility(R.id.widget_subtitle, if (compact && !live.isResting && showControls) View.GONE else View.VISIBLE)
@@ -227,8 +244,9 @@ fun buildWorkoutWidgetViews(
             val controlsVisible = showControls && !live.isResting
             views.setViewVisibility(R.id.widget_controls_row, if (controlsVisible) View.VISIBLE else View.GONE)
             if (controlsVisible) {
-                views.setTextViewText(R.id.widget_weight_value, "${next.weightLabel} ${Units.current.label}")
-                views.setTextViewText(R.id.widget_reps_value, "${next.reps}")
+                views.setTextViewText(R.id.widget_weight_value, next.primary)
+                views.setViewVisibility(R.id.widget_reps_group, if (next.secondary != null) View.VISIBLE else View.GONE)
+                next.secondary?.let { views.setTextViewText(R.id.widget_reps_value, it) }
                 listOf(
                     R.id.widget_btn_weight_minus to GymWidgetProvider.ACTION_WEIGHT_MINUS,
                     R.id.widget_btn_weight_plus to GymWidgetProvider.ACTION_WEIGHT_PLUS,
@@ -382,14 +400,30 @@ class GymWidgetProvider : AppWidgetProvider() {
             val setIdx = currentEx.sets.indexOfFirst { !it.isCompleted }
             val target = currentEx.sets[setIdx]
             val settings = LocalStorage.loadSettings(context)
-            val curWeight = parseWeightClean(target.weight, 20f)
             val curReps = parseRepsClean(target.reps, 8)
+            val type = currentEx.type
 
+            fun reps(delta: Int) = target.copy(reps = "${(curReps + delta).coerceAtLeast(0)}")
+            fun time(delta: Int) = target.copy(seconds = "${(target.secondCount + delta).coerceAtLeast(0)}")
+            fun distance(deltaUnits: Float) = target.copy(distanceM = formatKgClean(
+                (target.distanceMeters + deltaUnits * Units.current.metersPerDistanceUnit).coerceAtLeast(0f)
+            ))
+
+            // The first box is weight, reps (bodyweight), time (holds) or distance; the second is reps or time.
             val updated = when (action) {
-                ACTION_WEIGHT_MINUS -> target.copy(weight = stepWeight(target.weight, -settings.weightStep))
-                ACTION_WEIGHT_PLUS -> target.copy(weight = stepWeight(target.weight, settings.weightStep))
-                ACTION_REPS_MINUS -> target.copy(reps = "${(curReps - 1).coerceAtLeast(0)}")
-                ACTION_REPS_PLUS -> target.copy(reps = "${curReps + 1}")
+                ACTION_WEIGHT_MINUS, ACTION_WEIGHT_PLUS -> {
+                    val sign = if (action == ACTION_WEIGHT_PLUS) 1 else -1
+                    when (type) {
+                        ExerciseType.BODYWEIGHT -> reps(sign)
+                        ExerciseType.DURATION -> time(15 * sign)
+                        ExerciseType.DISTANCE_TIME -> distance(0.1f * sign)
+                        else -> target.copy(weight = stepWeight(target.weight, settings.weightStep * sign))
+                    }
+                }
+                ACTION_REPS_MINUS, ACTION_REPS_PLUS -> {
+                    val sign = if (action == ACTION_REPS_PLUS) 1 else -1
+                    if (type == ExerciseType.DISTANCE_TIME) time(60 * sign) else reps(sign)
+                }
                 ACTION_COMPLETE_SET -> target.copy(isCompleted = true)
                 else -> return
             }
@@ -398,7 +432,7 @@ class GymWidgetProvider : AppWidgetProvider() {
 
             if (action == ACTION_COMPLETE_SET) {
                 val restSec = target.restSeconds.takeIf { it >= 0 } ?: settings.restTimerSeconds
-                sendSetDoneNotification(context, currentEx.name, target.weight, target.reps, restSec)
+                sendSetDoneNotification(context, currentEx.name, formatSet(target, type), restSec)
                 val restEnd = if (restSec > 0) System.currentTimeMillis() + restSec * 1000L else 0L
                 LocalStorage.setRestEndTimeMillis(context, restEnd, fromWidget = true)
             }
@@ -718,8 +752,7 @@ private fun generateShareCard(
 
     val stats = computeWorkoutStats(exercises, history)
     val lifts = exercises.filter { !it.isSkipped }.mapNotNull { ex ->
-        val sets = ex.sets.filter { !it.isWarmupSet && it.repCount > 0 }
-        if (sets.isEmpty()) null else ex.name to formatSet(sets.maxBy { it.weightKg })
+        bestSetOf(ex.type, ex.workSets)?.let { ex.name to formatSet(it, ex.type) }
     }
 
     // Title block sits lower when a photo fills the top.

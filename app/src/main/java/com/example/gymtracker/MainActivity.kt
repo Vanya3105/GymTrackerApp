@@ -492,6 +492,7 @@ fun GymTrackerApp(
                         }
                         renamed
                     },
+                    onChangeType = { type -> changeExerciseType(name, type) },
                     onBack = { openExercise = null }
                 )
             }

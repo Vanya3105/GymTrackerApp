@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 3 in progress on branch `phase-3-exercise-types`. Steps 1 (data) and 2 (logging UI) are done.
-Next: **Phase 3, step 3**: results per type: exercise page (tiles, chart metrics, records instead of rep records), Progress best lifts, widgets, lock screen, set-done notification, share image.
+Phase 3 is done on branch `phase-3-exercise-types`, waiting for an on-device check by the owner, then merge to `master`.
+Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and delete their own splits and programs (today they are hardcoded in `SPLIT_PROGRAMS`); this needs Room tables for programs/splits (schema v3).
 
 ---
 
@@ -41,13 +41,13 @@ Next: **Phase 3, step 3**: results per type: exercise page (tiles, chart metrics
 - [x] +/− buttons snap an off-grid value to the next step (88.2 lb → 90 → 95), so switching units doesn't leave odd numbers
 - [x] Body-weight entries stored to 0.01 kg (was 0.1) so pound entries read back exactly
 
-## Phase 3 — Exercise types (branch `phase-3-exercise-types`)
+## Phase 3 — Exercise types ✅ (branch `phase-3-exercise-types`)
 - [x] Data layer: `ExerciseType` (weight & reps, bodyweight, weighted bodyweight, assisted, time, distance & time) stored on the exercise; `seconds` and `distanceM` on sets. Room v2 with `MIGRATION_1_2`, tested by `DatabaseMigrationTest` against the committed v1 schema
 - [x] Migration never hides logged data: library types are applied only where lossless (`typeForExistingExercise`); everything else stays weight & reps until changed by hand. Same rule for old backups/stores (no `exerciseTypes` section)
 - [x] Per-type rules: what counts as a work set, volume (weight & reps and added weight only), records and PRs (most reps, least assistance, longest time, longest distance), no weight suggestions for non-weight types
 - [x] Library: types for bodyweight exercises, new Assisted Pull-Up/Dip, Inverted Row, holds, and a Cardio group (running, rowing, bike, …)
 - [x] Logging UI per type: set rows and headers per type (`DurationStepper` types like a microwave timer, `DistanceStepper` in km/mi), drop sets only for loaded lifts, new exercises start from your last session of it, custom exercises ask for a type, "Logged as" in Notes & history changes it
-- [ ] Exercise page, Progress, widgets, lock screen, notifications and share image per type
+- [x] Results per type: exercise page tiles and chart metrics (reps, assistance, time, distance, pace), rep records only for loaded lifts, Progress lists every type with its own best, widget/lock-screen boxes and +/- follow the type, set-done notification and share image use per-type wording. Zero added weight / zero assistance reads as a bodyweight set
 
 ## Phase 4 — Routines & programs
 - [ ] Create, rename, reorder and delete your own splits and programs

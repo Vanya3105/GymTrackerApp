@@ -44,6 +44,9 @@ class ExerciseTypesTest {
         assertEquals("1 rep", formatSet(set(r = "1"), ExerciseType.BODYWEIGHT))
         assertEquals("+20 kg × 8", formatSet(set("20", "8"), ExerciseType.WEIGHTED_BODYWEIGHT))
         assertEquals("−25 kg × 8", formatSet(set("25", "8"), ExerciseType.ASSISTED))
+        assertEquals("10 reps", formatSet(set("0", "10"), ExerciseType.ASSISTED)) // no help = bodyweight
+        assertEquals("10 reps", formatSet(set("", "10"), ExerciseType.WEIGHTED_BODYWEIGHT))
+        assertEquals("No help", formatSessionValue(ExerciseType.ASSISTED, 0f))
         assertEquals("1:30", formatSet(set(sec = "90"), ExerciseType.DURATION))
         assertEquals("5 km · 25:00", formatSet(set(m = "5000", sec = "1500"), ExerciseType.DISTANCE_TIME))
         assertEquals("2.5 km", formatSet(set(m = "2500"), ExerciseType.DISTANCE_TIME))

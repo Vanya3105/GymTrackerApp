@@ -87,8 +87,9 @@ fun formatDistance(meters: Float): String =
 fun formatSet(set: SetEntry, type: ExerciseType = ExerciseType.WEIGHT_REPS): String = when (type) {
     ExerciseType.WEIGHT_REPS -> "${formatWeightKg(set.weightKg)} × ${set.reps}"
     ExerciseType.BODYWEIGHT -> if (set.repCount == 1) "1 rep" else "${set.repCount} reps"
-    ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(set.weightKg)} × ${set.reps}"
-    ExerciseType.ASSISTED -> "−${formatWeightKg(set.weightKg)} × ${set.reps}"
+    // Nothing added / no assistance is simply a bodyweight set.
+    ExerciseType.WEIGHTED_BODYWEIGHT -> if (set.weightKg > 0f) "+${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)
+    ExerciseType.ASSISTED -> if (set.weightKg > 0f) "−${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)
     ExerciseType.DURATION -> formatClock(set.secondCount.toLong())
     ExerciseType.DISTANCE_TIME -> listOfNotNull(
         set.distanceMeters.takeIf { it > 0f }?.let(::formatDistance),
@@ -100,8 +101,8 @@ fun formatSet(set: SetEntry, type: ExerciseType = ExerciseType.WEIGHT_REPS): Str
 fun formatSetShort(set: SetEntry, type: ExerciseType): String = when (type) {
     ExerciseType.WEIGHT_REPS -> "${formatWeightNumber(set.weightKg)}×${set.reps}"
     ExerciseType.BODYWEIGHT -> "${set.repCount}"
-    ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightNumber(set.weightKg)}×${set.reps}"
-    ExerciseType.ASSISTED -> "−${formatWeightNumber(set.weightKg)}×${set.reps}"
+    ExerciseType.WEIGHTED_BODYWEIGHT -> if (set.weightKg > 0f) "+${formatWeightNumber(set.weightKg)}×${set.reps}" else set.reps
+    ExerciseType.ASSISTED -> if (set.weightKg > 0f) "−${formatWeightNumber(set.weightKg)}×${set.reps}" else set.reps
     ExerciseType.DURATION, ExerciseType.DISTANCE_TIME -> formatSet(set, type)
 }
 

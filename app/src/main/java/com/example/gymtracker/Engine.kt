@@ -70,12 +70,21 @@ fun sessionValue(type: ExerciseType, workSets: List<SetEntry>): Float = when (ty
     ExerciseType.DISTANCE_TIME -> workSets.maxOf { it.distanceMeters }
 }
 
+/** The set that best represents [sets] for [type] (heaviest, most reps, least help, longest). */
+fun bestSetOf(type: ExerciseType, sets: List<SetEntry>): SetEntry? = when (type) {
+    ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> sets.maxWithOrNull(compareBy({ it.weightKg }, { it.repCount }))
+    ExerciseType.BODYWEIGHT -> sets.maxByOrNull { it.repCount }
+    ExerciseType.ASSISTED -> sets.minWithOrNull(compareBy({ it.weightKg }, { -it.repCount }))
+    ExerciseType.DURATION -> sets.maxByOrNull { it.secondCount }
+    ExerciseType.DISTANCE_TIME -> sets.maxWithOrNull(compareBy({ it.distanceMeters }, { it.secondCount }))
+}
+
 /** A [sessionValue] in words: "80 kg", "15 reps", "−20 kg", "1:30", "5 km". */
 fun formatSessionValue(type: ExerciseType, value: Float): String = when (type) {
     ExerciseType.WEIGHT_REPS -> formatWeightKg(value)
     ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(value)}"
     ExerciseType.BODYWEIGHT -> if (value.toInt() == 1) "1 rep" else "${value.toInt()} reps"
-    ExerciseType.ASSISTED -> "−${formatWeightKg(value)}"
+    ExerciseType.ASSISTED -> if (value > 0f) "−${formatWeightKg(value)}" else "No help"
     ExerciseType.DURATION -> formatClock(value.toLong())
     ExerciseType.DISTANCE_TIME -> formatDistance(value)
 }
@@ -338,11 +347,12 @@ private fun postAlert(context: Context, id: Int, channelId: String, icon: Int, t
     } catch (_: Exception) {}
 }
 
-fun sendSetDoneNotification(context: Context, exerciseName: String, weight: String, reps: String, restSeconds: Int) {
+/** [setText] is the set in words, e.g. from [formatSet]. */
+fun sendSetDoneNotification(context: Context, exerciseName: String, setText: String, restSeconds: Int) {
     val restMsg = if (restSeconds > 0) " · Rest ${formatRestShort(restSeconds)}" else ""
     postAlert(
         context, id = 1002, channelId = SET_DONE_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_workout,
-        title = "Set logged · $exerciseName", text = "${formatWeightKg(parseWeightClean(weight, 0f))} × $reps$restMsg", requestCode = 1
+        title = "Set logged · $exerciseName", text = "$setText$restMsg", requestCode = 1
     )
 }
 

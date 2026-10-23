@@ -111,7 +111,10 @@ val SetEntry.secondCount: Int get() = seconds.filter(Char::isDigit).toIntOrNull(
 val SetEntry.distanceMeters: Float get() = distanceM.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
 
 /** Non-warmup set with real numbers for [type] — the unit every stat and suggestion counts. */
-fun SetEntry.isValidWorkSet(type: ExerciseType): Boolean = !isWarmupSet && when (type) {
+fun SetEntry.isValidWorkSet(type: ExerciseType): Boolean = !isWarmupSet && hasNumbers(type)
+
+/** Has the numbers [type] needs, warm-up or not. */
+fun SetEntry.hasNumbers(type: ExerciseType): Boolean = when (type) {
     ExerciseType.WEIGHT_REPS -> weightKg > 0f && repCount > 0
     // Weighted with nothing added is still a bodyweight set; assistance can be zero too.
     ExerciseType.BODYWEIGHT, ExerciseType.WEIGHTED_BODYWEIGHT, ExerciseType.ASSISTED -> repCount > 0

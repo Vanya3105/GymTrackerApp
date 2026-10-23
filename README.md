@@ -11,6 +11,7 @@ A simple, offline workout log. Pick your split, follow the suggested weights, an
 * **Live workout:** steppers for weight and reps, one tap to mark a set done, and "last time" numbers under every exercise.
 * **Weight suggestions:** plain-language tips based on your past sessions of the same split. Two sessions in a row at 8+ reps means go up; two at 6 or fewer means go down. Tap "Use" to fill in the weight.
 * **Exercise library:** 130 exercises you can search by name, muscle, equipment or nickname ("rdl", "ohp"). You can still create your own.
+* **Exercise types:** weight & reps, bodyweight reps, weighted bodyweight (log the added weight), assisted (log the help), time (planks, hangs) and distance & time (running, rowing). Pick one for your own exercises and change it any time from Notes & history; logged numbers are kept.
 * **Set types:** tap a set number to mark it as a warm-up, drop set or rest-pause, change its rest, or delete it.
 * **Supersets:** link exercises so the rest timer starts after the whole round.
 * **Drag to reorder:** hold the handle on an exercise and drag. The card follows your finger and the others slide out of the way.

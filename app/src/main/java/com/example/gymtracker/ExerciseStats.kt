@@ -7,7 +7,7 @@ import kotlin.math.roundToInt
 // PER-EXERCISE HISTORY & RECORDS (powers the exercise detail screen)
 // ============================================================================
 
-/** Rep counts shown in the "rep records" table. */
+/** Rep counts shown in the "rep records" table (loaded lifts only). */
 val REP_RECORD_TARGETS = listOf(1, 3, 5, 8, 10, 12)
 
 /** One workout's worth of an exercise. Only valid work sets count toward the numbers. */
@@ -16,12 +16,21 @@ data class ExerciseSession(
     val workoutId: Long,
     val splitTitle: String,
     val displayDate: String,
+    /** Every set with numbers, warm-ups included, for the history list. */
     val sets: List<SetEntry>,
     val topWeightKg: Float,
     val estimated1RmKg: Float,
     val volumeKg: Float,
-    /** Beat every earlier session's estimated 1-rep max (never set on the first session). */
-    val isRecord: Boolean
+    /** Beat every earlier session's best (never set on the first session). */
+    val isRecord: Boolean,
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS,
+    /** The type's headline number: see [sessionValue]. */
+    val value: Float = 0f,
+    val maxReps: Int = 0,
+    val totalReps: Int = 0,
+    val maxSeconds: Int = 0,
+    val totalSeconds: Int = 0,
+    val distanceM: Float = 0f
 )
 
 /** Heaviest weight lifted for at least [reps] reps, and the workout where that first happened. */
@@ -35,19 +44,70 @@ data class ExerciseHistory(
     val sessions: List<ExerciseSession>,
     val repRecords: List<RepRecord>,
     val best1RmKg: Float,
-    val heaviestKg: Float
+    val heaviestKg: Float,
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS,
+    /** Best [ExerciseSession.value] ever (lowest for assisted). */
+    val bestValue: Float = 0f,
+    val allTimeReps: Int = 0,
+    val allTimeSeconds: Int = 0,
+    val allTimeDistanceM: Float = 0f
 )
 
 enum class ChartMetric(val label: String) {
     EST_1RM("Est. 1RM"),
     TOP_WEIGHT("Top weight"),
-    VOLUME("Volume");
+    VOLUME("Volume"),
+    MOST_REPS("Most reps"),
+    TOTAL_REPS("Total reps"),
+    ASSISTANCE("Assistance"),
+    LONGEST("Longest"),
+    TOTAL_TIME("Total time"),
+    DISTANCE("Distance"),
+    TIME("Time"),
+    PACE("Pace");
 
     fun valueOf(session: ExerciseSession): Float = when (this) {
         EST_1RM -> session.estimated1RmKg
         TOP_WEIGHT -> session.topWeightKg
         VOLUME -> session.volumeKg
+        MOST_REPS -> session.maxReps.toFloat()
+        TOTAL_REPS -> session.totalReps.toFloat()
+        ASSISTANCE -> session.value
+        LONGEST -> session.maxSeconds.toFloat()
+        TOTAL_TIME, TIME -> session.totalSeconds.toFloat()
+        DISTANCE -> session.distanceM
+        // Seconds per metre; shown per km or mile.
+        PACE -> if (session.distanceM > 0f && session.totalSeconds > 0) session.totalSeconds / session.distanceM else 0f
     }
+
+    /** "82.5 kg", "1,250 kg", "15 reps", "−20 kg", "1:30", "5 km", "5:12 /km". */
+    fun format(v: Float): String = when (this) {
+        EST_1RM, TOP_WEIGHT -> formatWeightKg(v)
+        VOLUME -> formatVolume(v.roundToInt())
+        MOST_REPS, TOTAL_REPS -> if (v.roundToInt() == 1) "1 rep" else "${v.roundToInt()} reps"
+        ASSISTANCE -> if (v > 0f) "−${formatWeightKg(v)}" else "No help"
+        LONGEST, TOTAL_TIME, TIME -> formatClock(v.roundToInt().toLong())
+        DISTANCE -> formatDistance(v)
+        PACE -> "${formatClock((v * Units.current.metersPerDistanceUnit).roundToInt().toLong())} /${Units.current.distanceLabel}"
+    }
+
+    /** Axis label: the number without its unit. */
+    fun short(v: Float): String = when (this) {
+        EST_1RM, TOP_WEIGHT, ASSISTANCE, VOLUME -> compactNumber(Units.current.fromKg(v))
+        MOST_REPS, TOTAL_REPS -> "${v.roundToInt()}"
+        LONGEST, TOTAL_TIME, TIME -> formatClock(v.roundToInt().toLong())
+        DISTANCE -> formatKgClean(((v / Units.current.metersPerDistanceUnit) * 10).roundToInt() / 10f)
+        PACE -> formatClock((v * Units.current.metersPerDistanceUnit).roundToInt().toLong())
+    }
+}
+
+/** The chart choices for each type; the first is the default. */
+fun metricsFor(type: ExerciseType): List<ChartMetric> = when (type) {
+    ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> listOf(ChartMetric.EST_1RM, ChartMetric.TOP_WEIGHT, ChartMetric.VOLUME)
+    ExerciseType.BODYWEIGHT -> listOf(ChartMetric.MOST_REPS, ChartMetric.TOTAL_REPS)
+    ExerciseType.ASSISTED -> listOf(ChartMetric.ASSISTANCE, ChartMetric.MOST_REPS)
+    ExerciseType.DURATION -> listOf(ChartMetric.LONGEST, ChartMetric.TOTAL_TIME)
+    ExerciseType.DISTANCE_TIME -> listOf(ChartMetric.DISTANCE, ChartMetric.TIME, ChartMetric.PACE)
 }
 
 enum class ChartRange(val label: String, val days: Int?) {
@@ -60,33 +120,57 @@ fun buildExerciseHistory(exerciseName: String, history: List<CompletedWorkout>):
     val key = exerciseKey(exerciseName)
     val chronological = ArrayList<ExerciseSession>()
     val repBest = HashMap<Int, RepRecord>()
+    var type = ExerciseType.WEIGHT_REPS
     var best1Rm = 0f
+    var bestValue: Float? = null
 
     for (workout in history.sortedBy { it.id }) {
         // An exercise can appear twice in one workout (added again later); merge its sets.
         val entries = workout.exercises.filter { !it.isSkipped && exerciseKey(it.name) == key }
-        val sets = entries.flatMap { it.sets }
+        if (entries.isEmpty()) continue
+        type = entries.first().type
         val workSets = entries.flatMap { it.workSets }
         if (workSets.isEmpty()) continue
 
         // Rounded once here so records, tiles and the chart all agree with what's shown,
         // and float noise between equal lifts (92.5×8 vs 95×7) never counts as a record.
-        val session1Rm = roundToHalf(workSets.maxOf { calculateEstimated1Rm(it.weightKg, it.repCount) })
+        val session1Rm = if (type.hasWeightSuggestions) roundToHalf(workSets.maxOf { calculateEstimated1Rm(it.weightKg, it.repCount) }) else 0f
+        val value = sessionValue(type, workSets)
+        val previousBest = bestValue
+        val isRecord = previousBest != null && when {
+            type.hasWeightSuggestions -> session1Rm > best1Rm
+            type == ExerciseType.ASSISTED -> value < previousBest
+            else -> value > previousBest
+        }
         chronological += ExerciseSession(
             workoutId = workout.id,
             splitTitle = workout.splitTitle,
             displayDate = workout.displayDate,
-            sets = sets.filter { it.weightKg > 0f && it.repCount > 0 },
+            sets = entries.flatMap { e -> e.sets.filter { it.hasNumbers(type) } },
             topWeightKg = workSets.maxOf { it.weightKg },
             estimated1RmKg = session1Rm,
-            volumeKg = workSets.sumOf { (it.weightKg * it.repCount).toDouble() }.toFloat(),
-            isRecord = chronological.isNotEmpty() && session1Rm > best1Rm
+            volumeKg = if (type.countsVolume) workSets.sumOf { (it.weightKg * it.repCount).toDouble() }.toFloat() else 0f,
+            isRecord = isRecord,
+            type = type,
+            value = value,
+            maxReps = workSets.maxOf { it.repCount },
+            totalReps = workSets.sumOf { it.repCount },
+            maxSeconds = workSets.maxOf { it.secondCount },
+            totalSeconds = workSets.sumOf { it.secondCount },
+            distanceM = workSets.sumOf { it.distanceMeters.toDouble() }.toFloat()
         )
         best1Rm = maxOf(best1Rm, session1Rm)
+        bestValue = when {
+            previousBest == null -> value
+            type == ExerciseType.ASSISTED -> minOf(previousBest, value)
+            else -> maxOf(previousBest, value)
+        }
 
-        for (target in REP_RECORD_TARGETS) {
-            val heaviest = workSets.filter { it.repCount >= target }.maxOfOrNull { it.weightKg } ?: continue
-            if (heaviest > (repBest[target]?.weightKg ?: 0f)) repBest[target] = RepRecord(target, heaviest, workout.id)
+        if (type.hasWeightSuggestions) {
+            for (target in REP_RECORD_TARGETS) {
+                val heaviest = workSets.filter { it.repCount >= target }.maxOfOrNull { it.weightKg } ?: continue
+                if (heaviest > (repBest[target]?.weightKg ?: 0f)) repBest[target] = RepRecord(target, heaviest, workout.id)
+            }
         }
     }
 
@@ -95,17 +179,35 @@ fun buildExerciseHistory(exerciseName: String, history: List<CompletedWorkout>):
         sessions = chronological.asReversed().toList(),
         repRecords = REP_RECORD_TARGETS.mapNotNull { repBest[it] },
         best1RmKg = best1Rm,
-        heaviestKg = chronological.maxOfOrNull { it.topWeightKg } ?: 0f
+        heaviestKg = chronological.maxOfOrNull { it.topWeightKg } ?: 0f,
+        type = type,
+        bestValue = bestValue ?: 0f,
+        allTimeReps = chronological.sumOf { it.totalReps },
+        allTimeSeconds = chronological.sumOf { it.totalSeconds },
+        allTimeDistanceM = chronological.sumOf { it.distanceM.toDouble() }.toFloat()
     )
 }
 
-/** Oldest-first (time, value) points for the chart, limited to [range] counted back from [nowMillis]. */
+/**
+ * Oldest-first (time, value) points for the chart, limited to [range] counted back from
+ * [nowMillis]. Sessions without the numbers a metric needs (pace without a distance) are skipped.
+ */
 fun ExerciseHistory.chartPoints(metric: ChartMetric, range: ChartRange, nowMillis: Long): List<Pair<Long, Float>> {
     val since = range.days?.let { nowMillis - it * 86_400_000L } ?: Long.MIN_VALUE
-    return sessions.asReversed().filter { it.workoutId >= since }.map { it.workoutId to metric.valueOf(it) }
+    return sessions.asReversed()
+        .filter { it.workoutId >= since }
+        .map { it.workoutId to metric.valueOf(it) }
+        .filter { (_, v) -> metric != ChartMetric.PACE || v > 0f }
 }
 
 fun roundToHalf(v: Float): Float = (v * 2f).roundToInt() / 2f
+
+/** "1.2k" style numbers for chart axes. */
+fun compactNumber(v: Float): String = when {
+    v >= 10_000f -> "${(v / 1000f).roundToInt()}k"
+    v >= 1_000f -> "${((v / 100f).roundToInt() / 10f)}k"
+    else -> formatKgClean((v * 2f).roundToInt() / 2f)
+}
 
 /** Every exercise that has at least one valid work set, most recently trained first. */
 fun loggedExerciseNames(history: List<CompletedWorkout>): List<String> =
