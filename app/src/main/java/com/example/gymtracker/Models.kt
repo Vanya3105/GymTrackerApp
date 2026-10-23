@@ -24,7 +24,9 @@ data class AppSettings(
     val themeChoice: String = THEME_SYSTEM,
     val targetFps: Int = 120,
     val hapticsEnabled: Boolean = true,
-    val weightStepKg: Float = 2.5f,
+    /** +/− step for set weights, in [weightUnit]. */
+    val weightStep: Float = 2.5f,
+    val weightUnit: WeightUnit = WeightUnit.KG,
     val restTimerSeconds: Int = 90,
     val keepScreenAwake: Boolean = true,
     val restSoundEnabled: Boolean = true

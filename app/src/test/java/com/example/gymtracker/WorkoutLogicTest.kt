@@ -73,8 +73,9 @@ class WorkoutLogicTest {
         )
         val rec = computeExerciseRecords("bench", history) // name match is case-insensitive
         assertEquals(70f, rec.maxWeightKg)
-        assertEquals(80, rec.bestEstimated1Rm) // 60 × (1 + 10/30) = 80 beats 70 × 1.1 = 77
-        assertEquals("60kg × 10", rec.bestSetText)
+        assertEquals(80f, rec.bestEstimated1Rm) // 60 × (1 + 10/30) = 80 beats 70 × 1.1 = 77
+        assertEquals("60", rec.bestSet?.weight)
+        assertEquals("10", rec.bestSet?.reps)
     }
 
     // --- Split-isolated progression AI ---

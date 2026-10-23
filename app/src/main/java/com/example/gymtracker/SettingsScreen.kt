@@ -88,14 +88,13 @@ fun SettingsScreen(
                             keyboardType = KeyboardType.Number
                         )
                     }
-                    LabeledStepper("Weight (kg)", Modifier.weight(1f)) {
-                        NumberStepper(
-                            value = formatKgClean(userProfile.currentWeightKg),
-                            onValueChange = { v ->
-                                sanitizeDecimalInput(v)?.let { onUpdateProfile(userProfile.copy(currentWeightKg = it.toFloatOrNull() ?: 0f)) }
-                            },
-                            onMinus = { onUpdateProfile(userProfile.copy(currentWeightKg = maxOf(20f, userProfile.currentWeightKg - 0.5f))) },
-                            onPlus = { onUpdateProfile(userProfile.copy(currentWeightKg = userProfile.currentWeightKg + 0.5f)) }
+                    LabeledStepper("Weight (${settings.weightUnit.label})", Modifier.weight(1f)) {
+                        WeightStepper(
+                            storedKg = if (userProfile.currentWeightKg > 0f) userProfile.currentWeightKg.toString() else "",
+                            onChange = { onUpdateProfile(userProfile.copy(currentWeightKg = it.toFloatOrNull() ?: 0f)) },
+                            step = settings.weightUnit.bodyStep,
+                            minKg = 20f,
+                            fallbackKg = 75f
                         )
                     }
                 }
@@ -130,12 +129,21 @@ fun SettingsScreen(
 
         item {
             SettingsGroup("Workouts") {
+                Text("Units", style = AppType.label, color = P.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                SegmentedControl(
+                    options = listOf(WeightUnit.KG to "Kilograms (kg)", WeightUnit.LB to "Pounds (lb)"),
+                    selected = settings.weightUnit,
+                    // Switching only changes how weights are shown; the step resets to the new unit's default.
+                    onSelect = { if (it != settings.weightUnit) onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) }
+                )
+                Spacer(Modifier.height(16.dp))
                 Text("Weight buttons change by", style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 ChoiceChips(
-                    options = WEIGHT_STEP_PRESETS.map { it to "${formatKgClean(it)} kg" },
-                    selected = settings.weightStepKg,
-                    onSelect = { onUpdateSettings(settings.copy(weightStepKg = it)) }
+                    options = settings.weightUnit.stepPresets.map { it to "${formatKgClean(it)} ${settings.weightUnit.label}" },
+                    selected = settings.weightStep,
+                    onSelect = { onUpdateSettings(settings.copy(weightStep = it)) }
                 )
                 Spacer(Modifier.height(16.dp))
                 Text("Default rest between sets", style = AppType.label, color = P.textSecondary)

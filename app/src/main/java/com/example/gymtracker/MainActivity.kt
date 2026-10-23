@@ -169,6 +169,8 @@ fun GymTrackerApp(
     var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
+    // Exercise detail screen, shown over everything else (including a running workout).
+    var openExercise by rememberSaveable { mutableStateOf<String?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -294,7 +296,8 @@ fun GymTrackerApp(
                             weightHistory = LocalStorage.addWeightLog(context, kg)
                             userProfile = LocalStorage.loadUserProfile(context)
                         },
-                        onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) }
+                        onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) },
+                        onOpenExercise = { haptics.tick(); openExercise = it }
                     )
                     AppTab.PROFILE -> SettingsScreen(
                         settings = settings,
@@ -360,6 +363,7 @@ fun GymTrackerApp(
                             initialPhotoPath = editing.photoPath,
                             haptics = haptics,
                             hasUnsavedEdits = currentExercises != editing.exercises,
+                            onOpenExercise = { openExercise = it },
                             onUpdateExercises = { currentExercises = it },
                             onReorderExercises = { from, to -> currentExercises = currentExercises.moved(from, to) },
                             onAddExercise = { _, _ -> },
@@ -397,6 +401,7 @@ fun GymTrackerApp(
                             isEditingPastWorkout = false,
                             initialPhotoPath = null,
                             haptics = haptics,
+                            onOpenExercise = { openExercise = it },
                             onUpdateExercises = { updated ->
                                 currentExercises = updated
                                 LocalStorage.saveActiveSession(context, split.title, updated)
@@ -454,6 +459,35 @@ fun GymTrackerApp(
             }
         }
 
+        // Keep the last name while the screen animates out.
+        var shownExercise by remember { mutableStateOf(openExercise) }
+        if (openExercise != null) shownExercise = openExercise
+        AnimatedVisibility(
+            visible = openExercise != null,
+            enter = slideInHorizontallyBy(1f) + fadeIn(tween(150)),
+            exit = fadeOut(tween(180))
+        ) {
+            shownExercise?.let { name ->
+                ExerciseDetailScreen(
+                    exerciseName = name,
+                    history = history,
+                    haptics = haptics,
+                    // A past workout being edited still holds the old name and would write it back.
+                    canRename = editingPastWorkout == null,
+                    onRename = { newName ->
+                        val renamed = LocalStorage.renameExercise(context, name, newName)
+                        if (renamed) {
+                            history = LocalStorage.loadHistory(context)
+                            if (activeSplit != null) currentExercises = LocalStorage.loadActiveSession(context)?.second ?: currentExercises
+                            openExercise = newName
+                        }
+                        renamed
+                    },
+                    onBack = { openExercise = null }
+                )
+            }
+        }
+
         AnimatedVisibility(
             visible = showOnboarding,
             enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.98f),
@@ -462,6 +496,8 @@ fun GymTrackerApp(
             Box(Modifier.fillMaxSize().background(P.bgPrimary)) {
                 OnboardingScreen(
                     initialProfile = userProfile,
+                    unit = settings.weightUnit,
+                    onSelectUnit = { onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) },
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
                     onBack = { showOnboarding = false },
@@ -487,9 +523,12 @@ fun newExerciseEntry(
     history: List<CompletedWorkout>,
     settings: AppSettings
 ): ExerciseEntry {
-    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStepKg)
-    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: "40"
-    val warmupWeight = formatKgClean(((workWeight.toFloatOrNull() ?: 40f) * 0.5f).let { (it / 2.5f).toInt() * 2.5f })
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStep)
+    val unit = Units.current
+    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
+    // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
+    val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
+    val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     return ExerciseEntry(
         name = name,

@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 1 is done on branch `phase-1-room`, waiting for an on-device check by the owner, then merge to `master`.
-Then start **Phase 2, step 1**: the exercise detail screen. Use `GymDao` queries for per-exercise history instead of scanning all workouts.
+Phase 2 is done on branch `phase-2-progress`, waiting for an on-device check by the owner, then merge to `master`.
+Then start **Phase 3, step 1**: exercise types. Add a `type` column to `exercises` (Room migration v1 → v2, test it against `app/schemas/.../1.json`) and default types for the library.
 
 ---
 
@@ -32,11 +32,14 @@ Then start **Phase 2, step 1**: the exercise detail screen. Use `GymDao` queries
 - [x] Tests: `RoomStoreTest`, `StorageMigrationTest` (Robolectric, real v3 fixture), and mutation-checked
 - [x] Verified on emulator: migration, debug + R8 release builds, finishing a workout then force-stopping
 
-## Phase 2 — Progress core
-- [ ] Exercise detail screen: full history, charts for est. 1RM, best set, volume; rep PRs (1/3/5/8/10)
-- [ ] Rename an exercise from its detail screen (uses `LocalStorage.renameExercise`)
-- [ ] Open it from history, the live workout and the progress screen
-- [ ] Units: kg/lb setting; store kg, convert for display and input; lb-friendly weight steps
+## Phase 2 — Progress core ✅ (branch `phase-2-progress`)
+- [x] Exercise detail screen (`ExerciseDetailScreen.kt`, stats in `ExerciseStats.kt`): every session, chart of est. 1RM / top weight / volume on a time axis (3M / 1Y / All, tap or drag to inspect), rep records for 1/3/5/8/10/12, setup note
+- [x] Rename from the detail screen (hidden while editing a past workout, which would write the old name back)
+- [x] Opens from Progress → Best lifts (now "See all") and from a workout's "Notes & history" sheet → "Full history" (live or past workouts from History)
+- [x] Estimated 1RMs are rounded to 0.5 kg once, everywhere (tiles, chart, records, live "new best" check), so equal lifts never count as a record
+- [x] Units (`Units.kt`): kg/lb in Profile and onboarding. Everything stays stored in kg; lb is display and input only (4-decimal kg so 135 lb reads back as 135). Coaching steps and rounds in the display unit; lb step presets 1/2.5/5/10. Widgets, notifications and the share image follow the unit
+- [x] +/− buttons snap an off-grid value to the next step (88.2 lb → 90 → 95), so switching units doesn't leave odd numbers
+- [x] Body-weight entries stored to 0.01 kg (was 0.1) so pound entries read back exactly
 
 ## Phase 3 — Exercise types
 - [ ] Types: weight×reps, bodyweight reps, weighted bodyweight, assisted (negative), duration, distance+duration
@@ -75,3 +78,5 @@ Then start **Phase 2, step 1**: the exercise detail screen. Use `GymDao` queries
 ## Decisions log
 - 2026-10-23: `applicationId` changed from `com.example.gymtracker`. Android sees this as a new app: export a backup from the old app and import it into the new one. The Kotlin `namespace`/package stays `com.example.gymtracker` for now (renaming it is cosmetic and touches every file).
 - 2026-10-23: Room holds history, body weight, templates and per-exercise notes/rest. Settings, profile, active session and widget settings stay in the JSON file: they are small and written on every tap. `LocalStorage` stays synchronous via an in-memory copy, so the UI didn't need rewriting. Set weight/reps stay strings in Room for now (exact round trip of half-typed sets); Phase 3 revisits this with exercise types.
+- 2026-10-23: The exercise detail screen scans the in-memory history instead of querying Room. History is already in memory and a scan of a few hundred workouts is instant; a Room query would add async loading for no gain.
+- 2026-10-23: Units are display-only; the database and backups stay in kg. The current unit is Compose snapshot state (`Units.current`) set from settings on first storage access, so screens redraw on change and widgets/notifications use it without a Context-aware formatter.

@@ -1,0 +1,115 @@
+package com.example.gymtracker
+
+import androidx.compose.runtime.mutableStateOf
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
+
+// ============================================================================
+// WEIGHT UNITS
+// ============================================================================
+// Everything is stored in kilograms. The unit only changes how weights are shown and typed,
+// so switching back and forth never alters logged data, records or charts.
+
+enum class WeightUnit(
+    val label: String,
+    private val kgPerUnit: Double,
+    /** Display rounding: kg keeps 0.01 (1.25 kg plates), lb keeps 0.1. */
+    private val decimals: Int,
+    val defaultStep: Float,
+    val stepPresets: List<Float>,
+    /** Step for body-weight steppers. */
+    val bodyStep: Float,
+    /** Starting weight for an exercise with no history. */
+    val defaultWorkWeight: Float
+) {
+    KG("kg", 1.0, 2, 2.5f, listOf(0.5f, 1f, 1.25f, 2f, 2.5f, 5f), 0.5f, 40f),
+    LB("lb", 0.45359237, 1, 5f, listOf(1f, 2.5f, 5f, 10f), 1f, 95f);
+
+    /** Kilograms → this unit, rounded the way it is displayed. */
+    fun fromKg(kg: Float): Float = round((kg / kgPerUnit).toFloat())
+
+    /** Rounds a value in this unit to its display precision. */
+    fun round(value: Float): Float {
+        val f = if (decimals == 2) 100f else 10f
+        return (value * f).roundToInt() / f
+    }
+
+    /** This unit → kilograms, unrounded. */
+    fun toKg(value: Float): Float = (value * kgPerUnit).toFloat()
+
+    /**
+     * The kg string stored for a value in this unit. Pounds keep 4 decimals of kg so the value
+     * reads back exactly (135 lb → "61.235" → 135 lb).
+     */
+    fun stored(value: Float): String =
+        if (this == KG) formatKgClean(value)
+        else String.format(Locale.US, "%.4f", toKg(value).coerceAtLeast(0f)).trimEnd('0').trimEnd('.')
+
+    /** A kg value as a bare number in this unit: "62.5", "135". */
+    fun number(kg: Float): String = formatKgClean(fromKg(kg))
+
+    companion object {
+        fun fromKey(key: String?): WeightUnit = entries.firstOrNull { it.name == key } ?: KG
+    }
+}
+
+/**
+ * The unit the app currently shows. Snapshot state, so any composable that formats a weight
+ * redraws when it changes. Updated whenever settings are loaded or saved, which also covers
+ * widgets and notifications.
+ */
+object Units {
+    private val state = mutableStateOf(WeightUnit.KG)
+    val current: WeightUnit get() = state.value
+
+    fun set(unit: WeightUnit) {
+        if (state.value != unit) state.value = unit
+    }
+}
+
+/** "62.5 kg" / "135 lb". */
+fun formatWeightKg(kg: Float): String = "${Units.current.number(kg)} ${Units.current.label}"
+
+/** Bare number in the current unit, for places that show the unit once (column headers, charts). */
+fun formatWeightNumber(kg: Float): String = Units.current.number(kg)
+
+/** "80 kg × 6". */
+fun formatSet(set: SetEntry): String = "${formatWeightKg(set.weightKg)} × ${set.reps}"
+
+fun formatVolume(kg: Int): String {
+    val v = Units.current.fromKg(kg.toFloat()).roundToInt()
+    val unit = Units.current.label
+    return if (v >= 10_000) String.format(Locale.US, "%.1fk %s", v / 1000f, unit) else String.format(Locale.US, "%,d %s", v, unit)
+}
+
+/**
+ * A stored kg string moved one step (the +/− buttons), never below [minKg]. A value off the step
+ * grid (e.g. 88.2 lb after switching units) snaps to the next multiple instead: 88.2 → 90 → 95.
+ */
+fun stepWeight(storedKg: String, delta: Float, fallbackKg: Float = 20f, minKg: Float = 0f): String {
+    val u = Units.current
+    val value = u.fromKg(parseWeightClean(storedKg, fallbackKg))
+    val step = abs(delta)
+    val steps = value / step
+    val onGrid = abs(steps - steps.roundToInt()) < 0.01f
+    val next = when {
+        step == 0f -> value
+        onGrid -> value + delta
+        delta > 0 -> ceil(steps) * step
+        else -> floor(steps) * step
+    }
+    return u.stored(u.round(next).coerceAtLeast(u.fromKg(minKg)))
+}
+
+/**
+ * A stored kg string scaled by [factor] (e.g. 0.9 for "go lighter"), with a floor of one
+ * default step so it never reaches zero.
+ */
+fun scaleWeight(storedKg: String, factor: Float, fallbackKg: Float = 20f): String {
+    val u = Units.current
+    val scaled = u.round(u.fromKg(parseWeightClean(storedKg, fallbackKg)) * factor)
+    return u.stored(scaled.coerceAtLeast(u.defaultStep))
+}

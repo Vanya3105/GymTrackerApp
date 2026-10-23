@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
@@ -32,13 +33,15 @@ fun ProgressScreen(
     weightHistory: List<WeightLogEntry>,
     haptics: Haptics,
     onLogWeight: (Float) -> Unit,
-    onDeleteWeight: (Long) -> Unit
+    onDeleteWeight: (Long) -> Unit,
+    onOpenExercise: (String) -> Unit
 ) {
     val P = LocalPalette.current
     var showLogSheet by remember { mutableStateOf(false) }
     var showAllWeighIns by rememberSaveable { mutableStateOf(false) }
+    var showAllLifts by rememberSaveable { mutableStateOf(false) }
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
-    val bestLifts = remember(history) { computeBestLifts(history).take(6) }
+    val bestLifts = remember(history) { computeBestLifts(history) }
 
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
@@ -87,23 +90,37 @@ fun ProgressScreen(
         item { SectionHeader("Recovery") }
         item { RecoveryDetailCard(recovery, Modifier.enterAnimation(1)) }
 
-        item { SectionHeader("Best lifts") }
+        item {
+            SectionHeader(
+                "Best lifts",
+                action = if (bestLifts.size > 6) (if (showAllLifts) "Show less" else "See all") else null,
+                onAction = { showAllLifts = !showAllLifts }
+            )
+        }
         if (bestLifts.isEmpty()) {
             item { EmptyState(Icons.Rounded.EmojiEvents, "No lifts yet", "Finish a workout and your best sets show up here.") }
         } else {
             item {
-                AppCard(Modifier.fillMaxWidth().enterAnimation(2), contentPadding = PaddingValues(vertical = 6.dp)) {
-                    bestLifts.forEachIndexed { i, lift ->
+                AppCard(
+                    Modifier.fillMaxWidth().enterAnimation(2).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    (if (showAllLifts) bestLifts else bestLifts.take(6)).forEachIndexed { i, lift ->
                         if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().pressable { onOpenExercise(lift.name) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
-                                Text("Best set ${lift.bestSet}", style = AppType.caption, color = P.textSecondary)
+                                Text("Best set ${lift.bestSet?.let(::formatSet) ?: "—"}", style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("${lift.estimated1Rm} kg", style = AppType.number, color = P.textPrimary)
+                                Text(formatWeightKg(lift.estimated1Rm), style = AppType.number, color = P.textPrimary)
                                 Text("est. 1-rep max", style = AppType.caption, color = P.textTertiary)
                             }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -124,13 +141,13 @@ fun ProgressScreen(
     }
 }
 
-private data class BestLift(val name: String, val estimated1Rm: Int, val bestSet: String)
+private data class BestLift(val name: String, val estimated1Rm: Float, val bestSet: SetEntry?)
 
 private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
     history.flatMap { w -> w.exercises.filter { !it.isSkipped }.map { it.name } }
         .distinctBy { it.lowercase() }
-        .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSetText.replace("kg ×", " kg ×")) } }
-        .filter { it.estimated1Rm > 0 }
+        .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSet) } }
+        .filter { it.estimated1Rm > 0f }
         .sortedByDescending { it.estimated1Rm }
 
 @Composable
@@ -144,14 +161,15 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
             Column(Modifier.weight(1f)) {
                 Text("Body weight", style = AppType.label, color = P.textSecondary)
                 Row(verticalAlignment = Alignment.Bottom) {
-                    RollingText(formatKgClean(current), AppType.bigNumber, P.textPrimary)
-                    Text(" kg", style = AppType.body, color = P.textSecondary, modifier = Modifier.padding(bottom = 3.dp))
+                    RollingText(formatWeightNumber(current), AppType.bigNumber, P.textPrimary)
+                    Text(" ${Units.current.label}", style = AppType.body, color = P.textSecondary, modifier = Modifier.padding(bottom = 3.dp))
                 }
                 if (change != null) {
-                    val rounded = (change * 10).roundToInt() / 10f
+                    val rounded = roundedChange(change)
+                    val unit = Units.current.label
                     val (icon, text) = when {
-                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} kg since last time"
-                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} kg since last time"
+                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit since last time"
+                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit since last time"
                         else -> Icons.AutoMirrored.Rounded.TrendingFlat to "Same as last time"
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -176,10 +194,10 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
 @Composable
 private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: () -> Unit) {
     val P = LocalPalette.current
-    val diff = prev?.let { ((entry.weightKg - it.weightKg) * 10).roundToInt() / 10f }
+    val diff = prev?.let { roundedChange(entry.weightKg - it.weightKg) }
     Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("${formatKgClean(entry.weightKg)} kg", style = AppType.number, color = P.textPrimary)
+            Text(formatWeightKg(entry.weightKg), style = AppType.number, color = P.textPrimary)
             Text(entry.displayDate.substringBefore(" •"), style = AppType.caption, color = P.textSecondary)
         }
         if (diff != null && diff != 0f) {
@@ -230,10 +248,19 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
     }
 }
 
+/** A body-weight change in the current unit, to 0.1. */
+private fun roundedChange(kg: Float): Float {
+    val unit = Units.current
+    return ((kg / unit.toKg(1f)) * 10).roundToInt() / 10f
+}
+
 @Composable
 private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float) -> Unit) {
     val P = LocalPalette.current
-    var input by remember { mutableStateOf(formatKgClean(startKg)) }
+    val unit = Units.current
+    val start = unit.fromKg(startKg)
+    // Typed in the current unit; converted to kg on save.
+    var input by remember { mutableStateOf(formatKgClean(start)) }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
             Text("Log today's weight", style = AppType.title, color = P.textPrimary)
@@ -242,15 +269,15 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
             NumberStepper(
                 value = input,
                 onValueChange = { v -> sanitizeDecimalInput(v)?.let { input = it } },
-                onMinus = { input = formatKgClean(((input.toFloatOrNull() ?: startKg) - 0.1f).coerceAtLeast(0f)) },
-                onPlus = { input = formatKgClean((input.toFloatOrNull() ?: startKg) + 0.1f) },
+                onMinus = { input = formatKgClean(unit.round(((input.toFloatOrNull() ?: start) - 0.1f).coerceAtLeast(0f))) },
+                onPlus = { input = formatKgClean(unit.round((input.toFloatOrNull() ?: start) + 0.1f)) },
                 modifier = Modifier.fillMaxWidth(),
                 height = 56.dp
             )
             Spacer(Modifier.height(20.dp))
             PrimaryButton(
                 "Save",
-                onClick = { input.toFloatOrNull()?.takeIf { it > 0f }?.let(onSave) },
+                onClick = { input.toFloatOrNull()?.takeIf { it > 0f }?.let { onSave(unit.toKg(it)) } },
                 enabled = (input.toFloatOrNull() ?: 0f) > 0f,
                 modifier = Modifier.fillMaxWidth()
             )

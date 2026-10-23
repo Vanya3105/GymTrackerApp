@@ -83,6 +83,9 @@ fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>): List<MuscleRec
 // WEIGHT SUGGESTIONS
 // ============================================================================
 
+/** A stored kg string as "62.5 kg" / "135 lb". */
+private fun shown(storedKg: String) = formatWeightKg(parseWeightClean(storedKg, 0f))
+
 private fun isCompoundLift(exerciseName: String): Boolean {
     val lower = exerciseName.lowercase(Locale.US)
     return listOf("squat", "bench", "press", "deadlift", "rdl", "row", "pull-up", "pullup", "pulldown", "dip", "lunge").any {
@@ -99,7 +102,7 @@ fun suggestNextWeight(
     splitTitle: String,
     exercise: ExerciseEntry,
     history: List<CompletedWorkout>,
-    stepKg: Float
+    step: Float
 ): Suggestion {
     val isCompound = isCompoundLift(exercise.name)
     val repRange = if (isCompound) "6–8" else "8–12"
@@ -111,33 +114,32 @@ fun suggestNextWeight(
     if (doneSets.size >= 2) {
         val firstReps = parseRepsClean(doneSets.first().reps, 8)
         val latestReps = parseRepsClean(doneSets.last().reps, 8)
-        val latestWeight = parseWeightClean(doneSets.last().weight, 40f)
         if (firstReps >= 6 && latestReps <= (firstReps * 0.62f).toInt()) {
-            val lighter = formatKgClean((latestWeight * 0.9f).coerceAtLeast(2.5f))
+            val lighter = scaleWeight(doneSets.last().weight, 0.9f, 40f)
             return Suggestion(
-                "Your reps fell from $firstReps to $latestReps. Try $lighter kg, or rest a bit longer.",
+                "Your reps fell from $firstReps to $latestReps. Try ${shown(lighter)}, or rest a bit longer.",
                 SuggestionTone.CAUTION, lighter
             )
         }
     }
 
-    suggestFromSplitHistory(splitTitle, exercise, history, stepKg)?.let { return it }
+    suggestFromSplitHistory(splitTitle, exercise, history, step)?.let { return it }
 
-    val topWeight = workSets.maxOfOrNull { parseWeightClean(it.weight, 40f) } ?: 40f
+    val unit = Units.current
+    val topWeight = unit.stored(unit.fromKg(workSets.maxOfOrNull { parseWeightClean(it.weight, 40f) } ?: 40f))
     if (doneSets.isNotEmpty()) {
         if (doneSets.any { parseRepsClean(it.reps, 8) in 1..4 }) {
-            val lighter = formatKgClean((topWeight * 0.9f).coerceAtLeast(2.5f))
-            return Suggestion("That's heavy — 4 reps or fewer. Try $lighter kg.", SuggestionTone.CAUTION, lighter)
+            val lighter = scaleWeight(topWeight, 0.9f, 40f)
+            return Suggestion("That's heavy — 4 reps or fewer. Try ${shown(lighter)}.", SuggestionTone.CAUTION, lighter)
         }
         if (doneSets.all { parseRepsClean(it.reps, 8) >= topReps }) {
-            val heavier = formatKgClean(topWeight + stepKg)
-            return Suggestion("Every set hit $topReps+ reps. Go up to $heavier kg.", SuggestionTone.GOOD, heavier)
+            val heavier = stepWeight(topWeight, step, 40f)
+            return Suggestion("Every set hit $topReps+ reps. Go up to ${shown(heavier)}.", SuggestionTone.GOOD, heavier)
         }
     }
 
-    val target = formatKgClean(topWeight)
     return Suggestion(
-        "Aim for $repRange reps at $target kg. Hit $topReps on every set, then add ${formatKgClean(stepKg)} kg.",
-        SuggestionTone.NEUTRAL, target
+        "Aim for $repRange reps at ${shown(topWeight)}. Hit $topReps on every set, then add ${formatKgClean(step)} ${unit.label}.",
+        SuggestionTone.NEUTRAL, topWeight
     )
 }

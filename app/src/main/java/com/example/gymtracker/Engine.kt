@@ -42,9 +42,12 @@ const val ACTION_SESSION_SYNC = "com.example.gymtracker.ACTION_SESSION_SYNC"
 @Immutable
 data class ExerciseRecords(
     val maxWeightKg: Float,
-    val bestEstimated1Rm: Int,
-    val bestSetText: String,
-    val recentHistory: List<Pair<String, String>>,
+    /** Rounded to 0.5 kg, like every estimated 1RM the app shows. */
+    val bestEstimated1Rm: Float,
+    /** The set behind the best estimated 1RM, or null when nothing is logged. */
+    val bestSet: SetEntry?,
+    /** Up to five most recent sessions, newest first: label to work sets. */
+    val recentHistory: List<Pair<String, List<SetEntry>>>,
     val chartPoints: List<Pair<String, Float>>
 )
 
@@ -135,7 +138,6 @@ fun programFor(programId: String): SplitProgramInfo =
     SPLIT_PROGRAMS[programId] ?: SPLIT_PROGRAMS.getValue("PPL_ARNOLD")
 
 val REST_PRESETS = listOf(0, 60, 90, 120, 180, 240)
-val WEIGHT_STEP_PRESETS = listOf(0.5f, 1.0f, 1.25f, 2.0f, 2.5f, 5.0f)
 
 fun formatRestShort(sec: Int): String {
     if (sec <= 0) return "Off"
@@ -157,9 +159,6 @@ fun formatDuration(totalSec: Long): String {
         else -> "< 1 min"
     }
 }
-
-fun formatVolume(kg: Int): String =
-    if (kg >= 10_000) String.format(Locale.US, "%.1fk kg", kg / 1000f) else String.format(Locale.US, "%,d kg", kg)
 
 fun cycleRestPreset(current: Int): Int {
     val idx = REST_PRESETS.indexOf(current)
@@ -296,7 +295,7 @@ fun sendSetDoneNotification(context: Context, exerciseName: String, weight: Stri
     val restMsg = if (restSeconds > 0) " · Rest ${formatRestShort(restSeconds)}" else ""
     postAlert(
         context, id = 1002, channelId = SET_DONE_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_workout,
-        title = "Set logged · $exerciseName", text = "$weight kg × $reps$restMsg", requestCode = 1
+        title = "Set logged · $exerciseName", text = "${formatWeightKg(parseWeightClean(weight, 0f))} × $reps$restMsg", requestCode = 1
     )
 }
 
@@ -405,8 +404,8 @@ fun calculateEstimated1Rm(weightKg: Float, reps: Int): Float {
 fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>): ExerciseRecords {
     var maxWeight = 0f
     var best1Rm = 0f
-    var bestSetStr = "—"
-    val recentLogs = ArrayList<Pair<String, String>>(5)
+    var bestSet: SetEntry? = null
+    val recentLogs = ArrayList<Pair<String, List<SetEntry>>>(5)
     val recentChartPoints = ArrayList<Pair<String, Float>>(5)
 
     for (workout in history) {
@@ -418,7 +417,7 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
 
         if (recentLogs.size < 5) {
             val shortDate = workout.displayDate.substringBefore(",")
-            recentLogs.add("${workout.splitTitle} ($shortDate)" to workSets.joinToString(" • ") { "${it.weight}kg × ${it.reps}" })
+            recentLogs.add("${workout.splitTitle} ($shortDate)" to workSets)
             recentChartPoints.add(shortDate to workSets.maxOf { it.weightKg })
         }
         for (s in workSets) {
@@ -427,15 +426,15 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
             if (w > maxWeight) maxWeight = w
             if (e1rm > best1Rm) {
                 best1Rm = e1rm
-                bestSetStr = "${s.weight}kg × ${s.repCount}"
+                bestSet = s
             }
         }
     }
 
     return ExerciseRecords(
         maxWeightKg = maxWeight,
-        bestEstimated1Rm = best1Rm.roundToInt(),
-        bestSetText = bestSetStr,
+        bestEstimated1Rm = roundToHalf(best1Rm),
+        bestSet = bestSet,
         recentHistory = recentLogs,
         chartPoints = recentChartPoints.reversed()
     )
@@ -445,8 +444,8 @@ fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords): Boolean {
     if (setEntry.isWarmupSet || !setEntry.isCompleted) return false
     val w = setEntry.weightKg
     val r = setEntry.repCount
-    if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0) return false
-    return calculateEstimated1Rm(w, r).roundToInt() > records.bestEstimated1Rm || w > records.maxWeightKg
+    if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0f) return false
+    return roundToHalf(calculateEstimated1Rm(w, r)) > records.bestEstimated1Rm || w > records.maxWeightKg
 }
 
 fun computeWeekSummary(
@@ -510,7 +509,7 @@ fun suggestFromSplitHistory(
     splitTitle: String,
     exercise: ExerciseEntry,
     history: List<CompletedWorkout>,
-    stepKg: Float
+    step: Float
 ): Suggestion? {
     // Work sets of this exercise from each past session of the same split, newest first.
     val pastSessions = history
@@ -527,28 +526,29 @@ fun suggestFromSplitHistory(
     val prevTopSet = prevSessionSets.maxBy { it.weightKg }
     val prevWeight = prevTopSet.weightKg
     val prevWeightStr = prevTopSet.weight
+    // Steps and rounding happen in the display unit so pounds land on whole plates.
+    val unit = Units.current
+    val prev = unit.fromKg(prevWeight)
+    val prevText = formatWeightKg(prevWeight)
 
     fun volume(sets: List<SetEntry>) = sets.sumOf { (it.weightKg * it.repCount).toDouble() }
     fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= 8 }
     fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..6 }
-    fun increase(message: (String) -> String) = formatKgClean(prevWeight + stepKg).let {
-        Suggestion(message(it), SuggestionTone.GOOD, suggestedWeight = it)
+    fun suggest(value: Float, tone: SuggestionTone, message: (String) -> String): Suggestion {
+        val v = unit.round(value.coerceAtLeast(0f))
+        return Suggestion(message("${formatKgClean(v)} ${unit.label}"), tone, suggestedWeight = unit.stored(v))
     }
-    fun decrease(message: (String) -> String) = formatKgClean(prevWeight - stepKg).let {
-        Suggestion(message(it), SuggestionTone.CAUTION, suggestedWeight = it)
-    }
+    fun increase(message: (String) -> String) = suggest(prev + step, SuggestionTone.GOOD, message)
+    fun decrease(message: (String) -> String) = suggest(prev - step, SuggestionTone.CAUTION, message)
 
     if (pastSessions.size >= 3) {
         val vol1 = volume(pastSessions[0])
         val vol2 = volume(pastSessions[1])
         val vol3 = volume(pastSessions[2])
         if (vol1 > 0 && vol1 < vol2 && vol2 < vol3) {
-            val dropW = formatKgClean(prevWeight * 0.9f)
-            return Suggestion(
-                message = "Your numbers have dipped three sessions in a row. Go lighter today: $dropW kg.",
-                tone = SuggestionTone.CAUTION,
-                suggestedWeight = dropW
-            )
+            return suggest(prev * 0.9f, SuggestionTone.CAUTION) { w ->
+                "Your numbers have dipped three sessions in a row. Go lighter today: $w."
+            }
         }
     }
 
@@ -558,33 +558,33 @@ fun suggestFromSplitHistory(
     val completedToday = exercise.sets.filter { !it.isWarmupSet && it.isCompleted && it.repCount > 0 }
     if (completedToday.isNotEmpty()) {
         if (prevHad8Plus && hit8Plus(completedToday)) {
-            return increase { w -> "8+ reps two sessions running. Move up to $w kg." }
+            return increase { w -> "8+ reps two sessions running. Move up to $w." }
         }
         if (prevHad6OrLess && hit6OrLess(completedToday)) {
-            return decrease { w -> "Under 7 reps two sessions running. Drop to $w kg." }
+            return decrease { w -> "Under 7 reps two sessions running. Drop to $w." }
         }
     }
 
     if (pastSessions.size >= 2) {
         if (prevHad8Plus && hit8Plus(pastSessions[1])) {
-            return increase { w -> "You hit 8+ reps the last two times. Try $w kg today." }
+            return increase { w -> "You hit 8+ reps the last two times. Try $w today." }
         }
         if (prevHad6OrLess && hit6OrLess(pastSessions[1])) {
-            return decrease { w -> "Under 7 reps the last two times. Try $w kg today." }
+            return decrease { w -> "Under 7 reps the last two times. Try $w today." }
         }
     }
 
     return when {
         prevHad8Plus -> Suggestion(
-            "Last time: $prevWeightStr kg for 8+ reps. Do it again to move up.",
+            "Last time: $prevText for 8+ reps. Do it again to move up.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
         prevHad6OrLess -> Suggestion(
-            "Last time: $prevWeightStr kg for 6 or fewer. Aim for 7–8 reps.",
+            "Last time: $prevText for 6 or fewer. Aim for 7–8 reps.",
             SuggestionTone.CAUTION, prevWeightStr
         )
         else -> Suggestion(
-            "Last time: $prevWeightStr kg. Aim for 6–8 reps.",
+            "Last time: $prevText. Aim for 6–8 reps.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
     }
@@ -638,7 +638,7 @@ object RestAlarmScheduler {
         val nextEx = active?.second?.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
         val nextSet = nextEx?.sets?.firstOrNull { !it.isCompleted }
         val detailLine = if (nextEx != null && nextSet != null) {
-            "Next: ${nextEx.name} · ${nextSet.weight} kg × ${nextSet.reps}"
+            "Next: ${nextEx.name} · ${formatSet(nextSet)}"
         } else {
             "Time for your next set."
         }
