@@ -252,6 +252,13 @@ fun GymTrackerApp(
         editingPastWorkout = workout
     }
 
+    fun changeExerciseType(name: String, type: ExerciseType) {
+        haptics.tick()
+        LocalStorage.setExerciseType(context, name, type)
+        history = LocalStorage.loadHistory(context)
+        currentExercises = currentExercises.map { if (exerciseKey(it.name) == exerciseKey(name)) it.copy(type = type) else it }
+    }
+
     fun deletePastWorkout(id: Long) {
         haptics.tick()
         LocalStorage.deleteWorkoutFromHistory(context, id)
@@ -364,6 +371,7 @@ fun GymTrackerApp(
                             haptics = haptics,
                             hasUnsavedEdits = currentExercises != editing.exercises,
                             onOpenExercise = { openExercise = it },
+                            onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { currentExercises = it },
                             onReorderExercises = { from, to -> currentExercises = currentExercises.moved(from, to) },
                             onAddExercise = { _, _ -> },
@@ -402,6 +410,7 @@ fun GymTrackerApp(
                             initialPhotoPath = null,
                             haptics = haptics,
                             onOpenExercise = { openExercise = it },
+                            onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { updated ->
                                 currentExercises = updated
                                 LocalStorage.saveActiveSession(context, split.title, updated)
@@ -483,6 +492,7 @@ fun GymTrackerApp(
                         }
                         renamed
                     },
+                    onChangeType = { type -> changeExerciseType(name, type) },
                     onBack = { openExercise = null }
                 )
             }
@@ -523,17 +533,49 @@ fun newExerciseEntry(
     history: List<CompletedWorkout>,
     settings: AppSettings
 ): ExerciseEntry {
-    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStep)
+    val type = LocalStorage.exerciseType(context, name)
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+
+    if (!type.hasWeightSuggestions) {
+        // No weight to suggest: start from your own last session, else plain defaults.
+        val last = history.firstNotNullOfOrNull { w ->
+            w.exercises.find { !it.isSkipped && exerciseKey(it.name) == exerciseKey(name) }?.workSets?.takeIf { it.isNotEmpty() }
+        }
+        val template = last ?: List(if (type == ExerciseType.DISTANCE_TIME) 1 else 3) {
+            SetEntry(
+                setNumber = 0,
+                weight = "",
+                reps = if (type.usesReps) "10" else "",
+                seconds = if (type == ExerciseType.DURATION) "60" else ""
+            )
+        }
+        return ExerciseEntry(
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
+            sets = template.mapIndexed { i, s ->
+                SetEntry(i + 1, weight = s.weight, reps = s.reps, seconds = s.seconds, distanceM = s.distanceM, restSeconds = rest)
+            }
+        )
+    }
+
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle, type = type), history, settings.weightStep)
     val unit = Units.current
+    if (type == ExerciseType.WEIGHTED_BODYWEIGHT) {
+        // Added weight; no warm-up set (the warm-up is the bodyweight version).
+        val added = suggestion?.suggestedWeight?.ifBlank { null } ?: "0"
+        return ExerciseEntry(
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
+            sets = List(3) { i -> SetEntry(i + 1, weight = added, reps = "8", restSeconds = rest) }
+        )
+    }
     val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
     // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
     val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
     val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)
-    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     return ExerciseEntry(
         name = name,
         targetMuscle = muscle,
         restSeconds = rest,
+        type = type,
         sets = listOf(
             SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest)),
             SetEntry(2, weight = workWeight, reps = "8", restSeconds = rest),

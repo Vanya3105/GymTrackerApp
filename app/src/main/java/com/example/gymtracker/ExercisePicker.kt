@@ -21,8 +21,11 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +45,7 @@ import androidx.compose.ui.unit.dp
 fun ExercisePickerSheet(
     existingNames: Set<String>,
     onPick: (ExerciseInfo) -> Unit,
-    onCreateCustom: (String) -> Unit,
+    onCreateCustom: (String, ExerciseType) -> Unit,
     onDismiss: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -52,6 +55,8 @@ fun ExercisePickerSheet(
     val results = remember(query, muscle) { ExerciseDatabase.search(query, muscle) }
     val lowerExisting = remember(existingNames) { existingNames.map { it.lowercase() }.toSet() }
     val trimmed = query.trim()
+    // A custom exercise is created once its type is chosen.
+    var pendingCustom by remember { mutableStateOf<String?>(null) }
     val canCreate = trimmed.length >= 2 &&
         results.none { it.name.equals(trimmed, ignoreCase = true) } &&
         trimmed.lowercase() !in lowerExisting
@@ -129,7 +134,7 @@ fun ExercisePickerSheet(
                     val added = info.name.lowercase() in lowerExisting
                     PickerRow(
                         title = info.name,
-                        subtitle = "${info.muscle} · ${info.equipment}",
+                        subtitle = listOfNotNull(info.muscle, info.equipment, info.type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label).joinToString(" · "),
                         added = added,
                         onClick = { if (!added) onPick(info) },
                         modifier = Modifier.animateItem()
@@ -142,10 +147,7 @@ fun ExercisePickerSheet(
                             subtitle = "Add your own exercise",
                             added = false,
                             leadingAccent = true,
-                            onClick = {
-                                onCreateCustom(trimmed)
-                                query = ""
-                            }
+                            onClick = { pendingCustom = trimmed }
                         )
                     }
                 }
@@ -154,6 +156,95 @@ fun ExercisePickerSheet(
                 }
             }
         }
+    }
+
+    pendingCustom?.let { name ->
+        AlertDialog(
+            onDismissRequest = { pendingCustom = null },
+            containerColor = P.bgElevated,
+            title = { Text("How do you log $name?", style = AppType.headline, color = P.textPrimary) },
+            text = {
+                ExerciseTypeOptions(selected = null) { type ->
+                    onCreateCustom(name, type)
+                    pendingCustom = null
+                    query = ""
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pendingCustom = null }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+}
+
+/** Every [ExerciseType] as a tappable row with an example, the current one checked. */
+@Composable
+fun ExerciseTypeOptions(selected: ExerciseType?, onPick: (ExerciseType) -> Unit) {
+    val P = LocalPalette.current
+    Column {
+        ExerciseType.entries.forEach { type ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .pressable(pressedScale = 0.98f) { onPick(type) }
+                    .padding(horizontal = 8.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(type.label, style = AppType.bodyStrong, color = if (type == selected) P.accentPrimary else P.textPrimary)
+                    Text(type.example, style = AppType.caption, color = P.textSecondary)
+                }
+                if (type == selected) Icon(Icons.Rounded.Check, "Current", tint = P.accentPrimary, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/**
+ * "Logged as: Weight & reps ▾". Changing it keeps every logged number, so switching back
+ * shows them again.
+ */
+@Composable
+fun ExerciseTypeRow(current: ExerciseType, onChange: (ExerciseType) -> Unit, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    var choosing by remember { mutableStateOf(false) }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(P.bgControl)
+            .pressable(pressedScale = 0.99f) { choosing = true }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Logged as", style = AppType.caption, color = P.textSecondary)
+            Text(current.label, style = AppType.bodyStrong, color = P.textPrimary)
+        }
+        Icon(Icons.Rounded.UnfoldMore, "Change", tint = P.textSecondary, modifier = Modifier.size(20.dp))
+    }
+    if (choosing) {
+        AlertDialog(
+            onDismissRequest = { choosing = false },
+            containerColor = P.bgElevated,
+            title = { Text("Log this exercise as", style = AppType.headline, color = P.textPrimary) },
+            text = {
+                Column {
+                    ExerciseTypeOptions(selected = current) { type ->
+                        choosing = false
+                        if (type != current) onChange(type)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Numbers you've already logged are kept. Switch back any time to see them again.",
+                        style = AppType.caption,
+                        color = P.textTertiary
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { choosing = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        )
     }
 }
 

@@ -39,11 +39,11 @@ class WorkoutLogicTest {
 
     @Test
     fun isValidWorkSet_excludesWarmupsAndEmptySets() {
-        assertTrue(set("60", "8").isValidWorkSet)
-        assertFalse(set("30", "8", warmup = true).isValidWorkSet)
-        assertFalse(set("60", "8", type = "WARMUP").isValidWorkSet) // legacy: warmup only via intensityType
-        assertFalse(set("0", "8").isValidWorkSet)
-        assertFalse(set("60", "").isValidWorkSet)
+        assertTrue(set("60", "8").isValidWorkSet(ExerciseType.WEIGHT_REPS))
+        assertFalse(set("30", "8", warmup = true).isValidWorkSet(ExerciseType.WEIGHT_REPS))
+        assertFalse(set("60", "8", type = "WARMUP").isValidWorkSet(ExerciseType.WEIGHT_REPS)) // legacy: warmup only via intensityType
+        assertFalse(set("0", "8").isValidWorkSet(ExerciseType.WEIGHT_REPS))
+        assertFalse(set("60", "").isValidWorkSet(ExerciseType.WEIGHT_REPS))
     }
 
     @Test

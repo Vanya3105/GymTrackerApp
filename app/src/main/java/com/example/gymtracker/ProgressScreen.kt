@@ -113,11 +113,11 @@ fun ProgressScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
-                                Text("Best set ${lift.bestSet?.let(::formatSet) ?: "—"}", style = AppType.caption, color = P.textSecondary)
+                                Text("Best set ${lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"}", style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(formatWeightKg(lift.estimated1Rm), style = AppType.number, color = P.textPrimary)
-                                Text("est. 1-rep max", style = AppType.caption, color = P.textTertiary)
+                                Text(lift.headline, style = AppType.number, color = P.textPrimary)
+                                Text(lift.headlineLabel, style = AppType.caption, color = P.textTertiary)
                             }
                             Spacer(Modifier.width(8.dp))
                             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
@@ -141,14 +141,40 @@ fun ProgressScreen(
     }
 }
 
-private data class BestLift(val name: String, val estimated1Rm: Float, val bestSet: SetEntry?)
+private data class BestLift(
+    val name: String,
+    val type: ExerciseType,
+    val bestSet: SetEntry?,
+    /** Weighted lifts: estimated 1RM (also the sort key). */
+    val estimated1Rm: Float,
+    val headline: String,
+    val headlineLabel: String
+)
 
+/** Loaded lifts by estimated 1RM first, then everything else (most recently trained first). */
 private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
-    history.flatMap { w -> w.exercises.filter { !it.isSkipped }.map { it.name } }
-        .distinctBy { it.lowercase() }
-        .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSet) } }
-        .filter { it.estimated1Rm > 0f }
-        .sortedByDescending { it.estimated1Rm }
+    loggedExerciseNames(history)
+        .map { name ->
+            val rec = computeExerciseRecords(name, history)
+            val type = rec.type
+            if (type.hasWeightSuggestions && rec.bestEstimated1Rm > 0f) {
+                BestLift(name, type, rec.bestSet, rec.bestEstimated1Rm, formatWeightKg(rec.bestEstimated1Rm), "est. 1-rep max")
+            } else if (type == ExerciseType.WEIGHTED_BODYWEIGHT) {
+                // Nothing added yet: it's a bodyweight exercise for now.
+                BestLift(name, type, rec.bestSet, 0f, ChartMetric.MOST_REPS.format(rec.maxReps.toFloat()), "most reps")
+            } else {
+                val best = rec.bestSet
+                val label = when (type) {
+                    ExerciseType.BODYWEIGHT -> "most reps"
+                    ExerciseType.ASSISTED -> "least help"
+                    else -> "longest"
+                }
+                val headline = best?.let { formatSessionValue(type, sessionValue(type, listOf(it))) } ?: "—"
+                BestLift(name, type, best, 0f, headline, label)
+            }
+        }
+        .filter { it.bestSet != null }
+        .sortedWith(compareByDescending<BestLift> { it.estimated1Rm > 0f }.thenByDescending { it.estimated1Rm })
 
 @Composable
 private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, onLog: () -> Unit, modifier: Modifier = Modifier) {

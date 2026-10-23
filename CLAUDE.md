@@ -17,7 +17,7 @@ When the user says "continue", that is what they mean.
 ## Code map
 - Kotlin package `com.example.gymtracker` (the `applicationId` is `com.vanyaevtushenko.gymtracker`).
 - `Storage.kt`: `LocalStorage` (the only storage API; in-memory reads, ordered writes on one storage thread), `StoreCodec` (JSON/backup format).
-- `Database.kt`: Room schema (`GymDatabase`, `GymDao`) and `RoomStore` (model <-> Room). Schemas are exported to `app/schemas/`; bump the version and add a migration for any schema change.
+- `Database.kt`: Room schema (`GymDatabase`, `GymDao`) and `RoomStore` (model <-> Room). Schemas are exported to `app/schemas/` (committed). Any schema change: bump the version, add a `Migration`, and extend `DatabaseMigrationTest`.
 - `Engine.kt`: records/1RM, suggestions, rest alarms, notifications, dates.
 - `Models.kt`: data classes. `ExerciseDatabase.kt`: built-in exercise library.
 - Screens: `HomeScreen`, `ActiveWorkoutScreen`, `HistoryScreen`, `ProgressScreen`, `SettingsScreen`, `OnboardingScreen`.

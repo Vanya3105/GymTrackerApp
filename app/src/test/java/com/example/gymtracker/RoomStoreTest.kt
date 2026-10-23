@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -46,7 +47,8 @@ class RoomStoreTest {
         weights = listOf(WeightLogEntry(2, "b", "B", 81.2f), WeightLogEntry(1, "a", "A", 80.4f)),
         templates = mapOf("Push" to listOf("Barbell Bench Press" to "Chest", "My Press" to "Custom")),
         notes = mapOf("barbell bench press" to "grip wide"),
-        restDefaults = mapOf("my press" to 75)
+        restDefaults = mapOf("my press" to 75),
+        types = mapOf("barbell bench press" to ExerciseType.WEIGHT_REPS, "my press" to ExerciseType.WEIGHT_REPS)
     )
 
     @Test
@@ -58,7 +60,7 @@ class RoomStoreTest {
     @Test
     fun replaceAll_replacesEverythingPreviouslyStored() {
         RoomStore.replaceAll(db, full)
-        val smaller = StoreData(history = listOf(workout(9, custom)))
+        val smaller = StoreData(history = listOf(workout(9, custom)), types = mapOf("my press" to ExerciseType.WEIGHT_REPS))
         RoomStore.replaceAll(db, smaller)
         assertEquals(smaller, RoomStore.load(db))
     }
@@ -116,6 +118,59 @@ class RoomStoreTest {
     }
 
     @Test
+    fun typesTimeAndDistance_roundTrip() {
+        val plank = ExerciseEntry("Plank", "Core", type = ExerciseType.DURATION,
+            sets = listOf(SetEntry(1, "", "", seconds = "60", isCompleted = true)))
+        val run = ExerciseEntry("Running", "Cardio", type = ExerciseType.DISTANCE_TIME,
+            sets = listOf(SetEntry(1, "", "", seconds = "1500", distanceM = "5000", isCompleted = true)))
+        val data = StoreData(
+            history = listOf(workout(1, plank, run)),
+            types = mapOf("plank" to ExerciseType.DURATION, "running" to ExerciseType.DISTANCE_TIME)
+        )
+        RoomStore.replaceAll(db, data)
+        assertEquals(data, RoomStore.load(db))
+    }
+
+    @Test
+    fun setType_keepsLoggedNumbers_soSwitchingBackRestoresTheView() {
+        val pullUp = ExerciseEntry("Pull-Up", "Back", type = ExerciseType.WEIGHT_REPS, sets = listOf(set(1, "20", "8")))
+        RoomStore.insertWorkout(db, workout(1, pullUp))
+        RoomStore.setType(db, "pull-up", ExerciseType.WEIGHTED_BODYWEIGHT)
+        val changed = RoomStore.load(db).history.single().exercises.single()
+        assertEquals(ExerciseType.WEIGHTED_BODYWEIGHT, changed.type)
+        assertEquals("20", changed.sets.single().weight)
+        RoomStore.setType(db, "Pull-Up", ExerciseType.WEIGHT_REPS)
+        assertEquals(pullUp, RoomStore.load(db).history.single().exercises.single())
+    }
+
+    @Test
+    fun replaceAll_withUnknownTypes_appliesLibraryTypesWithoutHidingData() {
+        RoomStore.replaceAll(db, StoreData(
+            history = listOf(workout(1,
+                ExerciseEntry("Pull-Up", sets = listOf(set(1, "20", "8"))),   // weighted → stays weight & reps
+                ExerciseEntry("Push-Up", sets = listOf(set(1, "0", "15"))),   // no weight → bodyweight
+                ExerciseEntry("Plank", sets = listOf(set(1, "0", "60")))      // logged as reps → stays
+            )),
+            templates = mapOf("Core" to listOf("Side Plank" to "Core")),       // never logged → library type
+            types = null
+        ))
+        val types = RoomStore.load(db).types!!
+        assertEquals(ExerciseType.WEIGHT_REPS, types["pull-up"])
+        assertEquals(ExerciseType.BODYWEIGHT, types["push-up"])
+        assertEquals(ExerciseType.WEIGHT_REPS, types["plank"])
+        assertEquals(ExerciseType.DURATION, types["side plank"])
+    }
+
+    @Test
+    fun newExercise_takesLibraryTypeOrTheGivenOne() {
+        RoomStore.exerciseId(db, "Running")
+        RoomStore.exerciseId(db, "Sled Push", type = ExerciseType.DISTANCE_TIME)
+        val types = RoomStore.load(db).types!!
+        assertEquals(ExerciseType.DISTANCE_TIME, types["running"])
+        assertEquals(ExerciseType.DISTANCE_TIME, types["sled push"])
+    }
+
+    @Test
     fun mergedOver_keepsNewerEntriesAndAddsMissingOnes() {
         val room = StoreData(history = listOf(workout(3, custom), workout(1, custom).copy(splitTitle = "Room")))
         val json = StoreData(history = listOf(workout(2, bench), workout(1, bench)), notes = mapOf("x" to "y"))
@@ -123,5 +178,6 @@ class RoomStoreTest {
         assertEquals(listOf(3L, 2L, 1L), merged.history.map { it.id })
         assertEquals("Room", merged.history.last().splitTitle)
         assertEquals("y", merged.notes["x"])
+        assertNull(room.mergedOver(json.copy(types = null)).types) // unknown stays unknown
     }
 }

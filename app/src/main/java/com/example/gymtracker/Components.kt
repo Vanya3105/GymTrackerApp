@@ -63,6 +63,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -401,7 +404,9 @@ fun NumberStepper(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Decimal,
-    height: Dp = 40.dp
+    height: Dp = 40.dp,
+    /** Keep the cursor after the last character, for fields that reformat as you type (times). */
+    cursorAtEnd: Boolean = false
 ) {
     val P = LocalPalette.current
     Row(
@@ -413,21 +418,36 @@ fun NumberStepper(
     ) {
         StepperButton(Icons.Rounded.Remove, "Decrease", enabled, P.textSecondary, onMinus)
         if (enabled) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                textStyle = AppType.number.copy(color = P.textPrimary, textAlign = TextAlign.Center),
-                cursorBrush = SolidColor(P.accentPrimary),
-                modifier = Modifier.weight(1f),
-                decorationBox = { inner ->
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        if (value.isEmpty()) Text("0", style = AppType.number, color = P.textTertiary)
-                        inner()
-                    }
+            val textStyle = AppType.number.copy(color = P.textPrimary, textAlign = TextAlign.Center)
+            val decoration: @Composable (@Composable () -> Unit) -> Unit = { inner ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    if (value.isEmpty()) Text("0", style = AppType.number, color = P.textTertiary)
+                    inner()
                 }
-            )
+            }
+            if (cursorAtEnd) {
+                BasicTextField(
+                    value = TextFieldValue(value, TextRange(value.length)),
+                    onValueChange = { onValueChange(it.text) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                    textStyle = textStyle,
+                    cursorBrush = SolidColor(P.accentPrimary),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = decoration
+                )
+            } else {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                    textStyle = textStyle,
+                    cursorBrush = SolidColor(P.accentPrimary),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = decoration
+                )
+            }
         } else {
             Text(value.ifEmpty { "0" }, style = AppType.number, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
@@ -553,9 +573,81 @@ fun WeightStepper(
     )
 }
 
+/**
+ * [NumberStepper] for a time stored as seconds. Typing works like a microwave: digits fill from
+ * the right, so "130" is 1:30 and "10000" is 1:00:00.
+ */
+@Composable
+fun DurationStepper(
+    seconds: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    step: Int = 15,
+    height: Dp = 40.dp,
+    onStep: () -> Unit = {}
+) {
+    val total = seconds.toIntOrNull() ?: 0
+    NumberStepper(
+        value = if (seconds.isBlank()) "" else formatClock(total.toLong()),
+        onValueChange = { v ->
+            val digits = v.filter(Char::isDigit).trimStart('0').take(6)
+            onChange(if (digits.isEmpty()) "" else clockDigitsToSeconds(digits).toString())
+        },
+        onMinus = { onStep(); onChange((total - step).coerceAtLeast(0).toString()) },
+        onPlus = { onStep(); onChange((total + step).toString()) },
+        keyboardType = KeyboardType.Number,
+        modifier = modifier,
+        height = height,
+        cursorAtEnd = true
+    )
+}
+
+/** "130" → 90 seconds (1:30); "10000" → 3600 (1:00:00). */
+fun clockDigitsToSeconds(digits: String): Int {
+    val d = digits.padStart(6, '0').takeLast(6)
+    return d.substring(0, 2).toInt() * 3600 + d.substring(2, 4).toInt() * 60 + d.substring(4, 6).toInt()
+}
+
+/** [NumberStepper] for a distance stored in metres, shown and typed in km or mi. */
+@Composable
+fun DistanceStepper(
+    meters: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    step: Float = 0.1f,
+    height: Dp = 40.dp,
+    onStep: () -> Unit = {}
+) {
+    val per = Units.current.metersPerDistanceUnit
+    val shown = meters.toFloatOrNull()?.let { formatKgClean(it / per) } ?: ""
+    // Local text so "5." survives the metre round trip, like WeightStepper.
+    var text by remember(per) { mutableStateOf(shown) }
+    LaunchedEffect(shown) { if (text.toFloatOrNull() != shown.toFloatOrNull()) text = shown }
+
+    fun stepBy(delta: Float) {
+        onStep()
+        val current = (meters.toFloatOrNull() ?: 0f) / per
+        onChange(formatKgClean(((current + delta).coerceAtLeast(0f) * 100f).roundToInt() / 100f * per))
+    }
+
+    NumberStepper(
+        value = text,
+        onValueChange = { v ->
+            sanitizeDecimalInput(v)?.let { t ->
+                text = t
+                onChange(t.toFloatOrNull()?.let { formatKgClean(it * per) } ?: "")
+            }
+        },
+        onMinus = { stepBy(-step) },
+        onPlus = { stepBy(step) },
+        modifier = modifier,
+        height = height
+    )
+}
+
 /** Smooth line chart with a soft fill that draws itself in from left to right. */
 @Composable
-fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier) {
+fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier, label: (Float) -> String = ::formatWeightNumber) {
     if (points.size < 2) return
     val P = LocalPalette.current
     val reveal = remember(points) { Animatable(0f) }
@@ -600,7 +692,7 @@ fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier)
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             points.forEach { (label, v) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(formatWeightNumber(v), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
+                    Text(label(v), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                     Text(label, style = AppType.caption, color = P.textTertiary)
                 }
             }

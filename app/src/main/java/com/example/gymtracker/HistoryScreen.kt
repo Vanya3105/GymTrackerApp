@@ -295,7 +295,7 @@ fun WorkoutHistoryCard(
     val P = LocalPalette.current
     val context = LocalContext.current
     val photo = remember(workout.photoPath) { PhotoStorage.loadImageBitmap(workout.photoPath) }
-    val sets = remember(workout.exercises) { workout.exercises.sumOf { ex -> ex.sets.count { !it.isWarmupSet && it.repCount > 0 } } }
+    val sets = remember(workout.exercises) { workout.exercises.sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } } }
     var menuOpen by remember { mutableStateOf(false) }
 
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpen) {

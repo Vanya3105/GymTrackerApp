@@ -103,6 +103,60 @@ class ExerciseStatsTest {
         assertEquals(400f, h.chartPoints(ChartMetric.VOLUME, ChartRange.ALL, now).last().second)
     }
 
+    private fun typed(id: Long, type: ExerciseType, vararg sets: SetEntry) =
+        workout(id, ExerciseEntry("Ex", sets = sets.toList(), type = type))
+
+    private fun s(w: String = "", r: String = "", sec: String = "", m: String = "") =
+        SetEntry(setNumber = 1, weight = w, reps = r, seconds = sec, distanceM = m, isCompleted = true)
+
+    @Test
+    fun bodyweight_recordsAndTotals() {
+        val h = buildExerciseHistory("Ex", listOf(
+            typed(3, ExerciseType.BODYWEIGHT, s(r = "12"), s(r = "10")),
+            typed(2, ExerciseType.BODYWEIGHT, s(r = "12")),
+            typed(1, ExerciseType.BODYWEIGHT, s(r = "10"), s(r = "8"))
+        ))
+        assertEquals(ExerciseType.BODYWEIGHT, h.type)
+        assertEquals(12f, h.bestValue)
+        assertEquals(52, h.allTimeReps)
+        assertEquals(listOf(false, true, false), h.sessions.map { it.isRecord }) // 12 beat 10; later 12 only tied
+        assertTrue(h.repRecords.isEmpty())
+        assertEquals(listOf(18f, 12f, 22f), h.chartPoints(ChartMetric.TOTAL_REPS, ChartRange.ALL, 0).map { it.second })
+    }
+
+    @Test
+    fun assisted_lessHelpIsBetter() {
+        val h = buildExerciseHistory("Ex", listOf(
+            typed(2, ExerciseType.ASSISTED, s("20", "8")),
+            typed(1, ExerciseType.ASSISTED, s("30", "8"))
+        ))
+        assertEquals(20f, h.bestValue)
+        assertTrue(h.sessions.first().isRecord)
+        assertEquals("−20 kg", ChartMetric.ASSISTANCE.format(h.bestValue))
+    }
+
+    @Test
+    fun distance_paceAndTotals() {
+        val h = buildExerciseHistory("Ex", listOf(
+            typed(2, ExerciseType.DISTANCE_TIME, s(m = "5000", sec = "1500")),
+            typed(1, ExerciseType.DISTANCE_TIME, s(sec = "1200")) // time only: no pace
+        ))
+        assertEquals(5000f, h.allTimeDistanceM)
+        assertEquals(2700, h.allTimeSeconds)
+        val pace = h.chartPoints(ChartMetric.PACE, ChartRange.ALL, 0)
+        assertEquals(1, pace.size)
+        assertEquals("5:00 /km", ChartMetric.PACE.format(pace.single().second))
+        assertEquals(listOf(ChartMetric.DISTANCE, ChartMetric.TIME, ChartMetric.PACE), metricsFor(ExerciseType.DISTANCE_TIME))
+    }
+
+    @Test
+    fun duration_longestHold() {
+        val h = buildExerciseHistory("Ex", listOf(typed(1, ExerciseType.DURATION, s(sec = "45"), s(sec = "60"))))
+        assertEquals(60f, h.bestValue)
+        assertEquals(105, h.allTimeSeconds)
+        assertEquals("1:00", ChartMetric.LONGEST.format(h.bestValue))
+    }
+
     @Test
     fun loggedExerciseNames_mostRecentFirst_caseInsensitiveUnique() {
         val names = loggedExerciseNames(history + workout(10, ExerciseEntry("row", sets = listOf(set("70", "8")))))

@@ -58,8 +58,35 @@ data class ExerciseEntry(
     val restSeconds: Int = 90,
     val isSkipped: Boolean = false,
     val sets: List<SetEntry> = emptyList(),
-    val isSuperset: Boolean = false
+    val isSuperset: Boolean = false,
+    /** Copied from the exercise's definition when loaded; not stored per workout. */
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS
 )
+
+/** What a set of this exercise records. Belongs to the exercise, not to each workout. */
+enum class ExerciseType(val label: String, val example: String) {
+    WEIGHT_REPS("Weight & reps", "Barbell, dumbbell, machine, cable"),
+    BODYWEIGHT("Bodyweight reps", "Push-ups, pull-ups, sit-ups"),
+    WEIGHTED_BODYWEIGHT("Weighted bodyweight", "Dips or pull-ups with a belt: log the added weight"),
+    ASSISTED("Assisted bodyweight", "Band or machine help: log the assistance"),
+    DURATION("Time", "Planks, hangs, holds"),
+    DISTANCE_TIME("Distance & time", "Running, rowing, cycling");
+
+    val usesWeight: Boolean get() = this == WEIGHT_REPS || this == WEIGHTED_BODYWEIGHT || this == ASSISTED
+    val usesReps: Boolean get() = usesWeight || this == BODYWEIGHT
+    val usesTime: Boolean get() = this == DURATION || this == DISTANCE_TIME
+    val usesDistance: Boolean get() = this == DISTANCE_TIME
+
+    /** Weight suggestions ("go up to 62.5 kg") apply where more weight means harder. */
+    val hasWeightSuggestions: Boolean get() = this == WEIGHT_REPS || this == WEIGHTED_BODYWEIGHT
+
+    /** Volume is weight × reps; for weighted bodyweight only the added weight counts. */
+    val countsVolume: Boolean get() = this == WEIGHT_REPS || this == WEIGHTED_BODYWEIGHT
+
+    companion object {
+        fun fromKey(key: String?): ExerciseType = entries.firstOrNull { it.name == key } ?: WEIGHT_REPS
+    }
+}
 
 @Immutable
 data class SetEntry(
@@ -69,15 +96,33 @@ data class SetEntry(
     val isWarmup: Boolean = false,
     val intensityType: String = "NORMAL", // NORMAL, WARMUP, DROP, REST_PAUSE
     val isCompleted: Boolean = false,
-    val restSeconds: Int = 90
+    val restSeconds: Int = 90,
+    /** Time-based sets: seconds as typed digits ("" when unused). */
+    val seconds: String = "",
+    /** Distance sets: metres ("" when unused). */
+    val distanceM: String = ""
 )
 
 val SetEntry.isWarmupSet: Boolean get() = isWarmup || intensityType == "WARMUP"
 val SetEntry.weightKg: Float get() = parseWeightClean(weight, 0f)
 val SetEntry.repCount: Int get() = parseRepsClean(reps, 0)
 
-/** Non-warmup set with real numbers logged — the unit every stat and suggestion counts. */
-val SetEntry.isValidWorkSet: Boolean get() = !isWarmupSet && weightKg > 0f && repCount > 0
+val SetEntry.secondCount: Int get() = seconds.filter(Char::isDigit).toIntOrNull() ?: 0
+val SetEntry.distanceMeters: Float get() = distanceM.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
+
+/** Non-warmup set with real numbers for [type] — the unit every stat and suggestion counts. */
+fun SetEntry.isValidWorkSet(type: ExerciseType): Boolean = !isWarmupSet && hasNumbers(type)
+
+/** Has the numbers [type] needs, warm-up or not. */
+fun SetEntry.hasNumbers(type: ExerciseType): Boolean = when (type) {
+    ExerciseType.WEIGHT_REPS -> weightKg > 0f && repCount > 0
+    // Weighted with nothing added is still a bodyweight set; assistance can be zero too.
+    ExerciseType.BODYWEIGHT, ExerciseType.WEIGHTED_BODYWEIGHT, ExerciseType.ASSISTED -> repCount > 0
+    ExerciseType.DURATION -> secondCount > 0
+    ExerciseType.DISTANCE_TIME -> distanceMeters > 0f || secondCount > 0
+}
+
+val ExerciseEntry.workSets: List<SetEntry> get() = sets.filter { it.isValidWorkSet(type) }
 
 @Immutable
 data class WorkoutStats(
@@ -94,11 +139,11 @@ fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedW
         if (ex.isSkipped) continue
         val records = computeExerciseRecords(ex.name, history)
         for (s in ex.sets) {
-            if (!s.isWarmupSet && s.repCount > 0) {
+            if (s.isValidWorkSet(ex.type) || (ex.type == ExerciseType.WEIGHT_REPS && !s.isWarmupSet && s.repCount > 0)) {
                 workSets++
-                volume += s.weightKg * s.repCount
+                if (ex.type.countsVolume) volume += s.weightKg * s.repCount
             }
-            if (isSetPersonalRecord(s, records)) prs++
+            if (isSetPersonalRecord(s, records, ex.type)) prs++
         }
     }
     return WorkoutStats(workSets, volume.roundToInt(), prs)

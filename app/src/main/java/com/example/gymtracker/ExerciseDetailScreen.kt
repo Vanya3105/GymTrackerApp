@@ -58,6 +58,7 @@ fun ExerciseDetailScreen(
     haptics: Haptics,
     canRename: Boolean,
     onRename: (String) -> Boolean,
+    onChangeType: (ExerciseType) -> Unit,
     onBack: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -104,12 +105,41 @@ fun ExerciseDetailScreen(
         }
 
         item {
+            val type = stats.type
+            val sessions = "${stats.sessions.size}" to if (stats.sessions.size == 1) "Session" else "Sessions"
+            val tiles = when (type) {
+                ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> listOf(
+                    formatWeightKg(stats.best1RmKg) to "Est. 1-rep max",
+                    formatWeightKg(stats.heaviestKg) to if (type == ExerciseType.WEIGHT_REPS) "Heaviest" else "Most added",
+                    sessions
+                )
+                ExerciseType.BODYWEIGHT -> listOf(
+                    ChartMetric.MOST_REPS.format(stats.bestValue) to "Most in a set",
+                    "${stats.allTimeReps}" to "Total reps",
+                    sessions
+                )
+                ExerciseType.ASSISTED -> listOf(
+                    ChartMetric.ASSISTANCE.format(stats.bestValue) to "Least help",
+                    ChartMetric.MOST_REPS.format(stats.sessions.maxOf { it.maxReps }.toFloat()) to "Most in a set",
+                    sessions
+                )
+                ExerciseType.DURATION -> listOf(
+                    formatClock(stats.bestValue.toLong()) to "Longest",
+                    formatClock(stats.allTimeSeconds.toLong()) to "Total time",
+                    sessions
+                )
+                ExerciseType.DISTANCE_TIME -> listOf(
+                    formatDistance(stats.bestValue) to "Longest",
+                    formatDistance(stats.allTimeDistanceM) to "Total distance",
+                    sessions
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile(formatWeightKg(stats.best1RmKg), "Est. 1-rep max", Modifier.weight(1f))
-                StatTile(formatWeightKg(stats.heaviestKg), "Heaviest", Modifier.weight(1f))
-                StatTile("${stats.sessions.size}", if (stats.sessions.size == 1) "Session" else "Sessions", Modifier.weight(1f))
+                tiles.forEach { (value, label) -> StatTile(value, label, Modifier.weight(1f)) }
             }
         }
+
+        item { ExerciseTypeRow(stats.type, onChangeType) }
 
         item { ProgressChartCard(stats, haptics, Modifier.enterAnimation(0)) }
 
@@ -126,8 +156,10 @@ fun ExerciseDetailScreen(
             }
         }
 
-        item { SectionHeader("Rep records") }
-        item { RepRecordsCard(stats, Modifier.enterAnimation(1)) }
+        if (stats.type.hasWeightSuggestions) {
+            item { SectionHeader("Rep records") }
+            item { RepRecordsCard(stats, Modifier.enterAnimation(1)) }
+        }
 
         item { SectionHeader("History") }
         items(stats.sessions, key = { it.workoutId }) { session -> SessionCard(session) }
@@ -151,17 +183,19 @@ fun ExerciseDetailScreen(
 @Composable
 private fun ProgressChartCard(stats: ExerciseHistory, haptics: Haptics, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
-    var metric by rememberSaveable { mutableStateOf(ChartMetric.EST_1RM) }
+    val metrics = metricsFor(stats.type)
+    var metric by rememberSaveable(stats.type) { mutableStateOf(metrics.first()) }
+    if (metric !in metrics) metric = metrics.first()
     var range by rememberSaveable { mutableStateOf(ChartRange.ALL) }
     val now = remember { System.currentTimeMillis() }
     val points = remember(stats, metric, range) { stats.chartPoints(metric, range, now) }
     var selected by remember(points) { mutableStateOf<Int?>(null) }
 
-    fun format(v: Float) = if (metric == ChartMetric.VOLUME) formatVolume(v.roundToInt()) else formatWeightKg(v)
+    fun format(v: Float) = metric.format(v)
 
     AppCard(modifier.fillMaxWidth()) {
         SegmentedControl(
-            options = ChartMetric.entries.map { it to it.label },
+            options = metrics.map { it to it.label },
             selected = metric,
             onSelect = { haptics.tick(); metric = it }
         )
@@ -179,7 +213,7 @@ private fun ProgressChartCard(stats: ExerciseHistory, haptics: Haptics, modifier
         }
 
         if (points.size >= 2) {
-            SessionChart(points, selected, onSelect = { idx ->
+            SessionChart(points, selected, axisLabel = metric::short, onSelect = { idx ->
                 if (idx != selected) haptics.tick()
                 selected = idx
             })
@@ -210,7 +244,7 @@ private fun ProgressChartCard(stats: ExerciseHistory, haptics: Haptics, modifier
  * values are labelled on the right.
  */
 @Composable
-private fun SessionChart(points: List<Pair<Long, Float>>, selected: Int?, onSelect: (Int?) -> Unit) {
+private fun SessionChart(points: List<Pair<Long, Float>>, selected: Int?, axisLabel: (Float) -> String, onSelect: (Int?) -> Unit) {
     val P = LocalPalette.current
     val reveal = remember(points) { Animatable(0f) }
     LaunchedEffect(points) { reveal.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
@@ -281,7 +315,7 @@ private fun SessionChart(points: List<Pair<Long, Float>>, selected: Int?, onSele
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             listOf(maxV, (maxV + minV) / 2f, minV).forEach {
-                Text(compactNumber(it), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary)
+                Text(axisLabel(it), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary)
             }
         }
     }
@@ -337,7 +371,7 @@ private fun SessionCard(session: ExerciseSession) {
             Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(tag, style = AppType.caption.copy(fontWeight = FontWeight.SemiBold), color = if (set.isWarmupSet) P.textTertiary else P.textSecondary, modifier = Modifier.width(24.dp))
                 Text(
-                    "${formatWeightKg(set.weightKg)} × ${set.repCount}",
+                    formatSet(set, session.type),
                     style = AppType.body.copy(fontFeatureSettings = "tnum"),
                     color = if (set.isWarmupSet) P.textSecondary else P.textPrimary
                 )
@@ -347,12 +381,17 @@ private fun SessionCard(session: ExerciseSession) {
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Est. 1RM ${formatWeightKg(session.estimated1RmKg)} · Volume ${formatVolume(session.volumeKg.roundToInt())}",
-            style = AppType.caption,
-            color = P.textTertiary
-        )
+        val footer = when (session.type) {
+            ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT ->
+                "Est. 1RM ${formatWeightKg(session.estimated1RmKg)} · Volume ${formatVolume(session.volumeKg.roundToInt())}"
+            ExerciseType.BODYWEIGHT, ExerciseType.ASSISTED -> "${session.totalReps} reps in total"
+            ExerciseType.DURATION -> "${formatClock(session.totalSeconds.toLong())} in total"
+            ExerciseType.DISTANCE_TIME -> ChartMetric.PACE.valueOf(session).takeIf { it > 0f }?.let { "Pace ${ChartMetric.PACE.format(it)}" }
+        }
+        if (footer != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(footer, style = AppType.caption, color = P.textTertiary)
+        }
     }
 }
 
@@ -410,11 +449,4 @@ private fun xFraction(points: List<Pair<Long, Float>>, i: Int): Float {
 private fun nearestPoint(points: List<Pair<Long, Float>>, x: Float, width: Float, padX: Float): Int =
     points.indices.minBy { i -> abs(padX + xFraction(points, i) * (width - padX * 2) - x) }
 
-/** "1.2k" style labels for the chart's value axis. */
-private fun compactNumber(kg: Float): String = Units.current.fromKg(kg).let { v ->
-    when {
-    v >= 10_000f -> "${(v / 1000f).roundToInt()}k"
-    v >= 1_000f -> "${((v / 100f).roundToInt() / 10f)}k"
-        else -> formatKgClean((v * 2f).roundToInt() / 2f)
-    }
-}
+

@@ -23,8 +23,8 @@ android {
         applicationId = "com.vanyaevtushenko.gymtracker"
         minSdk = 24
         targetSdk = 37
-        versionCode = 32
-        versionName = "3.2.0"
+        versionCode = 33
+        versionName = "3.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -64,6 +64,13 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    // Lets MigrationTestHelper open the exported schemas in (Robolectric) unit tests, which only
+    // see the variant's assets. Debug builds carry ~10 KB of schema JSON; release builds don't.
+    sourceSets {
+        getByName("debug") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 room {
@@ -87,6 +94,7 @@ dependencies {
     testImplementation(libs.json) // real org.json for JVM tests; android.jar only ships stubs
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

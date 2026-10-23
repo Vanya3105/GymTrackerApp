@@ -23,10 +23,13 @@ enum class WeightUnit(
     /** Step for body-weight steppers. */
     val bodyStep: Float,
     /** Starting weight for an exercise with no history. */
-    val defaultWorkWeight: Float
+    val defaultWorkWeight: Float,
+    /** Distances go with the weight unit: kilometres for kg, miles for lb. */
+    val distanceLabel: String,
+    val metersPerDistanceUnit: Float
 ) {
-    KG("kg", 1.0, 2, 2.5f, listOf(0.5f, 1f, 1.25f, 2f, 2.5f, 5f), 0.5f, 40f),
-    LB("lb", 0.45359237, 1, 5f, listOf(1f, 2.5f, 5f, 10f), 1f, 95f);
+    KG("kg", 1.0, 2, 2.5f, listOf(0.5f, 1f, 1.25f, 2f, 2.5f, 5f), 0.5f, 40f, "km", 1000f),
+    LB("lb", 0.45359237, 1, 5f, listOf(1f, 2.5f, 5f, 10f), 1f, 95f, "mi", 1609.344f);
 
     /** Kilograms → this unit, rounded the way it is displayed. */
     fun fromKg(kg: Float): Float = round((kg / kgPerUnit).toFloat())
@@ -76,8 +79,32 @@ fun formatWeightKg(kg: Float): String = "${Units.current.number(kg)} ${Units.cur
 /** Bare number in the current unit, for places that show the unit once (column headers, charts). */
 fun formatWeightNumber(kg: Float): String = Units.current.number(kg)
 
-/** "80 kg × 6". */
-fun formatSet(set: SetEntry): String = "${formatWeightKg(set.weightKg)} × ${set.reps}"
+/** "5 km" / "3.1 mi", up to two decimals. */
+fun formatDistance(meters: Float): String =
+    "${formatKgClean(meters / Units.current.metersPerDistanceUnit)} ${Units.current.distanceLabel}"
+
+/** A set as words for its type: "80 kg × 6", "12 reps", "+20 kg × 8", "1:30", "5 km · 25:00". */
+fun formatSet(set: SetEntry, type: ExerciseType = ExerciseType.WEIGHT_REPS): String = when (type) {
+    ExerciseType.WEIGHT_REPS -> "${formatWeightKg(set.weightKg)} × ${set.reps}"
+    ExerciseType.BODYWEIGHT -> if (set.repCount == 1) "1 rep" else "${set.repCount} reps"
+    // Nothing added / no assistance is simply a bodyweight set.
+    ExerciseType.WEIGHTED_BODYWEIGHT -> if (set.weightKg > 0f) "+${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)
+    ExerciseType.ASSISTED -> if (set.weightKg > 0f) "−${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)
+    ExerciseType.DURATION -> formatClock(set.secondCount.toLong())
+    ExerciseType.DISTANCE_TIME -> listOfNotNull(
+        set.distanceMeters.takeIf { it > 0f }?.let(::formatDistance),
+        set.secondCount.takeIf { it > 0 }?.let { formatClock(it.toLong()) }
+    ).joinToString(" · ")
+}
+
+/** Compact form for tight spots ("last time" lines): "80×6", "12", "+20×8", "1:30". */
+fun formatSetShort(set: SetEntry, type: ExerciseType): String = when (type) {
+    ExerciseType.WEIGHT_REPS -> "${formatWeightNumber(set.weightKg)}×${set.reps}"
+    ExerciseType.BODYWEIGHT -> "${set.repCount}"
+    ExerciseType.WEIGHTED_BODYWEIGHT -> if (set.weightKg > 0f) "+${formatWeightNumber(set.weightKg)}×${set.reps}" else set.reps
+    ExerciseType.ASSISTED -> if (set.weightKg > 0f) "−${formatWeightNumber(set.weightKg)}×${set.reps}" else set.reps
+    ExerciseType.DURATION, ExerciseType.DISTANCE_TIME -> formatSet(set, type)
+}
 
 fun formatVolume(kg: Int): String {
     val v = Units.current.fromKg(kg.toFloat()).roundToInt()
