@@ -90,6 +90,25 @@ class StoreCodecTest {
     }
 
     @Test
+    fun timeAndDistanceSets_roundTrip_andOldSetsGetEmptyValues() {
+        val ex = ExerciseEntry("Running", sets = listOf(SetEntry(1, "", "", seconds = "1500", distanceM = "5000")))
+        val back = StoreCodec.deserializeExercises(StoreCodec.serializeExercises(listOf(ex))).single().sets.single()
+        assertEquals("1500", back.seconds)
+        assertEquals("5000", back.distanceM)
+        val old = StoreCodec.deserializeExercises(JSONArray("""[{"name": "Row", "sets": [{"weight": "60", "reps": "8"}]}]""")).single().sets.single()
+        assertEquals("", old.seconds)
+        assertEquals("", old.distanceM)
+    }
+
+    @Test
+    fun exerciseTypes_areWrittenAndRead_andUnknownWhenMissing() {
+        val root = JSONObject()
+        StoreCodec.writeData(root, StoreData(types = mapOf("plank" to ExerciseType.DURATION)))
+        assertEquals(mapOf("plank" to ExerciseType.DURATION), StoreCodec.readData(JSONObject(root.toString())).types)
+        assertNull(StoreCodec.readData(JSONObject("""{"history": []}""")).types)
+    }
+
+    @Test
     fun exportedBackupShape_isReadable() {
         // Guards the backup format users already have on disk.
         val root = JSONObject().put("history", JSONArray().put(StoreCodec.serializeWorkout(sample)))

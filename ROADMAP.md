@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 2 is done on branch `phase-2-progress`, waiting for an on-device check by the owner, then merge to `master`.
-Then start **Phase 3, step 1**: exercise types. Add a `type` column to `exercises` (Room migration v1 → v2, test it against `app/schemas/.../1.json`) and default types for the library.
+Phase 3 in progress on branch `phase-3-exercise-types`. Step 1 (data layer) is done.
+Next: **Phase 3, step 2**: logging UI per type (set rows, time and distance inputs, type choice for custom exercises, changing an exercise's type).
 
 ---
 
@@ -41,10 +41,13 @@ Then start **Phase 3, step 1**: exercise types. Add a `type` column to `exercise
 - [x] +/− buttons snap an off-grid value to the next step (88.2 lb → 90 → 95), so switching units doesn't leave odd numbers
 - [x] Body-weight entries stored to 0.01 kg (was 0.1) so pound entries read back exactly
 
-## Phase 3 — Exercise types
-- [ ] Types: weight×reps, bodyweight reps, weighted bodyweight, assisted (negative), duration, distance+duration
-- [ ] Logger UI per type, widgets, stats/volume rules, PR rules, suggestions per type
-- [ ] Library exercises get correct default types
+## Phase 3 — Exercise types (branch `phase-3-exercise-types`)
+- [x] Data layer: `ExerciseType` (weight & reps, bodyweight, weighted bodyweight, assisted, time, distance & time) stored on the exercise; `seconds` and `distanceM` on sets. Room v2 with `MIGRATION_1_2`, tested by `DatabaseMigrationTest` against the committed v1 schema
+- [x] Migration never hides logged data: library types are applied only where lossless (`typeForExistingExercise`); everything else stays weight & reps until changed by hand. Same rule for old backups/stores (no `exerciseTypes` section)
+- [x] Per-type rules: what counts as a work set, volume (weight & reps and added weight only), records and PRs (most reps, least assistance, longest time, longest distance), no weight suggestions for non-weight types
+- [x] Library: types for bodyweight exercises, new Assisted Pull-Up/Dip, Inverted Row, holds, and a Cardio group (running, rowing, bike, …)
+- [ ] Logging UI per type: set rows, time and distance inputs, type for custom exercises, change an exercise's type
+- [ ] Exercise page, Progress, widgets, lock screen, notifications and share image per type
 
 ## Phase 4 — Routines & programs
 - [ ] Create, rename, reorder and delete your own splits and programs

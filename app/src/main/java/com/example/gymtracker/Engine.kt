@@ -48,8 +48,27 @@ data class ExerciseRecords(
     val bestSet: SetEntry?,
     /** Up to five most recent sessions, newest first: label to work sets. */
     val recentHistory: List<Pair<String, List<SetEntry>>>,
-    val chartPoints: List<Pair<String, Float>>
+    /** Oldest first: each session's [sessionValue]. */
+    val chartPoints: List<Pair<String, Float>>,
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS,
+    val maxReps: Int = 0,
+    val maxSeconds: Int = 0,
+    val maxDistanceM: Float = 0f,
+    /** Least assistance ever used (assisted exercises); null until one is logged. */
+    val minAssistKg: Float? = null
 )
+
+/**
+ * The single number that sums up a session for [type]: top weight (or added weight), most reps,
+ * least assistance, longest hold, or longest distance.
+ */
+fun sessionValue(type: ExerciseType, workSets: List<SetEntry>): Float = when (type) {
+    ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> workSets.maxOf { it.weightKg }
+    ExerciseType.BODYWEIGHT -> workSets.maxOf { it.repCount }.toFloat()
+    ExerciseType.ASSISTED -> workSets.minOf { it.weightKg }
+    ExerciseType.DURATION -> workSets.maxOf { it.secondCount }.toFloat()
+    ExerciseType.DISTANCE_TIME -> workSets.maxOf { it.distanceMeters }
+}
 
 const val WIDGET_KIND_WORKOUT = "WORKOUT"
 const val WIDGET_KIND_RECOVERY = "RECOVERY"
@@ -408,26 +427,42 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
     val recentLogs = ArrayList<Pair<String, List<SetEntry>>>(5)
     val recentChartPoints = ArrayList<Pair<String, Float>>(5)
 
+    var type = ExerciseType.WEIGHT_REPS
+    var maxReps = 0
+    var maxSeconds = 0
+    var maxDistance = 0f
+    var minAssist: Float? = null
+
     for (workout in history) {
         val matched = workout.exercises.find {
             !it.isSkipped && it.name.equals(exerciseName, ignoreCase = true)
         } ?: continue
-        val workSets = matched.sets.filter { it.isValidWorkSet }
+        type = matched.type
+        val workSets = matched.workSets
         if (workSets.isEmpty()) continue
 
         if (recentLogs.size < 5) {
             val shortDate = workout.displayDate.substringBefore(",")
             recentLogs.add("${workout.splitTitle} ($shortDate)" to workSets)
-            recentChartPoints.add(shortDate to workSets.maxOf { it.weightKg })
+            recentChartPoints.add(shortDate to sessionValue(type, workSets))
         }
         for (s in workSets) {
             val w = s.weightKg
             val e1rm = calculateEstimated1Rm(w, s.repCount)
             if (w > maxWeight) maxWeight = w
-            if (e1rm > best1Rm) {
-                best1Rm = e1rm
-                bestSet = s
+            if (e1rm > best1Rm) best1Rm = e1rm
+            val better = when (type) {
+                ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> bestSet == null || e1rm > calculateEstimated1Rm(bestSet.weightKg, bestSet.repCount)
+                ExerciseType.BODYWEIGHT -> s.repCount > maxReps
+                ExerciseType.ASSISTED -> minAssist == null || w < minAssist || (w == minAssist && s.repCount > (bestSet?.repCount ?: 0))
+                ExerciseType.DURATION -> s.secondCount > maxSeconds
+                ExerciseType.DISTANCE_TIME -> s.distanceMeters > maxDistance
             }
+            if (better) bestSet = s
+            maxReps = maxOf(maxReps, s.repCount)
+            maxSeconds = maxOf(maxSeconds, s.secondCount)
+            maxDistance = maxOf(maxDistance, s.distanceMeters)
+            if (type == ExerciseType.ASSISTED) minAssist = minOf(minAssist ?: w, w)
         }
     }
 
@@ -436,16 +471,30 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
         bestEstimated1Rm = roundToHalf(best1Rm),
         bestSet = bestSet,
         recentHistory = recentLogs,
-        chartPoints = recentChartPoints.reversed()
+        chartPoints = recentChartPoints.reversed(),
+        type = type,
+        maxReps = maxReps,
+        maxSeconds = maxSeconds,
+        maxDistanceM = maxDistance,
+        minAssistKg = minAssist
     )
 }
 
-fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords): Boolean {
-    if (setEntry.isWarmupSet || !setEntry.isCompleted) return false
+/** Whether a completed set beats this exercise's earlier best. Never true without earlier history. */
+fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords, type: ExerciseType = records.type): Boolean {
+    if (!setEntry.isCompleted || !setEntry.isValidWorkSet(type)) return false
     val w = setEntry.weightKg
     val r = setEntry.repCount
-    if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0f) return false
-    return roundToHalf(calculateEstimated1Rm(w, r)) > records.bestEstimated1Rm || w > records.maxWeightKg
+    return when (type) {
+        ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> {
+            if (w <= 0f || records.bestEstimated1Rm <= 0f) false
+            else roundToHalf(calculateEstimated1Rm(w, r)) > records.bestEstimated1Rm || w > records.maxWeightKg
+        }
+        ExerciseType.BODYWEIGHT -> records.maxReps > 0 && r > records.maxReps
+        ExerciseType.ASSISTED -> records.minAssistKg?.let { w < it } ?: false
+        ExerciseType.DURATION -> records.maxSeconds > 0 && setEntry.secondCount > records.maxSeconds
+        ExerciseType.DISTANCE_TIME -> records.maxDistanceM > 0f && setEntry.distanceMeters > records.maxDistanceM
+    }
 }
 
 fun computeWeekSummary(
@@ -511,13 +560,14 @@ fun suggestFromSplitHistory(
     history: List<CompletedWorkout>,
     step: Float
 ): Suggestion? {
+    if (!exercise.type.hasWeightSuggestions) return null
     // Work sets of this exercise from each past session of the same split, newest first.
     val pastSessions = history
         .filter { it.splitTitle.equals(splitTitle, ignoreCase = true) }
         .mapNotNull { workout ->
             workout.exercises
                 .find { !it.isSkipped && it.name.equals(exercise.name, ignoreCase = true) }
-                ?.sets?.filter { it.isValidWorkSet }
+                ?.workSets
                 ?.takeIf { it.isNotEmpty() }
         }
     if (pastSessions.isEmpty()) return null

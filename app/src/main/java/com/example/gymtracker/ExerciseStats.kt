@@ -64,10 +64,9 @@ fun buildExerciseHistory(exerciseName: String, history: List<CompletedWorkout>):
 
     for (workout in history.sortedBy { it.id }) {
         // An exercise can appear twice in one workout (added again later); merge its sets.
-        val sets = workout.exercises
-            .filter { !it.isSkipped && exerciseKey(it.name) == key }
-            .flatMap { it.sets }
-        val workSets = sets.filter { it.isValidWorkSet }
+        val entries = workout.exercises.filter { !it.isSkipped && exerciseKey(it.name) == key }
+        val sets = entries.flatMap { it.sets }
+        val workSets = entries.flatMap { it.workSets }
         if (workSets.isEmpty()) continue
 
         // Rounded once here so records, tiles and the chart all agree with what's shown,
@@ -111,5 +110,5 @@ fun roundToHalf(v: Float): Float = (v * 2f).roundToInt() / 2f
 /** Every exercise that has at least one valid work set, most recently trained first. */
 fun loggedExerciseNames(history: List<CompletedWorkout>): List<String> =
     history.sortedByDescending { it.id }
-        .flatMap { w -> w.exercises.filter { ex -> !ex.isSkipped && ex.sets.any { it.isValidWorkSet } }.map { it.name } }
+        .flatMap { w -> w.exercises.filter { ex -> !ex.isSkipped && ex.workSets.isNotEmpty() }.map { it.name } }
         .distinctBy { exerciseKey(it) }

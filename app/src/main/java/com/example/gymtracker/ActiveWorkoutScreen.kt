@@ -319,8 +319,7 @@ fun ActiveWorkoutScreen(
                     val lastTime = remember(exercise.name, previousSplitWorkout, unit) {
                         previousSplitWorkout?.exercises
                             ?.find { it.name.equals(exercise.name, ignoreCase = true) && !it.isSkipped }
-                            ?.sets?.filter { it.isValidWorkSet }
-                            ?.joinToString("  ·  ") { "${formatWeightNumber(it.weightKg)}×${it.reps}" }
+                            ?.let { ex -> ex.workSets.joinToString("  ·  ") { formatSetShort(it, ex.type) } }
                             ?.takeIf { it.isNotEmpty() }
                     }
                     val note = remember(exercise.name, noteVersion) { LocalStorage.getExerciseNote(context, exercise.name) }
@@ -665,7 +664,7 @@ private fun ExerciseCard(
     partners: List<String>,
     canLinkNext: Boolean,
     records: ExerciseRecords,
-    suggestion: Suggestion,
+    suggestion: Suggestion?,
     lastTime: String?,
     note: String,
     isDragging: Boolean,
@@ -782,7 +781,7 @@ private fun ExerciseCard(
                 }
             }
 
-            SuggestionBox(
+            if (suggestion != null) SuggestionBox(
                 suggestion = suggestion,
                 modifier = suggestionModifier.padding(top = 10.dp),
                 onUse = {

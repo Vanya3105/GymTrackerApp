@@ -1,6 +1,7 @@
 package com.example.gymtracker
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -14,6 +15,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import org.json.JSONArray
 import java.util.Locale
 
@@ -32,7 +35,9 @@ data class ExerciseEntity(
     val nameKey: String,
     val muscle: String,
     val note: String = "",
-    val defaultRestSeconds: Int? = null
+    val defaultRestSeconds: Int? = null,
+    /** [ExerciseType] name. */
+    @ColumnInfo(defaultValue = "WEIGHT_REPS") val type: String = ExerciseType.WEIGHT_REPS.name
 )
 
 @Entity(tableName = "workouts")
@@ -84,7 +89,9 @@ data class WorkoutSetEntity(
     val intensityType: String,
     val isWarmup: Boolean,
     val isCompleted: Boolean,
-    val restSeconds: Int
+    val restSeconds: Int,
+    @ColumnInfo(defaultValue = "") val seconds: String = "",
+    @ColumnInfo(defaultValue = "") val distanceM: String = ""
 )
 
 @Entity(tableName = "body_weight")
@@ -127,6 +134,10 @@ interface GymDao {
     @Query("UPDATE exercises SET note = :note WHERE id = :id") fun setExerciseNote(id: Long, note: String)
     @Query("UPDATE exercises SET defaultRestSeconds = :sec WHERE id = :id") fun setExerciseRest(id: Long, sec: Int?)
     @Query("UPDATE exercises SET name = :name, nameKey = :key WHERE id = :id") fun renameExercise(id: Long, name: String, key: String)
+    @Query("UPDATE exercises SET type = :type WHERE id = :id") fun setExerciseType(id: Long, type: String)
+    @Query("SELECT COUNT(*) FROM workout_exercises WHERE exerciseId = :id") fun loggedCount(id: Long): Int
+    @Query("SELECT COUNT(*) FROM workout_sets s JOIN workout_exercises e ON s.workoutExerciseId = e.id WHERE e.exerciseId = :id AND CAST(s.weight AS REAL) > 0")
+    fun weightedSetCount(id: Long): Int
 
     @Query("SELECT * FROM workouts") fun workouts(): List<WorkoutEntity>
     @Query("SELECT * FROM workout_exercises") fun workoutExercises(): List<WorkoutExerciseEntity>
@@ -155,7 +166,7 @@ interface GymDao {
         ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseEntity::class, WorkoutSetEntity::class,
         BodyWeightEntity::class, SplitTemplateItemEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -167,6 +178,7 @@ abstract class GymDatabase : RoomDatabase() {
 
         fun get(context: Context): GymDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, GymDatabase::class.java, "gymtracker.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { instance = it }
         }
 
@@ -175,6 +187,44 @@ abstract class GymDatabase : RoomDatabase() {
             instance = null
         }
     }
+}
+
+/** v2: exercise types, plus time and distance on sets. */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE exercises ADD COLUMN type TEXT NOT NULL DEFAULT 'WEIGHT_REPS'")
+        db.execSQL("ALTER TABLE workout_sets ADD COLUMN seconds TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE workout_sets ADD COLUMN distanceM TEXT NOT NULL DEFAULT ''")
+        val rows = ArrayList<Pair<Long, ExerciseType>>()
+        db.query("SELECT id, name FROM exercises").use { c ->
+            while (c.moveToNext()) {
+                val libraryType = ExerciseDatabase.find(c.getString(1))?.type ?: continue
+                rows += c.getLong(0) to libraryType
+            }
+        }
+        for ((id, libraryType) in rows) {
+            val logged = db.countFor("SELECT COUNT(*) FROM workout_exercises WHERE exerciseId = ?", id) > 0
+            val weighted = db.countFor(
+                "SELECT COUNT(*) FROM workout_sets s JOIN workout_exercises e ON s.workoutExerciseId = e.id " +
+                    "WHERE e.exerciseId = ? AND CAST(s.weight AS REAL) > 0", id
+            ) > 0
+            val type = typeForExistingExercise(libraryType, logged, weighted)
+            if (type != ExerciseType.WEIGHT_REPS) db.execSQL("UPDATE exercises SET type = ? WHERE id = ?", arrayOf<Any>(type.name, id))
+        }
+    }
+
+    private fun SupportSQLiteDatabase.countFor(sql: String, id: Long): Long =
+        query(sql, arrayOf<Any>(id)).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+}
+
+/**
+ * The type an exercise logged before types existed should get. Everything was "weight & reps"
+ * then, so the library's type is only applied when no logged data would be hidden by it.
+ */
+fun typeForExistingExercise(libraryType: ExerciseType, hasHistory: Boolean, hasWeightedSets: Boolean): ExerciseType = when (libraryType) {
+    ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> libraryType // same data shape
+    ExerciseType.BODYWEIGHT -> if (hasWeightedSets) ExerciseType.WEIGHT_REPS else libraryType
+    ExerciseType.ASSISTED, ExerciseType.DURATION, ExerciseType.DISTANCE_TIME -> if (hasHistory) ExerciseType.WEIGHT_REPS else libraryType
 }
 
 // ============================================================================
@@ -187,7 +237,12 @@ data class StoreData(
     val weights: List<WeightLogEntry> = emptyList(),
     val templates: Map<String, List<Pair<String, String>>> = emptyMap(),
     val notes: Map<String, String> = emptyMap(),
-    val restDefaults: Map<String, Int> = emptyMap()
+    val restDefaults: Map<String, Int> = emptyMap(),
+    /**
+     * Exercise type by [exerciseKey]. Null means unknown (stores and backups from before types),
+     * in which case library types are applied only where no logged data would be hidden.
+     */
+    val types: Map<String, ExerciseType>? = emptyMap()
 )
 
 fun exerciseKey(name: String): String = name.trim().lowercase(Locale.US)
@@ -217,10 +272,12 @@ object RoomStore {
                         restSeconds = we.restSeconds,
                         isSkipped = we.isSkipped,
                         isSuperset = we.isSuperset,
+                        type = ExerciseType.fromKey(exercises[we.exerciseId]?.type),
                         sets = setsByExercise[we.id].orEmpty().sortedBy { it.position }.map { s ->
                             SetEntry(
                                 setNumber = s.setNumber, weight = s.weight, reps = s.reps, isWarmup = s.isWarmup,
-                                intensityType = s.intensityType, isCompleted = s.isCompleted, restSeconds = s.restSeconds
+                                intensityType = s.intensityType, isCompleted = s.isCompleted, restSeconds = s.restSeconds,
+                                seconds = s.seconds, distanceM = s.distanceM
                             )
                         }
                     )
@@ -242,7 +299,8 @@ object RoomStore {
             weights = weights,
             templates = templates,
             notes = exercises.values.filter { it.note.isNotBlank() }.associate { it.nameKey to it.note },
-            restDefaults = exercises.values.mapNotNull { e -> e.defaultRestSeconds?.let { e.nameKey to it } }.toMap()
+            restDefaults = exercises.values.mapNotNull { e -> e.defaultRestSeconds?.let { e.nameKey to it } }.toMap(),
+            types = exercises.values.associate { it.nameKey to ExerciseType.fromKey(it.type) }
         )
     }
 
@@ -261,17 +319,34 @@ object RoomStore {
         data.weights.forEach { dao.insertBodyWeight(BodyWeightEntity(it.id, it.dateKey, it.displayDate, it.weightKg)) }
         data.notes.forEach { (key, note) -> setNote(db, key, note) }
         data.restDefaults.forEach { (key, sec) -> setDefaultRest(db, key, sec) }
+        val types = data.types
+        if (types != null) {
+            types.forEach { (key, type) -> setType(db, key, type) }
+        } else {
+            // Rows were just created with library types; undo any that would hide logged data.
+            for (e in dao.exercises()) {
+                val libraryType = ExerciseDatabase.find(e.name)?.type ?: continue
+                val type = typeForExistingExercise(libraryType, dao.loggedCount(e.id) > 0, dao.weightedSetCount(e.id) > 0)
+                if (type.name != e.type) dao.setExerciseType(e.id, type.name)
+            }
+        }
     }
 
-    /** Finds the exercise by name (case-insensitive) or creates it, returning its id. */
-    fun exerciseId(db: GymDatabase, name: String, muscle: String = ""): Long {
+    /**
+     * Finds the exercise by name (case-insensitive) or creates it, returning its id. A new row
+     * takes the library's type, or [type] for a custom exercise.
+     */
+    fun exerciseId(db: GymDatabase, name: String, muscle: String = "", type: ExerciseType? = null): Long {
         val dao = db.dao()
         val key = exerciseKey(name)
         dao.exerciseByKey(key)?.let { return it.id }
         // Notes arrive keyed by lowercase name, so take spelling and muscle from the library when we can.
         val library = ExerciseDatabase.find(name)
         return dao.insertExercise(
-            ExerciseEntity(name = library?.name ?: name.trim(), nameKey = key, muscle = library?.muscle ?: muscle)
+            ExerciseEntity(
+                name = library?.name ?: name.trim(), nameKey = key, muscle = library?.muscle ?: muscle,
+                type = (type ?: library?.type ?: ExerciseType.WEIGHT_REPS).name
+            )
         )
     }
 
@@ -289,14 +364,15 @@ object RoomStore {
         workout.exercises.forEachIndexed { i, ex ->
             val rowId = dao.insertWorkoutExercise(
                 WorkoutExerciseEntity(
-                    workoutId = workout.id, exerciseId = exerciseId(db, ex.name, ex.targetMuscle), position = i,
+                    workoutId = workout.id, exerciseId = exerciseId(db, ex.name, ex.targetMuscle, ex.type), position = i,
                     targetMuscle = ex.targetMuscle, restSeconds = ex.restSeconds, isSkipped = ex.isSkipped, isSuperset = ex.isSuperset
                 )
             )
             dao.insertSets(ex.sets.mapIndexed { j, s ->
                 WorkoutSetEntity(
                     workoutExerciseId = rowId, position = j, setNumber = s.setNumber, weight = s.weight, reps = s.reps,
-                    intensityType = s.intensityType, isWarmup = s.isWarmup, isCompleted = s.isCompleted, restSeconds = s.restSeconds
+                    intensityType = s.intensityType, isWarmup = s.isWarmup, isCompleted = s.isCompleted, restSeconds = s.restSeconds,
+                    seconds = s.seconds, distanceM = s.distanceM
                 )
             })
         }
@@ -322,6 +398,9 @@ object RoomStore {
 
     fun setDefaultRest(db: GymDatabase, name: String, sec: Int) =
         db.dao().setExerciseRest(exerciseId(db, name), sec)
+
+    fun setType(db: GymDatabase, name: String, type: ExerciseType) =
+        db.dao().setExerciseType(exerciseId(db, name, type = type), type.name)
 
     /**
      * Renames an exercise everywhere (history, templates, notes). Returns false if another

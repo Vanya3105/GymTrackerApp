@@ -102,7 +102,7 @@ class UnitsTest {
         Units.set(WeightUnit.LB)
         val w = WeightUnit.LB.stored(100f)
         val ex = ExerciseEntry("Cable Curl", sets = listOf(set(w, "12"), set(w, "12")))
-        val advice = suggestNextWeight("Arms", ex, emptyList(), 5f)
+        val advice = suggestNextWeight("Arms", ex, emptyList(), 5f)!!
         assertTrue(advice.message, advice.message.contains("105 lb"))
         assertEquals("105", WeightUnit.LB.number(parseWeightClean(advice.suggestedWeight, 0f)))
     }

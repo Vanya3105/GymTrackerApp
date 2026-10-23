@@ -37,7 +37,7 @@ object LocalStorage {
     private const val SURFACE_REFRESH_DEBOUNCE_MS = 250L
 
     /** JSON sections that moved to Room. Old store files and backups still carry them. */
-    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults")
+    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults", "exerciseTypes")
 
     private val lock = Any()
     private var cachedRoot: JSONObject? = null
@@ -386,6 +386,27 @@ object LocalStorage {
         }
     }
 
+    /** The exercise's type: its own setting, else the library's, else weight & reps. */
+    fun exerciseType(context: Context, exerciseName: String): ExerciseType =
+        data(context).types?.get(exerciseKey(exerciseName))
+            ?: ExerciseDatabase.find(exerciseName)?.type
+            ?: ExerciseType.WEIGHT_REPS
+
+    /**
+     * Changes how an exercise is logged. Logged numbers are kept as they are, so switching back
+     * restores the old view exactly.
+     */
+    fun setExerciseType(context: Context, exerciseName: String, type: ExerciseType) {
+        synchronized(lock) {
+            data(context)
+            cachedData = onIoThread(context) { db ->
+                RoomStore.setType(db, exerciseName, type)
+                RoomStore.load(db)
+            }
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = true)
+    }
+
     /**
      * Renames an exercise in history, templates, notes and the active session.
      * Returns false if the new name is blank or already used by another exercise.
@@ -457,7 +478,9 @@ object LocalStorage {
         val activeObj = root(context).optJSONObject("activeSession") ?: return null
         val splitTitle = activeObj.optString("splitTitle", "")
         if (splitTitle.isBlank()) return null
+        // Types come from the exercise definitions, so a change of type shows up mid-workout too.
         return splitTitle to StoreCodec.deserializeExercises(activeObj.optJSONArray("exercises"))
+            .map { it.copy(type = exerciseType(context, it.name)) }
     }
 
     // --- Workout history ---
@@ -496,7 +519,9 @@ fun StoreData.mergedOver(base: StoreData): StoreData {
         weights = (weights + base.weights.filter { it.id !in weightIds }).sortedByDescending { it.id },
         templates = base.templates + templates,
         notes = base.notes + notes,
-        restDefaults = base.restDefaults + restDefaults
+        restDefaults = base.restDefaults + restDefaults,
+        // Unknown on either side (data from before types) means the merge can't know them either.
+        types = types?.let { mine -> base.types?.let { it + mine } }
     )
 }
 
@@ -558,6 +583,8 @@ internal object StoreCodec {
                             put("intensityType", s.intensityType)
                             put("isCompleted", s.isCompleted)
                             put("restSeconds", s.restSeconds)
+                            if (s.seconds.isNotEmpty()) put("seconds", s.seconds)
+                            if (s.distanceM.isNotEmpty()) put("distanceM", s.distanceM)
                         })
                     }
                 })
@@ -583,7 +610,9 @@ internal object StoreCodec {
                     isWarmup = legacyWarmup || type == "WARMUP",
                     intensityType = type,
                     isCompleted = sObj.optBoolean("isCompleted", false),
-                    restSeconds = sObj.optInt("restSeconds", exRest)
+                    restSeconds = sObj.optInt("restSeconds", exRest),
+                    seconds = sObj.optString("seconds", ""),
+                    distanceM = sObj.optString("distanceM", "")
                 )
             }
             ExerciseEntry(
@@ -616,7 +645,11 @@ internal object StoreCodec {
         }.orEmpty(),
         restDefaults = root.optJSONObject("exerciseRestDefaults")?.let { obj ->
             obj.keys().asSequence().associate { exerciseKey(it) to obj.optInt(it, 90) }
-        }.orEmpty()
+        }.orEmpty(),
+        // Missing in files from before exercise types: null tells Room to work them out safely.
+        types = root.optJSONObject("exerciseTypes")?.let { obj ->
+            obj.keys().asSequence().associate { exerciseKey(it) to ExerciseType.fromKey(obj.optString(it)) }
+        }
     )
 
     fun writeData(root: JSONObject, data: StoreData) {
@@ -640,6 +673,7 @@ internal object StoreCodec {
         })
         root.put("exerciseNotes", JSONObject().apply { data.notes.forEach { (k, v) -> put(k, v) } })
         root.put("exerciseRestDefaults", JSONObject().apply { data.restDefaults.forEach { (k, v) -> put(k, v) } })
+        data.types?.let { types -> root.put("exerciseTypes", JSONObject().apply { types.forEach { (k, v) -> put(k, v.name) } }) }
     }
 
     fun parseWeights(arr: JSONArray?): List<WeightLogEntry> {

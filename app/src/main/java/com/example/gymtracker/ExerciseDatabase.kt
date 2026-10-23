@@ -8,7 +8,8 @@ data class ExerciseInfo(
     val name: String,
     val muscle: String,
     val equipment: String,
-    val aliases: List<String> = emptyList()
+    val aliases: List<String> = emptyList(),
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS
 )
 
 /** Built-in exercise library used by the "Add exercise" search. */
@@ -16,11 +17,15 @@ object ExerciseDatabase {
 
     val muscleGroups = listOf(
         "Chest", "Back", "Shoulders", "Biceps", "Triceps",
-        "Quads", "Hamstrings", "Glutes", "Calves", "Core", "Forearms"
+        "Quads", "Hamstrings", "Glutes", "Calves", "Core", "Forearms", "Cardio"
     )
 
     private fun ex(name: String, muscle: String, equipment: String, vararg aliases: String) =
         ExerciseInfo(name, muscle, equipment, aliases.toList())
+
+    /** Same as [ex] for exercises that aren't logged as weight × reps. */
+    private fun ex(name: String, muscle: String, equipment: String, type: ExerciseType, vararg aliases: String) =
+        ExerciseInfo(name, muscle, equipment, aliases.toList(), type)
 
     val all: List<ExerciseInfo> = listOf(
         // Chest
@@ -40,14 +45,17 @@ object ExerciseDatabase {
         ex("High-to-Low Cable Fly", "Chest", "Cable"),
         ex("Dumbbell Fly", "Chest", "Dumbbell", "db fly"),
         ex("Incline Dumbbell Fly", "Chest", "Dumbbell"),
-        ex("Push-Up", "Chest", "Bodyweight", "pushup", "press up"),
-        ex("Weighted Dips", "Chest", "Bodyweight", "chest dips"),
-        ex("Dips", "Chest", "Bodyweight", "parallel bar dips"),
+        ex("Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "pushup", "press up"),
+        ex("Weighted Dips", "Chest", "Bodyweight", ExerciseType.WEIGHTED_BODYWEIGHT, "chest dips"),
+        ex("Dips", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "parallel bar dips"),
+        ex("Assisted Dip", "Chest", "Machine", ExerciseType.ASSISTED, "assisted dips", "dip machine"),
 
         // Back
-        ex("Pull-Up", "Back", "Bodyweight", "pullup"),
-        ex("Weighted Pull-Up", "Back", "Bodyweight"),
-        ex("Chin-Up", "Back", "Bodyweight", "chinup"),
+        ex("Pull-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "pullup"),
+        ex("Assisted Pull-Up", "Back", "Machine", ExerciseType.ASSISTED, "assisted pullup", "band pull-up"),
+        ex("Weighted Pull-Up", "Back", "Bodyweight", ExerciseType.WEIGHTED_BODYWEIGHT),
+        ex("Chin-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "chinup"),
+        ex("Inverted Row", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "australian pull-up", "body row"),
         ex("Lat Pulldown", "Back", "Cable", "pulldown"),
         ex("Close-Grip Lat Pulldown", "Back", "Cable", "v-bar pulldown"),
         ex("Single-Arm Lat Pulldown", "Back", "Cable"),
@@ -63,7 +71,7 @@ object ExerciseDatabase {
         ex("Meadows Row", "Back", "Barbell", "landmine row"),
         ex("Deadlift", "Back", "Barbell", "conventional deadlift", "dl"),
         ex("Rack Pull", "Back", "Barbell"),
-        ex("Back Extension", "Back", "Bodyweight", "hyperextension"),
+        ex("Back Extension", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "hyperextension"),
         ex("Machine Pullover", "Back", "Machine"),
         ex("Dumbbell Shrug", "Back", "Dumbbell", "traps", "shrugs"),
         ex("Barbell Shrug", "Back", "Barbell", "traps"),
@@ -107,7 +115,7 @@ object ExerciseDatabase {
         ex("Skull Crusher", "Triceps", "EZ bar", "lying tricep extension", "skullcrusher"),
         ex("Close-Grip Bench Press", "Triceps", "Barbell", "cgbp"),
         ex("JM Press", "Triceps", "Barbell"),
-        ex("Tricep Dips", "Triceps", "Bodyweight", "bench dips"),
+        ex("Tricep Dips", "Triceps", "Bodyweight", ExerciseType.BODYWEIGHT, "bench dips"),
         ex("Machine Tricep Extension", "Triceps", "Machine"),
         ex("Single-Arm Cable Extension", "Triceps", "Cable"),
         ex("Dumbbell Kickback", "Triceps", "Dumbbell"),
@@ -125,7 +133,7 @@ object ExerciseDatabase {
         ex("Walking Lunge", "Quads", "Dumbbell", "lunges"),
         ex("Reverse Lunge", "Quads", "Dumbbell"),
         ex("Step-Up", "Quads", "Dumbbell"),
-        ex("Sissy Squat", "Quads", "Bodyweight"),
+        ex("Sissy Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT),
         ex("Belt Squat", "Quads", "Machine"),
 
         // Hamstrings
@@ -135,9 +143,9 @@ object ExerciseDatabase {
         ex("Seated Leg Curl", "Hamstrings", "Machine", "hamstring curl"),
         ex("Lying Leg Curl", "Hamstrings", "Machine"),
         ex("Standing Leg Curl", "Hamstrings", "Machine"),
-        ex("Nordic Curl", "Hamstrings", "Bodyweight", "nordic ham curl"),
+        ex("Nordic Curl", "Hamstrings", "Bodyweight", ExerciseType.BODYWEIGHT, "nordic ham curl"),
         ex("Good Morning", "Hamstrings", "Barbell"),
-        ex("Glute-Ham Raise", "Hamstrings", "Bodyweight", "ghr"),
+        ex("Glute-Ham Raise", "Hamstrings", "Bodyweight", ExerciseType.BODYWEIGHT, "ghr"),
 
         // Glutes
         ex("Hip Thrust", "Glutes", "Barbell", "barbell hip thrust"),
@@ -158,14 +166,16 @@ object ExerciseDatabase {
 
         // Core
         ex("Cable Crunch", "Core", "Cable", "abs"),
-        ex("Hanging Leg Raise", "Core", "Bodyweight", "abs", "leg raise"),
-        ex("Hanging Knee Raise", "Core", "Bodyweight", "abs"),
-        ex("Ab Wheel Rollout", "Core", "Bodyweight", "abs"),
-        ex("Plank", "Core", "Bodyweight", "abs"),
-        ex("Decline Sit-Up", "Core", "Bodyweight", "abs", "situp"),
+        ex("Hanging Leg Raise", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "leg raise"),
+        ex("Hanging Knee Raise", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs"),
+        ex("Ab Wheel Rollout", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs"),
+        ex("Plank", "Core", "Bodyweight", ExerciseType.DURATION, "abs", "hold"),
+        ex("Side Plank", "Core", "Bodyweight", ExerciseType.DURATION, "obliques", "hold"),
+        ex("Hollow Body Hold", "Core", "Bodyweight", ExerciseType.DURATION, "abs", "hold"),
+        ex("Decline Sit-Up", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "situp"),
         ex("Machine Crunch", "Core", "Machine", "abs"),
         ex("Pallof Press", "Core", "Cable", "anti rotation"),
-        ex("Russian Twist", "Core", "Bodyweight", "obliques"),
+        ex("Russian Twist", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "obliques"),
         ex("Woodchopper", "Core", "Cable", "obliques"),
 
         // Forearms
@@ -173,7 +183,18 @@ object ExerciseDatabase {
         ex("Reverse Wrist Curl", "Forearms", "Dumbbell"),
         ex("Reverse Curl", "Forearms", "EZ bar"),
         ex("Farmer's Carry", "Forearms", "Dumbbell", "farmers walk", "grip"),
-        ex("Dead Hang", "Forearms", "Bodyweight", "grip")
+        ex("Dead Hang", "Forearms", "Bodyweight", ExerciseType.DURATION, "grip", "hold"),
+
+        // Cardio
+        ex("Running", "Cardio", "None", ExerciseType.DISTANCE_TIME, "run", "jog"),
+        ex("Treadmill", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "run", "incline walk"),
+        ex("Rowing Machine", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "rower", "erg", "row"),
+        ex("Cycling", "Cardio", "None", ExerciseType.DISTANCE_TIME, "bike", "ride"),
+        ex("Stationary Bike", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "bike", "spin"),
+        ex("Elliptical", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "cross trainer"),
+        ex("Walking", "Cardio", "None", ExerciseType.DISTANCE_TIME, "walk"),
+        ex("Stair Climber", "Cardio", "Machine", ExerciseType.DURATION, "stairmaster", "stepper"),
+        ex("Jump Rope", "Cardio", "None", ExerciseType.DURATION, "skipping")
     )
 
     private fun norm(s: String) = s.lowercase(Locale.US).replace("-", " ").replace("'", "")

@@ -54,7 +54,7 @@ fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>): List<MuscleRec
         for (workout in history) {
             val sets = workout.exercises
                 .filter { !it.isSkipped && hitsMuscleGroup(workout.splitTitle, it.name, it.targetMuscle, group) }
-                .sumOf { ex -> ex.sets.count { !it.isWarmupSet && it.repCount > 0 } }
+                .sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } }
             if (sets == 0) continue
             if (lastTrained == null || workout.id > lastTrained) {
                 lastTrained = workout.id
@@ -96,14 +96,16 @@ private fun isCompoundLift(exerciseName: String): Boolean {
 /**
  * What to lift next for this exercise. Checks, in order: a big rep drop within today's sets,
  * same-split history ([suggestFromSplitHistory]), then today's sets alone (double progression:
- * hit the top of the rep range on every set, then add weight).
+ * hit the top of the rep range on every set, then add weight). Null for exercise types
+ * where weight suggestions don't apply (bodyweight, assisted, time, distance).
  */
 fun suggestNextWeight(
     splitTitle: String,
     exercise: ExerciseEntry,
     history: List<CompletedWorkout>,
     step: Float
-): Suggestion {
+): Suggestion? {
+    if (!exercise.type.hasWeightSuggestions) return null
     val isCompound = isCompoundLift(exercise.name)
     val repRange = if (isCompound) "6–8" else "8–12"
     val topReps = if (isCompound) 8 else 10
