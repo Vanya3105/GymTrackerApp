@@ -42,7 +42,8 @@ const val ACTION_SESSION_SYNC = "com.example.gymtracker.ACTION_SESSION_SYNC"
 @Immutable
 data class ExerciseRecords(
     val maxWeightKg: Float,
-    val bestEstimated1Rm: Int,
+    /** Rounded to 0.5 kg, like every estimated 1RM the app shows. */
+    val bestEstimated1Rm: Float,
     val bestSetText: String,
     val recentHistory: List<Pair<String, String>>,
     val chartPoints: List<Pair<String, Float>>
@@ -165,6 +166,9 @@ fun cycleRestPreset(current: Int): Int {
     val idx = REST_PRESETS.indexOf(current)
     return if (idx == -1 || idx == REST_PRESETS.lastIndex) REST_PRESETS.first() else REST_PRESETS[idx + 1]
 }
+
+/** A weight for display, with its unit. */
+fun formatWeightKg(kg: Float): String = "${formatKgClean(kg)} kg"
 
 fun formatKgClean(value: Float): String {
     val clamped = (value.coerceAtLeast(0f) * 100f).roundToInt() / 100f
@@ -434,7 +438,7 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
 
     return ExerciseRecords(
         maxWeightKg = maxWeight,
-        bestEstimated1Rm = best1Rm.roundToInt(),
+        bestEstimated1Rm = roundToHalf(best1Rm),
         bestSetText = bestSetStr,
         recentHistory = recentLogs,
         chartPoints = recentChartPoints.reversed()
@@ -445,8 +449,8 @@ fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords): Boolean {
     if (setEntry.isWarmupSet || !setEntry.isCompleted) return false
     val w = setEntry.weightKg
     val r = setEntry.repCount
-    if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0) return false
-    return calculateEstimated1Rm(w, r).roundToInt() > records.bestEstimated1Rm || w > records.maxWeightKg
+    if (w <= 0f || r <= 0 || records.bestEstimated1Rm <= 0f) return false
+    return roundToHalf(calculateEstimated1Rm(w, r)) > records.bestEstimated1Rm || w > records.maxWeightKg
 }
 
 fun computeWeekSummary(

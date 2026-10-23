@@ -20,6 +20,7 @@ A simple, offline workout log. Pick your split, follow the suggested weights, an
 ### History & progress
 * Week and month views, each workout card with share, edit and delete.
 * Body weight log with a trend chart, muscle recovery details and your best lifts (estimated 1-rep max).
+* **Exercise pages:** every session of an exercise, a chart of estimated 1-rep max, top weight or volume (3 months, 1 year or all time; tap to inspect), your best weight for 1, 3, 5, 8, 10 and 12 reps, and rename. Open one from Progress or from an exercise's notes during a workout.
 * Shareable workout image with your stats and top sets, over your photo if you added one.
 
 ### Widgets

@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
@@ -32,13 +33,15 @@ fun ProgressScreen(
     weightHistory: List<WeightLogEntry>,
     haptics: Haptics,
     onLogWeight: (Float) -> Unit,
-    onDeleteWeight: (Long) -> Unit
+    onDeleteWeight: (Long) -> Unit,
+    onOpenExercise: (String) -> Unit
 ) {
     val P = LocalPalette.current
     var showLogSheet by remember { mutableStateOf(false) }
     var showAllWeighIns by rememberSaveable { mutableStateOf(false) }
+    var showAllLifts by rememberSaveable { mutableStateOf(false) }
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
-    val bestLifts = remember(history) { computeBestLifts(history).take(6) }
+    val bestLifts = remember(history) { computeBestLifts(history) }
 
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
@@ -87,23 +90,37 @@ fun ProgressScreen(
         item { SectionHeader("Recovery") }
         item { RecoveryDetailCard(recovery, Modifier.enterAnimation(1)) }
 
-        item { SectionHeader("Best lifts") }
+        item {
+            SectionHeader(
+                "Best lifts",
+                action = if (bestLifts.size > 6) (if (showAllLifts) "Show less" else "See all") else null,
+                onAction = { showAllLifts = !showAllLifts }
+            )
+        }
         if (bestLifts.isEmpty()) {
             item { EmptyState(Icons.Rounded.EmojiEvents, "No lifts yet", "Finish a workout and your best sets show up here.") }
         } else {
             item {
-                AppCard(Modifier.fillMaxWidth().enterAnimation(2), contentPadding = PaddingValues(vertical = 6.dp)) {
-                    bestLifts.forEachIndexed { i, lift ->
+                AppCard(
+                    Modifier.fillMaxWidth().enterAnimation(2).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    (if (showAllLifts) bestLifts else bestLifts.take(6)).forEachIndexed { i, lift ->
                         if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth().pressable { onOpenExercise(lift.name) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
                                 Text("Best set ${lift.bestSet}", style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("${lift.estimated1Rm} kg", style = AppType.number, color = P.textPrimary)
+                                Text(formatWeightKg(lift.estimated1Rm), style = AppType.number, color = P.textPrimary)
                                 Text("est. 1-rep max", style = AppType.caption, color = P.textTertiary)
                             }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -124,13 +141,13 @@ fun ProgressScreen(
     }
 }
 
-private data class BestLift(val name: String, val estimated1Rm: Int, val bestSet: String)
+private data class BestLift(val name: String, val estimated1Rm: Float, val bestSet: String)
 
 private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
     history.flatMap { w -> w.exercises.filter { !it.isSkipped }.map { it.name } }
         .distinctBy { it.lowercase() }
         .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSetText.replace("kg ×", " kg ×")) } }
-        .filter { it.estimated1Rm > 0 }
+        .filter { it.estimated1Rm > 0f }
         .sortedByDescending { it.estimated1Rm }
 
 @Composable

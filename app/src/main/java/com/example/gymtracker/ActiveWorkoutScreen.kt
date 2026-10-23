@@ -95,6 +95,7 @@ fun ActiveWorkoutScreen(
     initialPhotoPath: String?,
     haptics: Haptics,
     hasUnsavedEdits: Boolean = false,
+    onOpenExercise: (String) -> Unit,
     onUpdateExercises: (List<ExerciseEntry>) -> Unit,
     onReorderExercises: (Int, Int) -> Unit,
     onAddExercise: (name: String, muscle: String) -> Unit,
@@ -486,6 +487,7 @@ fun ActiveWorkoutScreen(
                 noteVersion++
             },
             onRemove = { detailsFor = null; removeCandidate = name },
+            onOpenHistory = { detailsFor = null; onOpenExercise(name) },
             splitTitle = split.title,
             onDismiss = { detailsFor = null }
         )
@@ -1158,6 +1160,7 @@ private fun ExerciseDetailsSheet(
     onMoveDown: () -> Unit,
     onSaveNote: (String) -> Unit,
     onRemove: () -> Unit,
+    onOpenHistory: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -1187,7 +1190,7 @@ private fun ExerciseDetailsSheet(
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile(if (rec.bestEstimated1Rm > 0) "${rec.bestEstimated1Rm} kg" else "—", "Est. 1-rep max", Modifier.weight(1f))
+                StatTile(if (rec.bestEstimated1Rm > 0f) formatWeightKg(rec.bestEstimated1Rm) else "—", "Est. 1-rep max", Modifier.weight(1f))
                 StatTile(if (rec.maxWeightKg > 0f) "${formatKgClean(rec.maxWeightKg)} kg" else "—", "Heaviest", Modifier.weight(1f))
                 StatTile(rec.bestSetText.replace("kg ×", " ×"), "Best set", Modifier.weight(1f))
             }
@@ -1214,7 +1217,17 @@ private fun ExerciseDetailsSheet(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(16.dp))
-            Text("Recent sessions", style = AppType.label, color = P.textSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Recent sessions", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+                if (rec.recentHistory.isNotEmpty()) {
+                    Text(
+                        "Full history",
+                        style = AppType.label,
+                        color = P.accentPrimary,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onSaveNote(note); onOpenHistory() }.padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                }
+            }
             if (rec.recentHistory.isEmpty()) {
                 Text("Nothing logged yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 6.dp))
             } else {
