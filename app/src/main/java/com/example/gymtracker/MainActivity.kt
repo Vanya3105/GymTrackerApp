@@ -568,20 +568,29 @@ fun newExerciseEntry(
     val plan = liftPlanFor(splitTitle, name)
         ?: return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
 
-    // A percentage program's main lift: its sets come from the training max.
-    val tm = LocalStorage.getTrainingMax(context, name)
-        ?: return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
-            .copy(planNote = "Set a training max (tap the name) to get your ${plan.scheme.label} weights")
+    // A program's main lift: its sets come from a training max (its own, or another lift's for
+    // nSuns' secondary lifts).
+    val tm = LocalStorage.getTrainingMax(context, plan.trainingMaxOf)
+    if (tm == null) {
+        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) "a training max (tap the name)" else "a ${plan.trainingMaxOf} training max"
+        return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
+            .copy(planNote = "Set $whose to get your ${plan.scheme.label} weights")
+    }
     val type = LocalStorage.exerciseType(context, name)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     val day = planLiftDay(plan, tm, history)
+    val note = buildList {
+        add(day.title)
+        if (day.weightKg == null) add("TM ${formatWeightKg(day.trainingMaxKg)}")
+        day.amrapText()?.let(::add)
+    }.joinToString(" · ")
     return ExerciseEntry(
         name = name, targetMuscle = muscle, restSeconds = rest, type = type, programmed = true,
-        planNote = "${day.title} · TM ${formatWeightKg(day.trainingMaxKg)} · last set: as many reps as you can",
+        planNote = note,
         sets = day.sets.mapIndexed { i, p ->
             SetEntry(
                 setNumber = i + 1,
-                weight = percentWeight(day.trainingMaxKg, p.percent),
+                weight = day.weightFor(p),
                 reps = "${p.reps}",
                 isWarmup = p.warmup,
                 intensityType = if (p.warmup) "WARMUP" else "NORMAL",

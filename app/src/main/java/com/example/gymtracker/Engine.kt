@@ -190,6 +190,31 @@ val SPLIT_PROGRAMS = mapOf(
             WorkoutSplit("5/3/1 Press", "Overhead press, then back and arms", "04")
         )
     ),
+    "GZCLP" to SplitProgramInfo(
+        id = "GZCLP",
+        name = "GZCLP",
+        tagline = "Linear progression in tiers: heavy T1, volume T2, light T3",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("GZCLP A1", "T1 squat, T2 bench, T3 pulldown", "01"),
+            WorkoutSplit("GZCLP B1", "T1 press, T2 deadlift, T3 row", "02"),
+            WorkoutSplit("GZCLP A2", "T1 bench, T2 squat, T3 pulldown", "03"),
+            WorkoutSplit("GZCLP B2", "T1 deadlift, T2 press, T3 row", "04")
+        )
+    ),
+    "NSUNS_5" to SplitProgramInfo(
+        id = "NSUNS_5",
+        name = "nSuns 5-day",
+        tagline = "High-volume percentages; the 1+ sets raise your training max",
+        weeklyGoal = 5,
+        splits = listOf(
+            WorkoutSplit("nSuns Day 1", "Bench volume, overhead press", "01"),
+            WorkoutSplit("nSuns Day 2", "Squat, sumo deadlift", "02"),
+            WorkoutSplit("nSuns Day 3", "Overhead press, incline bench", "03"),
+            WorkoutSplit("nSuns Day 4", "Deadlift, front squat", "04"),
+            WorkoutSplit("nSuns Day 5", "Heavy bench, close-grip bench", "05")
+        )
+    ),
     "FULL_BODY" to SplitProgramInfo(
         id = "FULL_BODY",
         name = "Full body",
@@ -471,6 +496,15 @@ fun defaultTemplateForSplit(splitTitle: String): List<Pair<String, String>> {
         "5/3/1 Bench" -> listOf("Barbell Bench Press", "Dumbbell Row", "Tricep Pushdown", "Face Pull")
         "5/3/1 Deadlift" -> listOf("Deadlift", "Bulgarian Split Squat", "Ab Wheel Rollout")
         "5/3/1 Press" -> listOf("Overhead Press", "Chin-Up", "Dips", "Face Pull")
+        "GZCLP A1" -> listOf("Back Squat", "Barbell Bench Press", "Lat Pulldown")
+        "GZCLP B1" -> listOf("Overhead Press", "Deadlift", "Dumbbell Row")
+        "GZCLP A2" -> listOf("Barbell Bench Press", "Back Squat", "Lat Pulldown")
+        "GZCLP B2" -> listOf("Deadlift", "Overhead Press", "Dumbbell Row")
+        "nSuns Day 1" -> listOf("Barbell Bench Press", "Overhead Press", "Lat Pulldown", "Lateral Raise")
+        "nSuns Day 2" -> listOf("Back Squat", "Sumo Deadlift", "Lying Leg Curl", "Hanging Leg Raise")
+        "nSuns Day 3" -> listOf("Overhead Press", "Incline Barbell Bench Press", "Chin-Up", "Face Pull")
+        "nSuns Day 4" -> listOf("Deadlift", "Front Squat", "Barbell Row", "Ab Wheel Rollout")
+        "nSuns Day 5" -> listOf("Barbell Bench Press", "Close-Grip Bench Press", "Dumbbell Row", "Barbell Curl")
         "Arms & Shoulders" -> listOf(
             "Seated Dumbbell Shoulder Press", "Cable Lateral Raise", "Incline Dumbbell Curl",
             "Overhead Cable Tricep Extension", "Hammer Curl"

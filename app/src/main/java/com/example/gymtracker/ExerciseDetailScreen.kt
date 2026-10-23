@@ -141,7 +141,7 @@ fun ExerciseDetailScreen(
         }
 
         item { ExerciseTypeRow(stats.type, onChangeType) }
-        if (programLiftFor(exerciseName) != null) {
+        if (programsUsingTrainingMaxOf(exerciseName).isNotEmpty()) {
             item { TrainingMaxRow(exerciseName, history, stats.best1RmKg) }
         }
 
@@ -399,10 +399,6 @@ private fun SessionCard(session: ExerciseSession) {
     }
 }
 
-/** The percentage-program plan that uses this exercise as its main lift, if any. */
-fun programLiftFor(exerciseName: String): LiftPlan? =
-    PROGRAM_LIFTS.values.firstOrNull { exerciseKey(it.exercise) == exerciseKey(exerciseName) }
-
 /**
  * "Training max: 100 kg" for lifts a percentage program uses. Shows today's value (cycles add
  * to it); editing sets a new one and starts the program over at week 1.
@@ -417,10 +413,11 @@ fun TrainingMaxRow(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val plan = programLiftFor(exerciseName) ?: return
+    val programs = programsUsingTrainingMaxOf(exerciseName).takeIf { it.isNotEmpty() } ?: return
+    val programNames = programs.joinToString(", ")
     var version by remember { mutableIntStateOf(0) }
     val tm = remember(exerciseName, version) { LocalStorage.getTrainingMax(context, exerciseName) }
-    val today = remember(tm, history) { tm?.let { planLiftDay(plan, it, history) } }
+    val currentKg = remember(tm, history) { tm?.let { currentTrainingMaxKg(exerciseName, it, history) } }
     var editing by remember { mutableStateOf(false) }
 
     Row(
@@ -433,16 +430,18 @@ fun TrainingMaxRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Training max · ${plan.scheme.label}", style = AppType.caption, color = P.textSecondary)
-            Text(today?.let { formatWeightKg(it.trainingMaxKg) } ?: "Not set", style = AppType.bodyStrong, color = P.textPrimary)
-            if (today != null) Text(today.title, style = AppType.caption, color = P.textSecondary)
+            Text("Training max · $programNames", style = AppType.caption, color = P.textSecondary)
+            Text(currentKg?.let { formatWeightKg(it) } ?: "Not set", style = AppType.bodyStrong, color = P.textPrimary)
+            if (tm != null && currentKg != null && currentKg > tm.kg) {
+                Text("Started at ${formatWeightKg(tm.kg)}; the program has added the rest", style = AppType.caption, color = P.textSecondary)
+            }
         }
         Icon(Icons.Rounded.Edit, "Change", tint = P.textSecondary, modifier = Modifier.size(20.dp))
     }
 
     if (editing) {
         var value by remember {
-            mutableStateOf((today?.trainingMaxKg ?: suggestedTrainingMaxKg(best1RmKg).takeIf { it > 0f } ?: 0f).let { if (it > 0f) it.toString() else "" })
+            mutableStateOf((currentKg ?: suggestedTrainingMaxKg(best1RmKg)).let { if (it > 0f) it.toString() else "" })
         }
         AlertDialog(
             onDismissRequest = { editing = false },
@@ -451,7 +450,7 @@ fun TrainingMaxRow(
             text = {
                 Column {
                     Text(
-                        "Your ${plan.scheme.label} weights are percentages of this. A good start is 90% of your best estimated 1-rep max" +
+                        "Your $programNames weights are worked out from this. A good start is 90% of your best estimated 1-rep max" +
                             (if (best1RmKg > 0f) " (${formatWeightKg(suggestedTrainingMaxKg(best1RmKg))})." else ".") +
                             " Saving starts the program again at week 1.",
                         style = AppType.caption,

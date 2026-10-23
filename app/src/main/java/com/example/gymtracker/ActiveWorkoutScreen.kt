@@ -1242,7 +1242,7 @@ private fun ExerciseDetailsSheet(
             Spacer(Modifier.height(12.dp))
             val type = exercise.type
             ExerciseTypeRow(type, onChangeType)
-            if (programLiftFor(exercise.name) != null) {
+            if (programsUsingTrainingMaxOf(exercise.name).isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 TrainingMaxRow(exercise.name, history, rec.bestEstimated1Rm, onChanged = onTrainingMaxChanged)
             }
