@@ -411,8 +411,10 @@ private fun nearestPoint(points: List<Pair<Long, Float>>, x: Float, width: Float
     points.indices.minBy { i -> abs(padX + xFraction(points, i) * (width - padX * 2) - x) }
 
 /** "1.2k" style labels for the chart's value axis. */
-private fun compactNumber(v: Float): String = when {
+private fun compactNumber(kg: Float): String = Units.current.fromKg(kg).let { v ->
+    when {
     v >= 10_000f -> "${(v / 1000f).roundToInt()}k"
     v >= 1_000f -> "${((v / 100f).roundToInt() / 10f)}k"
-    else -> formatKgClean((v * 2f).roundToInt() / 2f)
+        else -> formatKgClean((v * 2f).roundToInt() / 2f)
+    }
 }

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun OnboardingScreen(
     initialProfile: UserProfile,
+    unit: WeightUnit,
+    onSelectUnit: (WeightUnit) -> Unit,
     canGoBack: Boolean,
     haptics: Haptics,
     onBack: () -> Unit,
@@ -41,7 +43,8 @@ fun OnboardingScreen(
     val P = LocalPalette.current
     var step by remember { mutableIntStateOf(0) }
     var age by remember { mutableStateOf(if (initialProfile.age > 0) initialProfile.age.toString() else "25") }
-    var weight by remember { mutableStateOf(if (initialProfile.currentWeightKg > 0f) formatKgClean(initialProfile.currentWeightKg) else "75") }
+    // Kept in kg; the field shows and takes the chosen unit.
+    var weightKg by remember { mutableStateOf(if (initialProfile.currentWeightKg > 0f) initialProfile.currentWeightKg.toString() else "75") }
     var program by remember { mutableStateOf(initialProfile.splitProgram) }
 
     BackHandler(enabled = step > 0 || canGoBack) {
@@ -105,13 +108,22 @@ fun OnboardingScreen(
                         height = 56.dp
                     )
                     Spacer(Modifier.height(20.dp))
-                    Text("What do you weigh? (kg)", style = AppType.label, color = P.textSecondary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("What do you weigh?", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+                        SegmentedControl(
+                            options = WeightUnit.entries.map { it to it.label },
+                            selected = unit,
+                            onSelect = { haptics.tick(); onSelectUnit(it) },
+                            modifier = Modifier.width(120.dp)
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
-                    NumberStepper(
-                        value = weight,
-                        onValueChange = { v -> sanitizeDecimalInput(v)?.let { weight = it } },
-                        onMinus = { weight = formatKgClean(((weight.toFloatOrNull() ?: 75f) - 0.5f).coerceAtLeast(20f)) },
-                        onPlus = { weight = formatKgClean((weight.toFloatOrNull() ?: 75f) + 0.5f) },
+                    WeightStepper(
+                        storedKg = weightKg,
+                        onChange = { weightKg = it },
+                        step = unit.bodyStep,
+                        minKg = 20f,
+                        fallbackKg = 75f,
                         modifier = Modifier.fillMaxWidth(),
                         height = 56.dp
                     )
@@ -132,7 +144,7 @@ fun OnboardingScreen(
         }
 
         val ageOk = (age.toIntOrNull() ?: 0) > 0
-        val weightOk = (weight.toFloatOrNull() ?: 0f) > 0f
+        val weightOk = (weightKg.toFloatOrNull() ?: 0f) > 0f
         PrimaryButton(
             text = if (step == 0) "Continue" else "Start training",
             enabled = if (step == 0) ageOk && weightOk else true,
@@ -143,7 +155,7 @@ fun OnboardingScreen(
                     UserProfile(
                         hasCompletedOnboarding = true,
                         age = age.toIntOrNull() ?: 0,
-                        currentWeightKg = weight.toFloatOrNull() ?: 0f,
+                        currentWeightKg = weightKg.toFloatOrNull() ?: 0f,
                         splitProgram = program
                     )
                 )

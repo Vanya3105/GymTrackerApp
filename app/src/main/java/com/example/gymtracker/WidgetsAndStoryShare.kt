@@ -132,7 +132,7 @@ private class LiveSession(
                 set.intensityType == "DROP" -> "Drop set"
                 else -> "Set $workNum"
             },
-            weightLabel = formatKgClean(parseWeightClean(set.weight, 20f)),
+            weightLabel = formatWeightNumber(parseWeightClean(set.weight, 20f)),
             reps = parseRepsClean(set.reps, 8),
             setNumber = idx + 1,
             setCount = ex.sets.size
@@ -219,7 +219,7 @@ fun buildWorkoutWidgetViews(
             views.setTextViewText(R.id.widget_split_title, next.exerciseName)
             views.setTextViewText(
                 R.id.widget_subtitle,
-                if (live.isResting) "Next: ${next.weightLabel} kg × ${next.reps}"
+                if (live.isResting) "Next: ${next.weightLabel} ${Units.current.label} × ${next.reps}"
                 else "${live.totalSetsLeft} sets left today"
             )
             views.setViewVisibility(R.id.widget_subtitle, if (compact && !live.isResting && showControls) View.GONE else View.VISIBLE)
@@ -227,7 +227,7 @@ fun buildWorkoutWidgetViews(
             val controlsVisible = showControls && !live.isResting
             views.setViewVisibility(R.id.widget_controls_row, if (controlsVisible) View.VISIBLE else View.GONE)
             if (controlsVisible) {
-                views.setTextViewText(R.id.widget_weight_value, "${next.weightLabel} kg")
+                views.setTextViewText(R.id.widget_weight_value, "${next.weightLabel} ${Units.current.label}")
                 views.setTextViewText(R.id.widget_reps_value, "${next.reps}")
                 listOf(
                     R.id.widget_btn_weight_minus to GymWidgetProvider.ACTION_WEIGHT_MINUS,
@@ -386,8 +386,8 @@ class GymWidgetProvider : AppWidgetProvider() {
             val curReps = parseRepsClean(target.reps, 8)
 
             val updated = when (action) {
-                ACTION_WEIGHT_MINUS -> target.copy(weight = formatKgClean((curWeight - settings.weightStepKg).coerceAtLeast(0f)))
-                ACTION_WEIGHT_PLUS -> target.copy(weight = formatKgClean(curWeight + settings.weightStepKg))
+                ACTION_WEIGHT_MINUS -> target.copy(weight = stepWeight(target.weight, -settings.weightStep))
+                ACTION_WEIGHT_PLUS -> target.copy(weight = stepWeight(target.weight, settings.weightStep))
                 ACTION_REPS_MINUS -> target.copy(reps = "${(curReps - 1).coerceAtLeast(0)}")
                 ACTION_REPS_PLUS -> target.copy(reps = "${curReps + 1}")
                 ACTION_COMPLETE_SET -> target.copy(isCompleted = true)
@@ -719,12 +719,12 @@ private fun generateShareCard(
     val stats = computeWorkoutStats(exercises, history)
     val lifts = exercises.filter { !it.isSkipped }.mapNotNull { ex ->
         val sets = ex.sets.filter { !it.isWarmupSet && it.repCount > 0 }
-        if (sets.isEmpty()) null else ex.name to sets.maxBy { it.weightKg }.let { "${it.weight} kg × ${it.reps}" }
+        if (sets.isEmpty()) null else ex.name to formatSet(sets.maxBy { it.weightKg })
     }
 
     // Title block sits lower when a photo fills the top.
     var y = if (photo != null) 1040f else 520f
-    val bw = if (bodyWeightKg > 0f) "  ·  ${formatKgClean(bodyWeightKg)} kg body weight" else ""
+    val bw = if (bodyWeightKg > 0f) "  ·  ${formatWeightKg(bodyWeightKg)} body weight" else ""
     canvas.drawText("Workout complete$bw", left, y, textPaint(accent, 40f).fitTo("Workout complete$bw", right - left))
     y += 120f
     canvas.drawText(splitTitle, left, y, textPaint(text, 120f, BOLD).fitTo(splitTitle, right - left))

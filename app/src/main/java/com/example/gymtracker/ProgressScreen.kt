@@ -113,7 +113,7 @@ fun ProgressScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
-                                Text("Best set ${lift.bestSet}", style = AppType.caption, color = P.textSecondary)
+                                Text("Best set ${lift.bestSet?.let(::formatSet) ?: "—"}", style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(formatWeightKg(lift.estimated1Rm), style = AppType.number, color = P.textPrimary)
@@ -141,12 +141,12 @@ fun ProgressScreen(
     }
 }
 
-private data class BestLift(val name: String, val estimated1Rm: Float, val bestSet: String)
+private data class BestLift(val name: String, val estimated1Rm: Float, val bestSet: SetEntry?)
 
 private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
     history.flatMap { w -> w.exercises.filter { !it.isSkipped }.map { it.name } }
         .distinctBy { it.lowercase() }
-        .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSetText.replace("kg ×", " kg ×")) } }
+        .map { name -> computeExerciseRecords(name, history).let { BestLift(name, it.bestEstimated1Rm, it.bestSet) } }
         .filter { it.estimated1Rm > 0f }
         .sortedByDescending { it.estimated1Rm }
 
@@ -161,14 +161,15 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
             Column(Modifier.weight(1f)) {
                 Text("Body weight", style = AppType.label, color = P.textSecondary)
                 Row(verticalAlignment = Alignment.Bottom) {
-                    RollingText(formatKgClean(current), AppType.bigNumber, P.textPrimary)
-                    Text(" kg", style = AppType.body, color = P.textSecondary, modifier = Modifier.padding(bottom = 3.dp))
+                    RollingText(formatWeightNumber(current), AppType.bigNumber, P.textPrimary)
+                    Text(" ${Units.current.label}", style = AppType.body, color = P.textSecondary, modifier = Modifier.padding(bottom = 3.dp))
                 }
                 if (change != null) {
-                    val rounded = (change * 10).roundToInt() / 10f
+                    val rounded = roundedChange(change)
+                    val unit = Units.current.label
                     val (icon, text) = when {
-                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} kg since last time"
-                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} kg since last time"
+                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit since last time"
+                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit since last time"
                         else -> Icons.AutoMirrored.Rounded.TrendingFlat to "Same as last time"
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -193,10 +194,10 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
 @Composable
 private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: () -> Unit) {
     val P = LocalPalette.current
-    val diff = prev?.let { ((entry.weightKg - it.weightKg) * 10).roundToInt() / 10f }
+    val diff = prev?.let { roundedChange(entry.weightKg - it.weightKg) }
     Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("${formatKgClean(entry.weightKg)} kg", style = AppType.number, color = P.textPrimary)
+            Text(formatWeightKg(entry.weightKg), style = AppType.number, color = P.textPrimary)
             Text(entry.displayDate.substringBefore(" •"), style = AppType.caption, color = P.textSecondary)
         }
         if (diff != null && diff != 0f) {
@@ -247,10 +248,19 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
     }
 }
 
+/** A body-weight change in the current unit, to 0.1. */
+private fun roundedChange(kg: Float): Float {
+    val unit = Units.current
+    return ((kg / unit.toKg(1f)) * 10).roundToInt() / 10f
+}
+
 @Composable
 private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float) -> Unit) {
     val P = LocalPalette.current
-    var input by remember { mutableStateOf(formatKgClean(startKg)) }
+    val unit = Units.current
+    val start = unit.fromKg(startKg)
+    // Typed in the current unit; converted to kg on save.
+    var input by remember { mutableStateOf(formatKgClean(start)) }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
             Text("Log today's weight", style = AppType.title, color = P.textPrimary)
@@ -259,15 +269,15 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
             NumberStepper(
                 value = input,
                 onValueChange = { v -> sanitizeDecimalInput(v)?.let { input = it } },
-                onMinus = { input = formatKgClean(((input.toFloatOrNull() ?: startKg) - 0.1f).coerceAtLeast(0f)) },
-                onPlus = { input = formatKgClean((input.toFloatOrNull() ?: startKg) + 0.1f) },
+                onMinus = { input = formatKgClean(unit.round(((input.toFloatOrNull() ?: start) - 0.1f).coerceAtLeast(0f))) },
+                onPlus = { input = formatKgClean(unit.round((input.toFloatOrNull() ?: start) + 0.1f)) },
                 modifier = Modifier.fillMaxWidth(),
                 height = 56.dp
             )
             Spacer(Modifier.height(20.dp))
             PrimaryButton(
                 "Save",
-                onClick = { input.toFloatOrNull()?.takeIf { it > 0f }?.let(onSave) },
+                onClick = { input.toFloatOrNull()?.takeIf { it > 0f }?.let { onSave(unit.toKg(it)) } },
                 enabled = (input.toFloatOrNull() ?: 0f) > 0f,
                 modifier = Modifier.fillMaxWidth()
             )

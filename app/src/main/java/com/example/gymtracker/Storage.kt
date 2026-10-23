@@ -70,9 +70,12 @@ object LocalStorage {
                 JSONObject()
             }
             cachedRoot = parsed
+            Units.set(unitIn(parsed))
             parsed
         }
     }
+
+    private fun unitIn(root: JSONObject) = WeightUnit.fromKey(root.optJSONObject("settings")?.optString("weightUnit"))
 
     private inline fun edit(context: Context, notifyInApp: Boolean = false, block: (JSONObject) -> Unit) {
         synchronized(lock) {
@@ -225,7 +228,8 @@ object LocalStorage {
 
     fun addWeightLog(context: Context, weightKg: Float): List<WeightLogEntry> {
         val now = Date()
-        val rounded = (weightKg * 10f).roundToInt() / 10f
+        // 0.01 kg keeps pound entries exact (180 lb → 81.65 kg → 180 lb).
+        val rounded = (weightKg * 100f).roundToInt() / 100f
         val entry = WeightLogEntry(
             id = System.currentTimeMillis(),
             dateKey = DateUtils.formatDayKey(now),
@@ -289,7 +293,8 @@ object LocalStorage {
             themeChoice = theme,
             targetFps = obj.optInt("targetFps", 120),
             hapticsEnabled = obj.optBoolean("hapticsEnabled", true),
-            weightStepKg = obj.optDouble("weightStepKg", 2.5).toFloat(),
+            weightStep = obj.optDouble("weightStepKg", 2.5).toFloat(), // key predates units; value is in weightUnit
+            weightUnit = WeightUnit.fromKey(obj.optString("weightUnit")),
             restTimerSeconds = obj.optInt("restTimerSeconds", 90),
             keepScreenAwake = obj.optBoolean("keepScreenAwake", true),
             restSoundEnabled = obj.optBoolean("restSoundEnabled", true)
@@ -300,12 +305,14 @@ object LocalStorage {
         root.put("settings", JSONObject().apply {
             put("targetFps", settings.targetFps)
             put("hapticsEnabled", settings.hapticsEnabled)
-            put("weightStepKg", settings.weightStepKg.toDouble())
+            put("weightStepKg", settings.weightStep.toDouble())
+            put("weightUnit", settings.weightUnit.name)
             put("restTimerSeconds", settings.restTimerSeconds)
             put("keepScreenAwake", settings.keepScreenAwake)
             put("restSoundEnabled", settings.restSoundEnabled)
             put("themeChoice", settings.themeChoice)
         })
+        Units.set(settings.weightUnit)
     }
 
     // --- Rest timer ---
@@ -350,6 +357,7 @@ object LocalStorage {
                 return false
             }
             cachedRoot = parsed
+            Units.set(unitIn(parsed))
             persist(context, parsed)
         }
         scheduleSurfaceRefresh(context, notifyInApp = false)

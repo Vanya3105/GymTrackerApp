@@ -78,7 +78,7 @@ fun HomeScreen(
                         Text(greeting(), style = AppType.display, color = P.textPrimary)
                     }
                     Pill(
-                        text = "${formatKgClean(userProfile.currentWeightKg)} kg",
+                        text = formatWeightKg(userProfile.currentWeightKg),
                         color = P.textPrimary,
                         container = P.bgCard,
                         modifier = Modifier

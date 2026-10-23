@@ -496,6 +496,8 @@ fun GymTrackerApp(
             Box(Modifier.fillMaxSize().background(P.bgPrimary)) {
                 OnboardingScreen(
                     initialProfile = userProfile,
+                    unit = settings.weightUnit,
+                    onSelectUnit = { onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) },
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
                     onBack = { showOnboarding = false },
@@ -521,9 +523,12 @@ fun newExerciseEntry(
     history: List<CompletedWorkout>,
     settings: AppSettings
 ): ExerciseEntry {
-    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStepKg)
-    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: "40"
-    val warmupWeight = formatKgClean(((workWeight.toFloatOrNull() ?: 40f) * 0.5f).let { (it / 2.5f).toInt() * 2.5f })
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle), history, settings.weightStep)
+    val unit = Units.current
+    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
+    // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
+    val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
+    val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     return ExerciseEntry(
         name = name,

@@ -513,9 +513,49 @@ fun AnimatedProgressBar(
     }
 }
 
+/**
+ * [NumberStepper] for a weight stored as a kg string but shown and typed in the current unit.
+ * Keeps its own text while typing so half-typed input ("62.") survives the kg round trip.
+ */
+@Composable
+fun WeightStepper(
+    storedKg: String,
+    onChange: (String) -> Unit,
+    step: Float,
+    modifier: Modifier = Modifier,
+    minKg: Float = 0f,
+    fallbackKg: Float = 20f,
+    height: Dp = 40.dp,
+    onStep: () -> Unit = {}
+) {
+    val unit = Units.current
+    val shown = if (storedKg.isBlank()) "" else unit.number(parseWeightClean(storedKg, fallbackKg))
+    var text by remember(unit) { mutableStateOf(shown) }
+    LaunchedEffect(shown) { if (text.toFloatOrNull() != shown.toFloatOrNull()) text = shown }
+
+    fun stepBy(delta: Float) {
+        onStep()
+        onChange(stepWeight(storedKg, delta, fallbackKg, minKg))
+    }
+
+    NumberStepper(
+        value = text,
+        onValueChange = { v ->
+            sanitizeDecimalInput(v)?.let { t ->
+                text = t
+                onChange(t.toFloatOrNull()?.let(unit::stored) ?: "")
+            }
+        },
+        onMinus = { stepBy(-step) },
+        onPlus = { stepBy(step) },
+        modifier = modifier,
+        height = height
+    )
+}
+
 /** Smooth line chart with a soft fill that draws itself in from left to right. */
 @Composable
-fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier, unit: String = "kg") {
+fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier) {
     if (points.size < 2) return
     val P = LocalPalette.current
     val reveal = remember(points) { Animatable(0f) }
@@ -560,7 +600,7 @@ fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier,
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             points.forEach { (label, v) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${formatKgClean(v)}", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
+                    Text(formatWeightNumber(v), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                     Text(label, style = AppType.caption, color = P.textTertiary)
                 }
             }

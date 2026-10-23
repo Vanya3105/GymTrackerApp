@@ -26,6 +26,6 @@ When the user says "continue", that is what they mean.
 
 ## Conventions
 - Compose + Material 3, custom design system; no DI framework, no ViewModels so far.
-- Weights stored in kg. Old store files and backups must keep loading (see `StoreCodecTest`, `StorageMigrationTest`).
+- Weights stored in kg; never hardcode "kg" in UI text. Use `formatWeightKg`, `formatSet`, `formatVolume`, `stepWeight`, `scaleWeight` and `WeightStepper` from `Units.kt`/`Components.kt`. Old store files and backups must keep loading (see `StoreCodecTest`, `StorageMigrationTest`).
 - Storage tests run on Robolectric (`RoomStoreTest`, `StorageMigrationTest`). On-device checks: use the emulator (`emulator-5554`), never the user's phone.
 - Comments are sparse and explain *why*.

@@ -157,6 +157,19 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun weightUnit_persists_andIsAppliedOnAnyFirstStorageAccess() {
+        assertEquals(WeightUnit.KG, LocalStorage.loadSettings(context).weightUnit) // v3 file has no unit
+        LocalStorage.saveSettings(context, LocalStorage.loadSettings(context).copy(weightUnit = WeightUnit.LB, weightStep = 5f))
+        restart()
+        Units.set(WeightUnit.KG)
+        // A widget's first storage call (not loadSettings) must already switch the display unit.
+        LocalStorage.loadActiveSession(context)
+        assertEquals(WeightUnit.LB, Units.current)
+        assertEquals(5f, LocalStorage.loadSettings(context).weightStep)
+        Units.set(WeightUnit.KG)
+    }
+
+    @Test
     fun freshInstall_startsEmpty() {
         storeFile.delete()
         assertTrue(LocalStorage.loadHistory(context).isEmpty())
