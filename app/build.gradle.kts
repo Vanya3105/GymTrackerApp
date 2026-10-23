@@ -3,6 +3,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.room)
 }
 
 // Release signing keys live in keystore.properties (git-ignored). Without it, release builds
@@ -21,8 +23,8 @@ android {
         applicationId = "com.vanyaevtushenko.gymtracker"
         minSdk = 24
         targetSdk = 37
-        versionCode = 30
-        versionName = "3.0.0"
+        versionCode = 31
+        versionName = "3.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -59,6 +61,14 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+room {
+    // Exported schemas are committed so future migrations can be tested against them.
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
@@ -71,8 +81,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.json) // real org.json for JVM tests; android.jar only ships stubs
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

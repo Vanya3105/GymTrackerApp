@@ -1,0 +1,42 @@
+{
+  "userProfile": {"hasCompletedOnboarding": true, "age": 24, "currentWeightKg": 81.2, "splitProgram": "CLASSIC_PPL"},
+  "settings": {"themeChoice": "DARK", "targetFps": 120, "hapticsEnabled": true, "weightStepKg": 2.5, "restTimerSeconds": 120, "keepScreenAwake": true, "restSoundEnabled": false},
+  "widgetSettings": {"42": {"theme": "SYSTEM", "opacityPercent": 80, "style": "STANDARD", "options": ["next"]}},
+  "activeSession": {
+    "splitTitle": "Pull", "startTimeMillis": 1760000000000, "restEndTimeMillis": 0,
+    "exercises": [{"name": "Barbell Row", "targetMuscle": "Back", "restSeconds": 90, "isSkipped": false, "isSuperset": false,
+      "sets": [{"setNumber": 1, "weight": "70", "reps": "8", "isWarmup": false, "intensityType": "NORMAL", "isCompleted": true, "restSeconds": 90}]}]
+  },
+  "history": [
+    {"id": 1759000000000, "splitTitle": "Push", "dateKey": "2025-09-27", "displayDate": "Sep 27, 2025 • 18:00",
+     "durationSeconds": 3900, "bodyWeightKg": 81.0, "photoPath": "", "skippedExercises": ["Cable Fly"],
+     "totalVolumeKg": 4200, "prsHit": 1,
+     "exercises": [
+       {"name": "Bench Press", "targetMuscle": "Chest", "restSeconds": 150, "isSkipped": false, "isSuperset": false,
+        "sets": [
+          {"setNumber": 1, "weight": "40", "reps": "10", "isWarmup": true, "intensityType": "WARMUP", "isCompleted": true, "restSeconds": 60},
+          {"setNumber": 2, "weight": "80", "reps": "6", "isWarmup": false, "intensityType": "NORMAL", "isCompleted": true, "restSeconds": 150},
+          {"setNumber": 3, "weight": "65", "reps": "10", "isWarmup": false, "intensityType": "DROP", "isCompleted": true, "restSeconds": 150}
+        ]},
+       {"name": "Cable Fly", "targetMuscle": "Chest", "restSeconds": 60, "isSkipped": true, "isSuperset": false, "sets": []},
+       {"name": "My Weird Press", "targetMuscle": "Custom", "restSeconds": 90, "isSkipped": false, "isSuperset": true,
+        "sets": [{"setNumber": 1, "weight": "20", "reps": "12", "isWarmup": false, "intensityType": "NORMAL", "isCompleted": true, "restSeconds": 90}]}
+     ]},
+    {"id": 1759500000000, "splitTitle": "Pull", "dateKey": "2025-10-03", "displayDate": "Oct 3, 2025 • 07:30",
+     "durationSeconds": 3000, "bodyWeightKg": 81.2, "photoPath": "/data/photo.jpg", "skippedExercises": [],
+     "totalVolumeKg": 3100, "prsHit": 0,
+     "exercises": [
+       {"name": "bench press", "targetMuscle": "Chest", "restSeconds": 120, "isSkipped": false, "isSuperset": false,
+        "sets": [{"setNumber": 1, "weight": "82.5", "reps": "5", "isWarmup": false, "intensityType": "NORMAL", "isCompleted": true, "restSeconds": 120}]}
+     ]}
+  ],
+  "weightHistory": [
+    {"id": 1758000000000, "dateKey": "2025-09-16", "displayDate": "Sep 16, 2025", "weightKg": 80.4},
+    {"id": 1759500000000, "dateKey": "2025-10-03", "displayDate": "Oct 3, 2025", "weightKg": 81.2}
+  ],
+  "splitTemplates": {
+    "Push": [{"name": "Bench Press", "muscle": "Chest"}, {"name": "My Weird Press", "muscle": "Custom"}]
+  },
+  "exerciseNotes": {"bench press": "Seat on 4, grip ring finger"},
+  "exerciseRestDefaults": {"bench press": 150}
+}
