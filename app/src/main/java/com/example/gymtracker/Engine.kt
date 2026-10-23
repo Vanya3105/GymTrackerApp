@@ -430,6 +430,10 @@ object LocalStorage {
             val parsed = try {
                 if (file.exists()) JSONObject(file.readText()) else JSONObject()
             } catch (e: Exception) {
+                // Keep the unreadable file aside: the next save would otherwise overwrite all history.
+                try {
+                    file.copyTo(File(file.parentFile, "$FILE_NAME.corrupt-${System.currentTimeMillis()}"))
+                } catch (_: Exception) {}
                 JSONObject()
             }
             cachedRoot = parsed
@@ -709,7 +713,7 @@ object LocalStorage {
                     put("splitTitle", splitTitle)
                     put("startTimeMillis", prevObj?.optLong("startTimeMillis", 0L)?.takeIf { it > 0L } ?: System.currentTimeMillis())
                     put("restEndTimeMillis", prevObj?.optLong("restEndTimeMillis", 0L) ?: 0L)
-                    put("exercises", serializeExercises(exercises))
+                    put("exercises", StoreCodec.serializeExercises(exercises))
                 })
             }
         }
@@ -724,7 +728,7 @@ object LocalStorage {
         val activeObj = root(context).optJSONObject("activeSession") ?: return null
         val splitTitle = activeObj.optString("splitTitle", "")
         if (splitTitle.isBlank()) return null
-        return splitTitle to deserializeExercises(activeObj.optJSONArray("exercises"))
+        return splitTitle to StoreCodec.deserializeExercises(activeObj.optJSONArray("exercises"))
     }
 
     // --- Workout history ---
@@ -732,7 +736,7 @@ object LocalStorage {
     fun saveCompletedWorkout(context: Context, workout: CompletedWorkout) {
         edit(context) { root ->
             val historyArr = root.optJSONArray("history") ?: JSONArray().also { root.put("history", it) }
-            historyArr.put(serializeWorkout(workout))
+            historyArr.put(StoreCodec.serializeWorkout(workout))
             root.remove("activeSession")
             cachedHistory = null
         }
@@ -744,7 +748,7 @@ object LocalStorage {
             val arr = root.optJSONArray("history") ?: return
             for (i in 0 until arr.length()) {
                 if (arr.getJSONObject(i).optLong("id") == updatedWorkout.id) {
-                    arr.put(i, serializeWorkout(updatedWorkout))
+                    arr.put(i, StoreCodec.serializeWorkout(updatedWorkout))
                     break
                 }
             }
@@ -762,10 +766,25 @@ object LocalStorage {
 
     /** Newest first. The parsed list is cached until history changes, so callers can use it as a stable key. */
     fun loadHistory(context: Context): List<CompletedWorkout> = synchronized(lock) {
-        cachedHistory ?: parseHistory(root(context).optJSONArray("history")).also { cachedHistory = it }
+        cachedHistory ?: StoreCodec.parseHistory(root(context).optJSONArray("history")).also { cachedHistory = it }
     }
 
-    private fun parseHistory(arr: JSONArray?): List<CompletedWorkout> {
+    private inline fun JSONArray.filterObjects(keep: (JSONObject) -> Boolean): JSONArray {
+        val out = JSONArray()
+        for (i in 0 until length()) {
+            val o = getJSONObject(i)
+            if (keep(o)) out.put(o)
+        }
+        return out
+    }
+}
+
+/**
+ * Pure JSON <-> model mapping for the store file, kept free of Context so it can be unit-tested
+ * and reused by data migrations. Reading is lenient: older saves and hand-edited backups must still load.
+ */
+internal object StoreCodec {
+    fun parseHistory(arr: JSONArray?): List<CompletedWorkout> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
@@ -786,7 +805,7 @@ object LocalStorage {
         }.sortedByDescending { it.id }
     }
 
-    private fun serializeWorkout(workout: CompletedWorkout) = JSONObject().apply {
+    fun serializeWorkout(workout: CompletedWorkout) = JSONObject().apply {
         put("id", workout.id)
         put("splitTitle", workout.splitTitle)
         put("dateKey", workout.dateKey)
@@ -800,7 +819,7 @@ object LocalStorage {
         put("prsHit", workout.prsHit)
     }
 
-    private fun serializeExercises(exercises: List<ExerciseEntry>): JSONArray = JSONArray().apply {
+    fun serializeExercises(exercises: List<ExerciseEntry>): JSONArray = JSONArray().apply {
         for (ex in exercises) {
             put(JSONObject().apply {
                 put("name", ex.name)
@@ -825,7 +844,7 @@ object LocalStorage {
         }
     }
 
-    private fun deserializeExercises(arr: JSONArray?): List<ExerciseEntry> {
+    fun deserializeExercises(arr: JSONArray?): List<ExerciseEntry> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { i ->
             val exObj = arr.getJSONObject(i)
@@ -855,15 +874,6 @@ object LocalStorage {
                 isSuperset = exObj.optBoolean("isSuperset", false)
             )
         }
-    }
-
-    private inline fun JSONArray.filterObjects(keep: (JSONObject) -> Boolean): JSONArray {
-        val out = JSONArray()
-        for (i in 0 until length()) {
-            val o = getJSONObject(i)
-            if (keep(o)) out.put(o)
-        }
-        return out
     }
 }
 
