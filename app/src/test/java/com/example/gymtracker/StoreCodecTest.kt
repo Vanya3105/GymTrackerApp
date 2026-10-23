@@ -109,6 +109,15 @@ class StoreCodecTest {
     }
 
     @Test
+    fun programs_areWrittenAndRead_andMissingMeansNone() {
+        val p = SplitProgramInfo("custom-9", "Bro split", "Five days", 5, listOf(WorkoutSplit("Chest", "Pecs", "01"), WorkoutSplit("Back", "", "02")))
+        val root = JSONObject()
+        StoreCodec.writeData(root, StoreData(programs = listOf(p)))
+        assertEquals(listOf(p), StoreCodec.readData(JSONObject(root.toString())).programs)
+        assertTrue(StoreCodec.readData(JSONObject("{}")).programs.isEmpty())
+    }
+
+    @Test
     fun exportedBackupShape_isReadable() {
         // Guards the backup format users already have on disk.
         val root = JSONObject().put("history", JSONArray().put(StoreCodec.serializeWorkout(sample)))

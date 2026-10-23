@@ -170,6 +170,22 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun renamingADayOfACustomizedProgram_keepsHistory_butLeavesTheBuiltInItsExercises() {
+        val copy = SPLIT_PROGRAMS.getValue("CLASSIC_PPL").copy(id = "custom-1", name = "My PPL")
+        LocalStorage.saveProgram(context, copy)
+        LocalStorage.saveTemplateForSplit(context, "Pull", listOf("Barbell Row" to "Back"))
+        LocalStorage.renameSplit(context, "custom-1", "Pull", "Back Day")
+        restart()
+
+        val history = LocalStorage.loadHistory(context)
+        assertEquals("Back Day", history.first { it.id == 1759500000000 }.splitTitle) // history follows
+        assertEquals(listOf("Barbell Row" to "Back"), LocalStorage.loadTemplateForSplit(context, "Back Day"))
+        assertEquals(listOf("Barbell Row" to "Back"), LocalStorage.loadTemplateForSplit(context, "Pull")) // built-ins keep theirs
+        assertEquals(listOf("Push", "Back Day", "Legs"), programFor("custom-1").splits.map { it.title })
+        assertEquals("Back Day", LocalStorage.loadActiveSession(context)?.first) // the open workout follows too
+    }
+
+    @Test
     fun freshInstall_startsEmpty() {
         storeFile.delete()
         assertTrue(LocalStorage.loadHistory(context).isEmpty())

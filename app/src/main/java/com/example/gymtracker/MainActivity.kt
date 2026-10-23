@@ -163,7 +163,8 @@ fun GymTrackerApp(
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
-    val activeProgram = remember(userProfile.splitProgram) { programFor(userProfile.splitProgram) }
+    // Not remembered: programFor reads the user's programs, so edits to the active one show at once.
+    val activeProgram = programFor(userProfile.splitProgram)
     val splits = activeProgram.splits
 
     var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
@@ -171,6 +172,7 @@ fun GymTrackerApp(
     var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
     // Exercise detail screen, shown over everything else (including a running workout).
     var openExercise by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -321,7 +323,8 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                             weightHistory = LocalStorage.loadWeightHistory(context)
                             onUpdateSettings(LocalStorage.loadSettings(context))
-                        }
+                        },
+                        onEditProgram = { haptics.tick(); editingProgramId = it }
                     )
                 }
             }
@@ -465,6 +468,35 @@ fun GymTrackerApp(
                         )
                     }
                 }
+            }
+        }
+
+        var shownProgramId by remember { mutableStateOf(editingProgramId) }
+        if (editingProgramId != null) shownProgramId = editingProgramId
+        AnimatedVisibility(
+            visible = editingProgramId != null,
+            enter = slideInHorizontallyBy(1f) + fadeIn(tween(150)),
+            exit = fadeOut(tween(180))
+        ) {
+            shownProgramId?.let { id ->
+                ProgramEditorScreen(
+                    programId = id,
+                    isActive = userProfile.splitProgram == id,
+                    haptics = haptics,
+                    onUseProgram = {
+                        userProfile = userProfile.copy(splitProgram = id)
+                        LocalStorage.saveUserProfile(context, userProfile)
+                    },
+                    onDeleted = {
+                        if (userProfile.splitProgram == id) {
+                            userProfile = userProfile.copy(splitProgram = DEFAULT_PROGRAM_ID)
+                            LocalStorage.saveUserProfile(context, userProfile)
+                        }
+                        editingProgramId = null
+                    },
+                    onHistoryChanged = { history = LocalStorage.loadHistory(context) },
+                    onBack = { editingProgramId = null }
+                )
             }
         }
 

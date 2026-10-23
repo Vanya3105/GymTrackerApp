@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 3 is done on branch `phase-3-exercise-types`, waiting for an on-device check by the owner, then merge to `master`.
-Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and delete their own splits and programs (today they are hardcoded in `SPLIT_PROGRAMS`); this needs Room tables for programs/splits (schema v3).
+Phase 4 in progress on branch `phase-4-routines`. Step 1 (your own programs) is done.
+Next: **Phase 4, step 2**: per-exercise targets on a day's exercise list (sets × rep range, rest). Store them on `split_template_items` (schema v4), prefill new workouts from them, and use the rep range in coaching instead of the compound/isolation guess.
 
 ---
 
@@ -49,8 +49,9 @@ Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and 
 - [x] Logging UI per type: set rows and headers per type (`DurationStepper` types like a microwave timer, `DistanceStepper` in km/mi), drop sets only for loaded lifts, new exercises start from your last session of it, custom exercises ask for a type, "Logged as" in Notes & history changes it
 - [x] Results per type: exercise page tiles and chart metrics (reps, assistance, time, distance, pace), rep records only for loaded lifts, Progress lists every type with its own best, widget/lock-screen boxes and +/- follow the type, set-done notification and share image use per-type wording. Zero added weight / zero assistance reads as a bodyweight set
 
-## Phase 4 — Routines & programs
-- [ ] Create, rename, reorder and delete your own splits and programs
+## Phase 4 — Routines & programs (branch `phase-4-routines`)
+- [x] Your own programs (Room v3, auto-migrated): Profile lists built-in + yours; "Customize" copies a built-in, "New program" starts blank; the editor sets name, workouts per week and days (add, rename, reorder, remove) and each day's exercise list. Built-in programs stay read-only presets
+- [x] Days are identified by title, shared across programs. Renaming a day moves its history unless another of *your* programs uses the old title, and copies its exercise list if any other program (built-ins included) still uses it
 - [ ] Per-exercise targets (sets × rep range, rest)
 - [ ] Built-in programs: 5/3/1, GZCLP, nSuns (percentage-based, with training max)
 

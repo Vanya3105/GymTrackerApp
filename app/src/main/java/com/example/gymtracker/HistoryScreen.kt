@@ -123,7 +123,8 @@ private fun WeekView(
 ) {
     val P = LocalPalette.current
     var weekOffset by rememberSaveable { mutableIntStateOf(0) }
-    val week = remember(history, weekOffset, userProfile.splitProgram) { computeWeekSummary(history, weekOffset, userProfile.splitProgram) }
+    val program = programFor(userProfile.splitProgram)
+    val week = remember(history, weekOffset, program) { computeWeekSummary(history, weekOffset, userProfile.splitProgram) }
     val stats = remember(week) { week.workouts.map { computeWorkoutStats(it.exercises, emptyList()) } }
 
     LazyColumn(

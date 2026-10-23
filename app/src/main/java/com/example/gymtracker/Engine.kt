@@ -23,6 +23,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -190,8 +191,28 @@ val SPLIT_PROGRAMS = mapOf(
     )
 )
 
+const val DEFAULT_PROGRAM_ID = "PPL_ARNOLD"
+
+/**
+ * Programs the user built or customized. Kept current by LocalStorage whenever its data loads
+ * or changes; snapshot state, so program lists redraw on edits.
+ */
+object UserPrograms {
+    private val state = mutableStateOf<List<SplitProgramInfo>>(emptyList())
+    val all: List<SplitProgramInfo> get() = state.value
+
+    fun set(programs: List<SplitProgramInfo>) {
+        if (state.value != programs) state.value = programs
+    }
+}
+
+/** Built-in programs first, then the user's own. */
+fun allPrograms(): List<SplitProgramInfo> = SPLIT_PROGRAMS.values.toList() + UserPrograms.all
+
 fun programFor(programId: String): SplitProgramInfo =
-    SPLIT_PROGRAMS[programId] ?: SPLIT_PROGRAMS.getValue("PPL_ARNOLD")
+    SPLIT_PROGRAMS[programId] ?: UserPrograms.all.find { it.id == programId } ?: SPLIT_PROGRAMS.getValue(DEFAULT_PROGRAM_ID)
+
+val SplitProgramInfo.isBuiltIn: Boolean get() = id in SPLIT_PROGRAMS
 
 val REST_PRESETS = listOf(0, 60, 90, 120, 180, 240)
 

@@ -1,6 +1,7 @@
 package com.example.gymtracker
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
@@ -115,6 +116,29 @@ data class SplitTemplateItemEntity(
     val muscle: String
 )
 
+/** A program the user built or customized. Built-in programs live in code ([SPLIT_PROGRAMS]). */
+@Entity(tableName = "programs")
+data class ProgramEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val tagline: String,
+    val weeklyGoal: Int,
+    val position: Int
+)
+
+/** A day of a program. Days are identified by title, which history and exercise lists use too. */
+@Entity(
+    tableName = "program_splits",
+    primaryKeys = ["programId", "position"],
+    foreignKeys = [ForeignKey(entity = ProgramEntity::class, parentColumns = ["id"], childColumns = ["programId"], onDelete = ForeignKey.CASCADE)]
+)
+data class ProgramSplitEntity(
+    val programId: String,
+    val position: Int,
+    val title: String,
+    val subtitle: String
+)
+
 class Converters {
     @TypeConverter
     fun fromStringList(list: List<String>): String = JSONArray(list).toString()
@@ -155,6 +179,17 @@ interface GymDao {
     @Insert fun insertTemplateItems(items: List<SplitTemplateItemEntity>)
     @Query("DELETE FROM split_template_items WHERE splitTitle = :splitTitle") fun deleteTemplate(splitTitle: String)
 
+    @Query("SELECT * FROM programs ORDER BY position") fun programs(): List<ProgramEntity>
+    @Query("SELECT * FROM program_splits ORDER BY programId, position") fun programSplits(): List<ProgramSplitEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertProgram(p: ProgramEntity)
+    @Insert fun insertProgramSplits(splits: List<ProgramSplitEntity>)
+    @Query("DELETE FROM program_splits WHERE programId = :id") fun deleteProgramSplits(id: String)
+    @Query("DELETE FROM programs WHERE id = :id") fun deleteProgram(id: String)
+    @Query("UPDATE workouts SET splitTitle = :new WHERE splitTitle = :old") fun renameWorkoutSplit(old: String, new: String)
+    @Query("UPDATE split_template_items SET splitTitle = :new WHERE splitTitle = :old") fun renameTemplate(old: String, new: String)
+    @Query("SELECT * FROM split_template_items WHERE splitTitle = :title ORDER BY position") fun templateFor(title: String): List<SplitTemplateItemEntity>
+    @Query("DELETE FROM programs") fun clearPrograms()
+
     @Query("DELETE FROM workouts") fun clearWorkouts()
     @Query("DELETE FROM body_weight") fun clearBodyWeights()
     @Query("DELETE FROM split_template_items") fun clearTemplates()
@@ -164,10 +199,12 @@ interface GymDao {
 @Database(
     entities = [
         ExerciseEntity::class, WorkoutEntity::class, WorkoutExerciseEntity::class, WorkoutSetEntity::class,
-        BodyWeightEntity::class, SplitTemplateItemEntity::class
+        BodyWeightEntity::class, SplitTemplateItemEntity::class, ProgramEntity::class, ProgramSplitEntity::class
     ],
-    version = 2,
-    exportSchema = true
+    version = 3,
+    exportSchema = true,
+    // v3 only adds tables, which Room can migrate by itself.
+    autoMigrations = [AutoMigration(from = 2, to = 3)]
 )
 @TypeConverters(Converters::class)
 abstract class GymDatabase : RoomDatabase() {
@@ -242,7 +279,9 @@ data class StoreData(
      * Exercise type by [exerciseKey]. Null means unknown (stores and backups from before types),
      * in which case library types are applied only where no logged data would be hidden.
      */
-    val types: Map<String, ExerciseType>? = emptyMap()
+    val types: Map<String, ExerciseType>? = emptyMap(),
+    /** The user's own programs, in display order. */
+    val programs: List<SplitProgramInfo> = emptyList()
 )
 
 fun exerciseKey(name: String): String = name.trim().lowercase(Locale.US)
@@ -300,7 +339,8 @@ object RoomStore {
             templates = templates,
             notes = exercises.values.filter { it.note.isNotBlank() }.associate { it.nameKey to it.note },
             restDefaults = exercises.values.mapNotNull { e -> e.defaultRestSeconds?.let { e.nameKey to it } }.toMap(),
-            types = exercises.values.associate { it.nameKey to ExerciseType.fromKey(it.type) }
+            types = exercises.values.associate { it.nameKey to ExerciseType.fromKey(it.type) },
+            programs = loadPrograms(db)
         )
     }
 
@@ -308,6 +348,7 @@ object RoomStore {
     fun replaceAll(db: GymDatabase, data: StoreData) = db.runInTransaction {
         val dao = db.dao()
         dao.clearTemplates()
+        dao.clearPrograms() // cascades to their days
         dao.clearWorkouts() // cascades to exercises-in-workout and sets
         dao.clearBodyWeights()
         dao.clearExercises()
@@ -319,6 +360,7 @@ object RoomStore {
         data.weights.forEach { dao.insertBodyWeight(BodyWeightEntity(it.id, it.dateKey, it.displayDate, it.weightKg)) }
         data.notes.forEach { (key, note) -> setNote(db, key, note) }
         data.restDefaults.forEach { (key, sec) -> setDefaultRest(db, key, sec) }
+        data.programs.forEachIndexed { i, p -> saveProgram(db, p, i) }
         val types = data.types
         if (types != null) {
             types.forEach { (key, type) -> setType(db, key, type) }
@@ -398,6 +440,42 @@ object RoomStore {
 
     fun setDefaultRest(db: GymDatabase, name: String, sec: Int) =
         db.dao().setExerciseRest(exerciseId(db, name), sec)
+
+    private fun loadPrograms(db: GymDatabase): List<SplitProgramInfo> {
+        val dao = db.dao()
+        val splits = dao.programSplits().groupBy { it.programId }
+        return dao.programs().map { p ->
+            SplitProgramInfo(
+                id = p.id, name = p.name, tagline = p.tagline, weeklyGoal = p.weeklyGoal,
+                splits = splits[p.id].orEmpty().map { WorkoutSplit(it.title, it.subtitle, "%02d".format(it.position + 1)) }
+            )
+        }
+    }
+
+    /** Inserts or replaces a program and its days. */
+    fun saveProgram(db: GymDatabase, program: SplitProgramInfo, position: Int) = db.runInTransaction {
+        val dao = db.dao()
+        dao.insertProgram(ProgramEntity(program.id, program.name, program.tagline, program.weeklyGoal, position))
+        dao.deleteProgramSplits(program.id)
+        dao.insertProgramSplits(program.splits.mapIndexed { i, s -> ProgramSplitEntity(program.id, i, s.title, s.subtitle) })
+    }
+
+    fun deleteProgram(db: GymDatabase, id: String) = db.dao().deleteProgram(id)
+
+    /**
+     * Gives a day a new title. Its exercise list moves with it, or is copied when [keepTemplate]
+     * (another program still uses the old title). Logged workouts move too, so suggestions and
+     * "last time" keep working, unless [keepHistory].
+     */
+    fun renameSplit(db: GymDatabase, old: String, new: String, keepTemplate: Boolean, keepHistory: Boolean) = db.runInTransaction {
+        val dao = db.dao()
+        val items = dao.templateFor(old)
+        if (items.isNotEmpty()) {
+            dao.deleteTemplate(new)
+            if (keepTemplate) dao.insertTemplateItems(items.map { it.copy(splitTitle = new) }) else dao.renameTemplate(old, new)
+        }
+        if (!keepHistory) dao.renameWorkoutSplit(old, new)
+    }
 
     fun setType(db: GymDatabase, name: String, type: ExerciseType) =
         db.dao().setExerciseType(exerciseId(db, name, type = type), type.name)

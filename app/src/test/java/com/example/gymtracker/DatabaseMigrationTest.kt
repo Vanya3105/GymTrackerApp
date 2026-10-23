@@ -60,6 +60,24 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    fun v2ToV3_addsProgramTables_andKeepsData() {
+        helper.createDatabase(dbName, 2).use { db ->
+            db.execSQL("INSERT INTO workouts (id, splitTitle, dateKey, displayDate, durationSeconds, bodyWeightKg, photoPath, skippedExercises, totalVolumeKg, prsHit) VALUES (7, 'Push', '', '', 0, 80, NULL, '[]', 0, 0)")
+        }
+        helper.runMigrationsAndValidate(dbName, 3, true).use { db ->
+            db.query("SELECT splitTitle FROM workouts").use { c -> c.moveToFirst(); assertEquals("Push", c.getString(0)) }
+            db.query("SELECT COUNT(*) FROM programs").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
+            db.query("SELECT COUNT(*) FROM program_splits").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
+        }
+    }
+
+    @Test
+    fun v1ToV3_inOneGo() {
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(dbName, 3, true, MIGRATION_1_2).close()
+    }
+
+    @Test
     fun typeForExistingExercise_rules() {
         val bw = ExerciseType.BODYWEIGHT
         assertEquals(bw, typeForExistingExercise(bw, hasHistory = true, hasWeightedSets = false))
