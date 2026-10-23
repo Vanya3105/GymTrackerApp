@@ -70,6 +70,34 @@ fun sessionValue(type: ExerciseType, workSets: List<SetEntry>): Float = when (ty
     ExerciseType.DISTANCE_TIME -> workSets.maxOf { it.distanceMeters }
 }
 
+/** A [sessionValue] in words: "80 kg", "15 reps", "−20 kg", "1:30", "5 km". */
+fun formatSessionValue(type: ExerciseType, value: Float): String = when (type) {
+    ExerciseType.WEIGHT_REPS -> formatWeightKg(value)
+    ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(value)}"
+    ExerciseType.BODYWEIGHT -> if (value.toInt() == 1) "1 rep" else "${value.toInt()} reps"
+    ExerciseType.ASSISTED -> "−${formatWeightKg(value)}"
+    ExerciseType.DURATION -> formatClock(value.toLong())
+    ExerciseType.DISTANCE_TIME -> formatDistance(value)
+}
+
+/** The same value without its unit, for chart labels. */
+fun formatSessionValueShort(type: ExerciseType, value: Float): String = when (type) {
+    ExerciseType.BODYWEIGHT -> "${value.toInt()}"
+    ExerciseType.DURATION -> formatClock(value.toLong())
+    ExerciseType.DISTANCE_TIME -> formatKgClean(value / Units.current.metersPerDistanceUnit)
+    else -> formatWeightNumber(value)
+}
+
+/** What [sessionValue] means, as a chart title. */
+fun sessionValueTitle(type: ExerciseType): String = when (type) {
+    ExerciseType.WEIGHT_REPS -> "Top weight per session"
+    ExerciseType.WEIGHTED_BODYWEIGHT -> "Most added weight per session"
+    ExerciseType.BODYWEIGHT -> "Most reps per session"
+    ExerciseType.ASSISTED -> "Least assistance per session"
+    ExerciseType.DURATION -> "Longest hold per session"
+    ExerciseType.DISTANCE_TIME -> "Longest distance per session"
+}
+
 const val WIDGET_KIND_WORKOUT = "WORKOUT"
 const val WIDGET_KIND_RECOVERY = "RECOVERY"
 const val WIDGET_KIND_WEEKLY = "WEEKLY"

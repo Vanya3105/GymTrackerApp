@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 3 in progress on branch `phase-3-exercise-types`. Step 1 (data layer) is done.
-Next: **Phase 3, step 2**: logging UI per type (set rows, time and distance inputs, type choice for custom exercises, changing an exercise's type).
+Phase 3 in progress on branch `phase-3-exercise-types`. Steps 1 (data) and 2 (logging UI) are done.
+Next: **Phase 3, step 3**: results per type: exercise page (tiles, chart metrics, records instead of rep records), Progress best lifts, widgets, lock screen, set-done notification, share image.
 
 ---
 
@@ -46,7 +46,7 @@ Next: **Phase 3, step 2**: logging UI per type (set rows, time and distance inpu
 - [x] Migration never hides logged data: library types are applied only where lossless (`typeForExistingExercise`); everything else stays weight & reps until changed by hand. Same rule for old backups/stores (no `exerciseTypes` section)
 - [x] Per-type rules: what counts as a work set, volume (weight & reps and added weight only), records and PRs (most reps, least assistance, longest time, longest distance), no weight suggestions for non-weight types
 - [x] Library: types for bodyweight exercises, new Assisted Pull-Up/Dip, Inverted Row, holds, and a Cardio group (running, rowing, bike, …)
-- [ ] Logging UI per type: set rows, time and distance inputs, type for custom exercises, change an exercise's type
+- [x] Logging UI per type: set rows and headers per type (`DurationStepper` types like a microwave timer, `DistanceStepper` in km/mi), drop sets only for loaded lifts, new exercises start from your last session of it, custom exercises ask for a type, "Logged as" in Notes & history changes it
 - [ ] Exercise page, Progress, widgets, lock screen, notifications and share image per type
 
 ## Phase 4 — Routines & programs

@@ -102,6 +102,18 @@ class ExerciseTypesTest {
             val advice = suggestNextWeight("Any", ex(type, set("40", "8"), set("40", "8")), emptyList(), 2.5f)
             if (type.hasWeightSuggestions) assertTrue(type.name, advice != null) else assertNull(type.name, advice)
         }
+        // Weighted with nothing added (blank or zero) has no load to suggest from.
+        assertNull(suggestNextWeight("Any", ex(ExerciseType.WEIGHTED_BODYWEIGHT, set("", "8"), set("0", "8")), emptyList(), 2.5f))
+    }
+
+    @Test
+    fun timeTyping_fillsFromTheRightLikeAMicrowave() {
+        assertEquals(5, clockDigitsToSeconds("5"))
+        assertEquals(45, clockDigitsToSeconds("45"))
+        assertEquals(90, clockDigitsToSeconds("130"))
+        assertEquals(25 * 60, clockDigitsToSeconds("2500"))
+        assertEquals(3600, clockDigitsToSeconds("10000"))
+        assertEquals("1:30", formatClock(clockDigitsToSeconds("130").toLong()))
     }
 
     @Test

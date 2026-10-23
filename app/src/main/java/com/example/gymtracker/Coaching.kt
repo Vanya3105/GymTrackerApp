@@ -126,6 +126,8 @@ fun suggestNextWeight(
     }
 
     suggestFromSplitHistory(splitTitle, exercise, history, step)?.let { return it }
+    // Weighted bodyweight with nothing added yet: there's no load to build on.
+    if (exercise.type == ExerciseType.WEIGHTED_BODYWEIGHT && workSets.none { it.weightKg > 0f }) return null
 
     val unit = Units.current
     val topWeight = unit.stored(unit.fromKg(workSets.maxOfOrNull { parseWeightClean(it.weight, 40f) } ?: 40f))

@@ -96,6 +96,7 @@ fun ActiveWorkoutScreen(
     haptics: Haptics,
     hasUnsavedEdits: Boolean = false,
     onOpenExercise: (String) -> Unit,
+    onChangeExerciseType: (name: String, type: ExerciseType) -> Unit,
     onUpdateExercises: (List<ExerciseEntry>) -> Unit,
     onReorderExercises: (Int, Int) -> Unit,
     onAddExercise: (name: String, muscle: String) -> Unit,
@@ -203,8 +204,8 @@ fun ActiveWorkoutScreen(
         }
         haptics.confirm()
 
-        if (isSetPersonalRecord(updatedSet, computeExerciseRecords(exercise.name, history))) {
-            banner = Banner("New best: ${exercise.name}, ${formatSet(updatedSet)}", Icons.Rounded.EmojiEvents, isPr = true)
+        if (isSetPersonalRecord(updatedSet, computeExerciseRecords(exercise.name, history), exercise.type)) {
+            banner = Banner("New best: ${exercise.name}, ${formatSet(updatedSet, exercise.type)}", Icons.Rounded.EmojiEvents, isPr = true)
         }
         if (isEditingPastWorkout) return
 
@@ -467,7 +468,10 @@ fun ActiveWorkoutScreen(
         ExercisePickerSheet(
             existingNames = exercises.map { it.name }.toSet(),
             onPick = { info -> addFromLibrary(info.name, info.muscle) },
-            onCreateCustom = { name -> addFromLibrary(name, "") },
+            onCreateCustom = { name, type ->
+                LocalStorage.setExerciseType(context, name, type)
+                addFromLibrary(name, "")
+            },
             onDismiss = { showPicker = false }
         )
     }
@@ -488,6 +492,7 @@ fun ActiveWorkoutScreen(
             },
             onRemove = { detailsFor = null; removeCandidate = name },
             onOpenHistory = { detailsFor = null; onOpenExercise(name) },
+            onChangeType = { type -> onChangeExerciseType(name, type) },
             splitTitle = split.title,
             onDismiss = { detailsFor = null }
         )
@@ -728,7 +733,7 @@ private fun ExerciseCard(
                 Text(exercise.name, style = AppType.headline, color = P.textPrimary, maxLines = 2)
                 val sub = buildList {
                     if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
-                    records.bestSet?.let { add("Best ${formatSet(it)}") }
+                    records.bestSet?.let { add("Best ${formatSet(it, exercise.type)}") }
                 }.joinToString(" · ")
                 if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary)
             }
@@ -801,9 +806,20 @@ private fun ExerciseCard(
 
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Set", style = AppType.caption, color = P.textTertiary, modifier = Modifier.width(40.dp))
-                Text(Units.current.label, style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1.25f).padding(start = 12.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Reps", style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                val unit = Units.current
+                val (first, second) = when (exercise.type) {
+                    ExerciseType.WEIGHT_REPS -> unit.label to "Reps"
+                    ExerciseType.WEIGHTED_BODYWEIGHT -> "Added ${unit.label}" to "Reps"
+                    ExerciseType.ASSISTED -> "Assist ${unit.label}" to "Reps"
+                    ExerciseType.BODYWEIGHT -> null to "Reps"
+                    ExerciseType.DURATION -> null to "Time"
+                    ExerciseType.DISTANCE_TIME -> unit.distanceLabel to "Time"
+                }
+                if (first != null) {
+                    Text(first, style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1.25f).padding(start = 12.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(second, style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1f).padding(start = 12.dp))
                 Spacer(Modifier.width(52.dp))
             }
 
@@ -813,7 +829,8 @@ private fun ExerciseCard(
                 SetRow(
                     set = set,
                     workNumber = workNumber,
-                    isPr = isSetPersonalRecord(set, records),
+                    isPr = isSetPersonalRecord(set, records, exercise.type),
+                    type = exercise.type,
                     canDelete = exercise.sets.size > 1,
                     badgeModifier = if (setIdx == 0) firstBadgeModifier else Modifier,
                     step = settings.weightStep,
@@ -841,13 +858,15 @@ private fun ExerciseCard(
                         val last = ex.sets.lastOrNull()
                         ex.copy(sets = ex.sets + SetEntry(
                             setNumber = ex.sets.size + 1,
-                            weight = last?.weight ?: "20",
-                            reps = last?.reps ?: "8",
-                            restSeconds = last?.restSeconds?.takeIf { it >= 0 && last.intensityType != "DROP" } ?: ex.restSeconds
+                            weight = last?.weight ?: if (ex.type.usesWeight) "20" else "",
+                            reps = last?.reps ?: if (ex.type.usesReps) "8" else "",
+                            restSeconds = last?.restSeconds?.takeIf { it >= 0 && last.intensityType != "DROP" } ?: ex.restSeconds,
+                            seconds = last?.seconds.orEmpty(),
+                            distanceM = last?.distanceM.orEmpty()
                         ))
                     }
                 }, Modifier.weight(1f), icon = Icons.Rounded.Add, height = 40.dp)
-                SecondaryButton("Drop set", {
+                if (exercise.type.hasWeightSuggestions) SecondaryButton("Drop set", {
                     haptics.tick()
                     onUpdate { ex ->
                         val last = ex.sets.lastOrNull()
@@ -931,6 +950,7 @@ private fun SetRow(
     isPr: Boolean,
     canDelete: Boolean,
     badgeModifier: Modifier,
+    type: ExerciseType,
     step: Float,
     onChange: ((SetEntry) -> SetEntry) -> Unit,
     onSetType: (String) -> Unit,
@@ -971,12 +991,15 @@ private fun SetRow(
                 else Text(badgeText, style = AppType.label.copy(fontWeight = FontWeight.SemiBold), color = badgeFg)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
-                listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up", "DROP" to "Drop set", "REST_PAUSE" to "Rest-pause").forEach { (type, label) ->
-                    val selected = if (type == "WARMUP") set.isWarmupSet else set.intensityType == type && !set.isWarmupSet
+                // Drop sets and rest-pause only mean something when there's a load to change.
+                val kinds = if (type.hasWeightSuggestions) listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up", "DROP" to "Drop set", "REST_PAUSE" to "Rest-pause")
+                else listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up")
+                kinds.forEach { (kind, label) ->
+                    val selected = if (kind == "WARMUP") set.isWarmupSet else set.intensityType == kind && !set.isWarmupSet
                     DropdownMenuItem(
                         text = { Text(label, style = AppType.body) },
                         trailingIcon = { if (selected) Icon(Icons.Rounded.Check, null, tint = P.accentPrimary) },
-                        onClick = { menuOpen = false; onSetType(type) }
+                        onClick = { menuOpen = false; onSetType(kind) }
                     )
                 }
                 HorizontalDivider(color = P.borderSubtle)
@@ -992,28 +1015,51 @@ private fun SetRow(
             }
         }
 
-        WeightStepper(
-            storedKg = set.weight,
-            onChange = { w -> onChange { it.copy(weight = w) } },
-            step = step,
-            onStep = haptics::tick,
-            modifier = Modifier.weight(1.25f)
-        )
-        Spacer(Modifier.width(8.dp))
-        NumberStepper(
-            value = set.reps,
-            onValueChange = { v -> onChange { it.copy(reps = v.filter(Char::isDigit).take(3)) } },
-            onMinus = {
-                haptics.tick()
-                onChange { it.copy(reps = "${maxOf(0, parseRepsClean(set.reps, 8) - 1)}") }
-            },
-            onPlus = {
-                haptics.tick()
-                onChange { it.copy(reps = "${parseRepsClean(set.reps, 8) + 1}") }
-            },
-            keyboardType = KeyboardType.Number,
-            modifier = Modifier.weight(1f)
-        )
+        if (type.usesWeight) {
+            WeightStepper(
+                storedKg = set.weight,
+                onChange = { w -> onChange { it.copy(weight = w) } },
+                step = step,
+                onStep = haptics::tick,
+                fallbackKg = if (type == ExerciseType.WEIGHT_REPS) 20f else 0f,
+                modifier = Modifier.weight(1.25f)
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        if (type.usesDistance) {
+            DistanceStepper(
+                meters = set.distanceM,
+                onChange = { m -> onChange { it.copy(distanceM = m) } },
+                onStep = haptics::tick,
+                modifier = Modifier.weight(1.25f)
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        if (type.usesReps) {
+            NumberStepper(
+                value = set.reps,
+                onValueChange = { v -> onChange { it.copy(reps = v.filter(Char::isDigit).take(3)) } },
+                onMinus = {
+                    haptics.tick()
+                    onChange { it.copy(reps = "${maxOf(0, parseRepsClean(set.reps, 8) - 1)}") }
+                },
+                onPlus = {
+                    haptics.tick()
+                    onChange { it.copy(reps = "${parseRepsClean(set.reps, 8) + 1}") }
+                },
+                keyboardType = KeyboardType.Number,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (type.usesTime) {
+            DurationStepper(
+                seconds = set.seconds,
+                onChange = { sec -> onChange { it.copy(seconds = sec) } },
+                step = if (type == ExerciseType.DISTANCE_TIME) 60 else 15,
+                onStep = haptics::tick,
+                modifier = Modifier.weight(1f)
+            )
+        }
         Spacer(Modifier.width(8.dp))
         CheckButton(done = set.isCompleted, onClick = onToggle)
     }
@@ -1153,6 +1199,7 @@ private fun ExerciseDetailsSheet(
     onSaveNote: (String) -> Unit,
     onRemove: () -> Unit,
     onOpenHistory: () -> Unit,
+    onChangeType: (ExerciseType) -> Unit,
     onDismiss: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -1180,17 +1227,31 @@ private fun ExerciseDetailsSheet(
                 Spacer(Modifier.width(6.dp))
                 CircleIconButton(Icons.Rounded.ArrowDownward, "Move down", onMoveDown, enabled = canMoveDown, size = 36.dp)
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            val type = exercise.type
+            ExerciseTypeRow(type, onChangeType)
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile(if (rec.bestEstimated1Rm > 0f) formatWeightKg(rec.bestEstimated1Rm) else "—", "Est. 1-rep max", Modifier.weight(1f))
-                StatTile(if (rec.maxWeightKg > 0f) formatWeightKg(rec.maxWeightKg) else "—", "Heaviest", Modifier.weight(1f))
-                StatTile(rec.bestSet?.let { "${formatWeightNumber(it.weightKg)} × ${it.reps}" } ?: "—", "Best set", Modifier.weight(1f))
+                if (type.hasWeightSuggestions) {
+                    StatTile(if (rec.bestEstimated1Rm > 0f) formatWeightKg(rec.bestEstimated1Rm) else "—", "Est. 1-rep max", Modifier.weight(1f))
+                    StatTile(if (rec.maxWeightKg > 0f) formatWeightKg(rec.maxWeightKg) else "—", "Heaviest", Modifier.weight(1f))
+                    StatTile(rec.bestSet?.let { formatSetShort(it, type) } ?: "—", "Best set", Modifier.weight(1f))
+                } else {
+                    val bestLabel = when (type) {
+                        ExerciseType.BODYWEIGHT -> "Most reps"
+                        ExerciseType.ASSISTED -> "Least help"
+                        else -> "Longest"
+                    }
+                    StatTile(rec.bestSet?.let { formatSet(it, type) } ?: "—", bestLabel, Modifier.weight(1f))
+                    val last = rec.recentHistory.firstOrNull()?.second?.let { formatSessionValue(type, sessionValue(type, it)) }
+                    StatTile(last ?: "—", "Last time", Modifier.weight(1f))
+                }
             }
             if (rec.chartPoints.size >= 2) {
                 Spacer(Modifier.height(16.dp))
-                Text("Top weight per session", style = AppType.label, color = P.textSecondary)
+                Text(sessionValueTitle(type), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
-                TrendChart(rec.chartPoints)
+                TrendChart(rec.chartPoints, label = { formatSessionValueShort(type, it) })
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
@@ -1226,7 +1287,7 @@ private fun ExerciseDetailsSheet(
                 rec.recentHistory.forEach { (label, sets) ->
                     Column(Modifier.padding(top = 10.dp)) {
                         Text(label, style = AppType.caption, color = P.textTertiary)
-                        Text(sets.joinToString("  ·  ") { "${formatWeightNumber(it.weightKg)} × ${it.reps}" }, style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
+                        Text(sets.joinToString("  ·  ") { formatSetShort(it, exercise.type) }, style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                     }
                 }
             }
