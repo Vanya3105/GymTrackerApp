@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 0 is done and waiting for an on-device check, then merge to `master`.
-Then start **Phase 1, step 1**: add Room + KSP and define the entities.
+Phase 1 is done on branch `phase-1-room`, waiting for an on-device check by the owner, then merge to `master`.
+Then start **Phase 2, step 1**: the exercise detail screen. Use `GymDao` queries for per-exercise history instead of scanning all workouts.
 
 ---
 
@@ -21,19 +21,20 @@ Then start **Phase 1, step 1**: add Room + KSP and define the entities.
 - [x] Fix: an unreadable store file is copied aside instead of being silently overwritten
 - [x] `ROADMAP.md` + `CLAUDE.md`
 
-## Phase 1 — Room database (branch `phase-1-room`)
-Riskiest phase: existing user data must migrate without loss.
-- [ ] Add Room + KSP. Entities: `ExerciseDef` (stable id, name, muscle, equipment, type, isCustom), `Workout`, `WorkoutExercise`, `WorkoutSet`, `BodyWeight`, `SplitTemplate` + items, `ExerciseNote`/rest defaults
-- [ ] Seed `ExerciseDef` from `ExerciseDatabase`. History references exercises by id, not name
-- [ ] One-time migration JSON → Room using `StoreCodec`; keep the old JSON file as `*.migrated` backup; idempotent
-- [ ] Repository layer replacing `LocalStorage` history/profile calls; settings, active session and widget settings may stay JSON or move to DataStore (decide in-phase)
-- [ ] Widgets, lock screen and receivers read through the repository (keep the `flush()` contract for receivers)
-- [ ] Backup export/import still uses the same JSON format (compatible with old backups)
-- [ ] Renaming a custom exercise keeps its history
-- [ ] Tests: migration from sample v3 JSON, DAO queries (Robolectric or instrumented)
+## Phase 1 — Room database ✅ (branch `phase-1-room`)
+- [x] Room 2.8 + KSP. Entities: `exercises` (stable id, case-insensitive unique name, muscle, note, default rest), `workouts`, `workout_exercises`, `workout_sets`, `body_weight`, `split_template_items`. Schema v1 exported to `app/schemas/`
+- [x] History and templates reference exercises by id. Library exercises take the library spelling and muscle
+- [x] One-time JSON → Room migration on first launch. The original is kept as `gym_tracker_store_v2.json.pre-room`. Merges over Room, so a retry after a crash loses nothing
+- [x] `LocalStorage` stays the only API (no call-site changes). Reads from memory; Room and JSON writes are ordered on one storage thread
+- [x] Widgets, lock screen and receivers unchanged; `flush()` now waits for Room writes too
+- [x] Backup export/import keeps the old single-file format (old ↔ new builds compatible)
+- [x] `LocalStorage.renameExercise` updates history, templates, notes and the active session (UI comes in Phase 2)
+- [x] Tests: `RoomStoreTest`, `StorageMigrationTest` (Robolectric, real v3 fixture), and mutation-checked
+- [x] Verified on emulator: migration, debug + R8 release builds, finishing a workout then force-stopping
 
 ## Phase 2 — Progress core
 - [ ] Exercise detail screen: full history, charts for est. 1RM, best set, volume; rep PRs (1/3/5/8/10)
+- [ ] Rename an exercise from its detail screen (uses `LocalStorage.renameExercise`)
 - [ ] Open it from history, the live workout and the progress screen
 - [ ] Units: kg/lb setting; store kg, convert for display and input; lb-friendly weight steps
 
@@ -73,3 +74,4 @@ Riskiest phase: existing user data must migrate without loss.
 
 ## Decisions log
 - 2026-10-23: `applicationId` changed from `com.example.gymtracker`. Android sees this as a new app: export a backup from the old app and import it into the new one. The Kotlin `namespace`/package stays `com.example.gymtracker` for now (renaming it is cosmetic and touches every file).
+- 2026-10-23: Room holds history, body weight, templates and per-exercise notes/rest. Settings, profile, active session and widget settings stay in the JSON file: they are small and written on every tap. `LocalStorage` stays synchronous via an in-memory copy, so the UI didn't need rewriting. Set weight/reps stay strings in Room for now (exact round trip of half-typed sets); Phase 3 revisits this with exercise types.

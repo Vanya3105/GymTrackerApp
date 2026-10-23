@@ -16,7 +16,9 @@ When the user says "continue", that is what they mean.
 
 ## Code map
 - Kotlin package `com.example.gymtracker` (the `applicationId` is `com.vanyaevtushenko.gymtracker`).
-- `Engine.kt`: storage (`LocalStorage`, `StoreCodec`), records/1RM, suggestions, rest alarms, dates.
+- `Storage.kt`: `LocalStorage` (the only storage API; in-memory reads, ordered writes on one storage thread), `StoreCodec` (JSON/backup format).
+- `Database.kt`: Room schema (`GymDatabase`, `GymDao`) and `RoomStore` (model <-> Room). Schemas are exported to `app/schemas/`; bump the version and add a migration for any schema change.
+- `Engine.kt`: records/1RM, suggestions, rest alarms, notifications, dates.
 - `Models.kt`: data classes. `ExerciseDatabase.kt`: built-in exercise library.
 - Screens: `HomeScreen`, `ActiveWorkoutScreen`, `HistoryScreen`, `ProgressScreen`, `SettingsScreen`, `OnboardingScreen`.
 - Design system: `Theme.kt` (`P` palette, `AppType`), `Components.kt`.
@@ -24,5 +26,6 @@ When the user says "continue", that is what they mean.
 
 ## Conventions
 - Compose + Material 3, custom design system; no DI framework, no ViewModels so far.
-- Weights stored in kg. Old store files and backups must keep loading (see `StoreCodecTest`).
+- Weights stored in kg. Old store files and backups must keep loading (see `StoreCodecTest`, `StorageMigrationTest`).
+- Storage tests run on Robolectric (`RoomStoreTest`, `StorageMigrationTest`). On-device checks: use the emulator (`emulator-5554`), never the user's phone.
 - Comments are sparse and explain *why*.

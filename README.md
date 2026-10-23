@@ -38,7 +38,7 @@ A simple, offline workout log. Pick your split, follow the suggested weights, an
 ## Tech
 * **UI:** Jetpack Compose with Material 3, a custom design system (`Theme.kt`, `Components.kt`) and Material icons.
 * **Widgets & lock screen:** `RemoteViews`, `AppWidgetProvider`, bitmaps drawn at each widget's real size.
-* **Storage:** a single local JSON file (`LocalStorage`), kept in memory and written in the background with an atomic file swap. Widget and lock-screen refreshes are batched.
+* **Storage:** `LocalStorage` is the single entry point. Workout history, body weight, split templates and exercise notes live in a Room database, with exercises stored once by id. Settings, profile, the active workout and widget settings live in a small JSON file. Reads come from memory; writes reach disk in order on one background thread. Widget and lock-screen refreshes are batched. Backups are still a single JSON file.
 * **Rest alarms:** `AlarmManager` + `BroadcastReceiver`.
 
 ---
