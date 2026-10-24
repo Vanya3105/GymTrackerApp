@@ -143,7 +143,7 @@ fun ActiveWorkoutScreen(
     val tips = remember {
         listOf(
             TutorialStepInfo("HANDLE", "Change the order", "Hold and drag the handle to move an exercise up or down."),
-            TutorialStepInfo("SUGGESTION", "Weight suggestions", "Based on your last sessions. Tap \"Use\" to fill in the suggested weight."),
+            TutorialStepInfo("SUGGESTION", "Weight suggestions", "Based on your last sessions and today's sets. Tap \"Use\" to fill in the suggested weight."),
             TutorialStepInfo("SET_BADGE", "Set options", "Tap a set number to mark it as a warm-up or drop set, change its rest, work out the plates, or delete it.")
         )
     }
@@ -810,7 +810,7 @@ private fun ExerciseCard(
                     onUpdate { ex ->
                         ex.copy(sets = ex.sets.map { s ->
                             if (s.isCompleted || s.isWarmupSet) s
-                            else s.copy(weight = scaleWeight(s.weight, 0.9f))
+                            else s.copy(weight = lighterWeight(s.weight, settings.weightStep))
                         })
                     }
                 }
@@ -937,7 +937,7 @@ private fun SuggestionBox(suggestion: Suggestion, modifier: Modifier, onUse: () 
             Spacer(Modifier.width(8.dp))
             Text(suggestion.message, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
         }
-        Row(Modifier.padding(top = 10.dp, start = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!suggestion.forNextTime) Row(Modifier.padding(top = 10.dp, start = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (suggestion.suggestedWeight.isNotBlank()) {
                 Text(
                     "Use ${formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))}",

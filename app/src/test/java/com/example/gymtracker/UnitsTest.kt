@@ -89,10 +89,10 @@ class UnitsTest {
         Units.set(WeightUnit.LB)
         val w135 = WeightUnit.LB.stored(135f)
         val history = listOf(
-            workout(2, ExerciseEntry("Barbell Bench Press", sets = listOf(set(w135, "8")))),
+            workout(2, ExerciseEntry("Barbell Bench Press", sets = listOf(set(w135, "10"), set(w135, "10")))),
             workout(1, ExerciseEntry("Barbell Bench Press", sets = listOf(set(w135, "9"))))
         )
-        val advice = suggestFromSplitHistory("Push", ExerciseEntry("Barbell Bench Press"), history, 5f)!!
+        val advice = suggestFromSplitHistory("Push", ExerciseEntry("Barbell Bench Press"), history, 5f, now = 2)!!
         assertEquals("140", WeightUnit.LB.number(parseWeightClean(advice.suggestedWeight, 0f)))
         assertTrue(advice.message, advice.message.contains("140 lb"))
     }

@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–6 are merged into `master` (v3.6.0). Next: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Phases 0–6 are merged into `master` (v3.6.0). **Coaching v2** (branch `coaching-v2`) is done and waits for the owner to try it on a phone before merging. Then: the owner wants to rework the start screen and the split picker (they'll describe it). After that: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -75,6 +75,17 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - [x] Set screen fits a 40 mm watch without scrolling. Checked with Robolectric screenshots of every screen on 192 dp and 227 dp round displays (`WatchScreenshotTest`, PNGs in `wear/build/screenshots`)
 - [x] Tested by the owner on their Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
 
+## Coaching v2 ✅ (branch `coaching-v2`, between phases 6 and 7)
+Weight suggestions rewritten from published guidance (all in `Coaching.kt`, tested by `CoachingTest`):
+- [x] Double progression: hold a weight until *every* set at it reaches the top of the range (back-off and drop sets don't count), then add weight. Inside the range: "stay and add a rep", showing last time's reps
+- [x] Jump size from the estimated 1RM: one step normally; beat the top by 2+ reps on every set and it jumps further, as long as the reps should stay in range and the jump is ≤ ~10% (ACSM: 2–10%). When one step is >10% of the load (light dumbbells), it asks for 2 extra reps first. Weighted bodyweight counts body weight in the load
+- [x] Going down: well under the range once (3+ reps short) or under it twice at the same weight → the weight the e1RM says gives mid-range reps (≤15% off); 3 sessions at one weight without more reps → reset ~10%; e1RM falling 3 sessions running → ~10% lighter. Just under once → hold
+- [x] Breaks: ≥2 weeks off → repeat before moving up; ≥4 weeks → ease back in at 90%; ≥8 weeks → 80%
+- [x] During the workout: first set 2+ reps under the range → lighter for the rest; first set 3+ over → heavier (≤15%); reps crashing later → rest longer or lighter. Losing a rep or two per set is treated as normal fatigue
+- [x] Once every set is done the card shows next time's plan (no "Use" button). "Go lighter" rounds down to the step
+- [x] Default ranges 6–10 (compound) / 8–12 (isolation), unified (they disagreed before); a day's target overrides; even sets of ≤5 twice running (5×5, 3×3) read as strength work (3–5), not misses
+- [x] Uses the same day's history first, any day's when this day has none (was: none)
+
 ## Phase 7 — Data in/out
 - [ ] CSV export
 - [ ] Import from Strong and Hevy CSV (map exercise names to the library)
@@ -97,6 +108,7 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 ---
 
 ## Decisions log
+- 2026-10-24: Coaching v2 rules come from: double progression (hold until every set hits the top of the range); ACSM 2009 progression stand (raise load 2–10% once the target is beaten by 1–2 reps); Plotkin et al. 2022 (adding reps and adding load grow muscle about equally, so "add a rep" is real progress); the fatigue meta-analysis summarised by Stronger by Science (to failure, set 2 is ~70% of set 1's reps, set 3 ~55%, so reps falling a little is normal); detraining reviews (little strength lost in 2–3 weeks off, more after ~4); and the common 10% reset after repeated failed sessions (linear-progression programs, Helms' novice rule). Epley for e1RM, as the rest of the app uses. All the cut-offs are rules of thumb, not study results.
 - 2026-10-23: `applicationId` changed from `com.example.gymtracker`. Android sees this as a new app: export a backup from the old app and import it into the new one. The Kotlin `namespace`/package stays `com.example.gymtracker` for now (renaming it is cosmetic and touches every file).
 - 2026-10-23: Room holds history, body weight, templates and per-exercise notes/rest. Settings, profile, active session and widget settings stay in the JSON file: they are small and written on every tap. `LocalStorage` stays synchronous via an in-memory copy, so the UI didn't need rewriting. Set weight/reps stay strings in Room for now (exact round trip of half-typed sets); Phase 3 revisits this with exercise types.
 - 2026-10-23: The exercise detail screen scans the in-memory history instead of querying Room. History is already in memory and a scan of a few hundred workouts is instant; a Room query would add async loading for no gain.

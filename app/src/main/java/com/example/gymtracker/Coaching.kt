@@ -2,6 +2,8 @@ package com.example.gymtracker
 
 import androidx.compose.runtime.Immutable
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 // ============================================================================
@@ -98,12 +100,48 @@ fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>, now: Long = Sys
     }
 }
 
+
 // ============================================================================
 // WEIGHT SUGGESTIONS
 // ============================================================================
+// Double progression: keep a weight until every work set reaches the top of the rep range, then
+// add weight. How much comes from the estimated 1RM, capped near 10% (ACSM: 2–10% once you beat
+// the target by a rep or two). Misses below the range, stalls and long breaks bring it down.
+// Everything here works in the display unit, so steps and rounding land on real plates.
 
-/** A stored kg string as "62.5 kg" / "135 lb". */
-private fun shown(storedKg: String) = formatWeightKg(parseWeightClean(storedKg, 0f))
+private const val DAY_MS = 24L * 60 * 60 * 1000
+
+/** Body weight assumed for weighted bodyweight lifts when no workout recorded one. */
+private const val DEFAULT_BODY_KG = 75f
+
+/** The rep range coaching aims for. */
+private class RepGoal(val min: Int, val max: Int) {
+    val text: String get() = if (min == max) "$min" else "$min–$max"
+    val mid: Int get() = (min + max + 1) / 2
+}
+
+/**
+ * One session of an exercise, in the display unit. Only sets at the session's heaviest weight
+ * count for reps: back-off and drop sets would otherwise look like misses.
+ */
+private class Session(val time: Long, sets: List<SetEntry>, unit: WeightUnit, bodyLoad: Float) {
+    val weight = unit.fromKg(sets.maxOf { it.weightKg })
+    val reps = sets.filter { unit.fromKg(it.weightKg) >= weight - 0.01f }.map { it.repCount }
+    val firstReps get() = reps.first()
+    val minReps get() = reps.min()
+    val totalReps get() = reps.sum()
+    // Epley gets unreliable past ~15 reps, where it overstates the max.
+    val e1rm = sets.maxOf { calculateEstimated1Rm(unit.fromKg(it.weightKg) + bodyLoad, it.repCount.coerceAtMost(15)) }
+}
+
+/** Reps expected at [weight] from an estimated 1RM (Epley, inverted). */
+private fun repsAt(e1rm: Float, weight: Float, bodyLoad: Float): Float = 30f * (e1rm / (weight + bodyLoad) - 1f)
+
+/** The weight that should allow [reps] reps from an estimated 1RM. */
+private fun weightFor(e1rm: Float, reps: Int, bodyLoad: Float): Float = e1rm / (1f + reps / 30f) - bodyLoad
+
+private fun floorTo(value: Float, step: Float): Float =
+    if (step <= 0f) value else (floor(value / step + 0.001f) * step).coerceAtLeast(0f)
 
 private fun isCompoundLift(exerciseName: String): Boolean {
     val lower = exerciseName.lowercase(Locale.US)
@@ -112,57 +150,205 @@ private fun isCompoundLift(exerciseName: String): Boolean {
     } && !lower.contains("pushdown") && !lower.contains("extension") && !lower.contains("fly")
 }
 
+private fun repGoal(exercise: ExerciseEntry, recent: List<Session>): RepGoal {
+    exercise.target?.let { return RepGoal(it.repMin, it.repMax) }
+    // No plan, but even sets of 5 or fewer (5×5, 3×3) twice running: strength work, not a miss.
+    // Misses look different: the reps tail off from set to set.
+    if (recent.size >= 2 && recent.take(2).all { it.firstReps in 1..5 && it.minReps == it.firstReps }) return RepGoal(3, 5)
+    // Ranges 4–5 reps wide leave room to progress for a few weeks between jumps.
+    return if (isCompoundLift(exercise.name)) RepGoal(6, 10) else RepGoal(8, 12)
+}
+
+private fun bodyLoadFor(type: ExerciseType, history: List<CompletedWorkout>, unit: WeightUnit): Float =
+    if (type != ExerciseType.WEIGHTED_BODYWEIGHT) 0f
+    else unit.fromKg(history.firstOrNull { it.bodyWeightKg > 0f }?.bodyWeightKg ?: DEFAULT_BODY_KG)
+
+/** Past sessions of this exercise, newest first: the same day if it has any, else any day. */
+private fun pastSessions(
+    splitTitle: String,
+    exercise: ExerciseEntry,
+    history: List<CompletedWorkout>,
+    unit: WeightUnit,
+    bodyLoad: Float
+): List<Session> {
+    fun from(workouts: List<CompletedWorkout>) = workouts.mapNotNull { workout ->
+        workout.exercises
+            .find { !it.isSkipped && it.name.equals(exercise.name, ignoreCase = true) }
+            ?.workSets
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { Session(workout.id, it, unit, bodyLoad) }
+    }
+    // A day can be heavy or light on purpose, so its own history comes first.
+    return from(history.filter { it.splitTitle.equals(splitTitle, ignoreCase = true) }).ifEmpty { from(history) }
+}
+
 /**
- * What to lift next for this exercise. Checks, in order: a big rep drop within today's sets,
- * same-split history ([suggestFromSplitHistory]), then today's sets alone (double progression:
- * hit the top of the rep range on every set, then add weight). Null for exercise types
- * where weight suggestions don't apply (bodyweight, assisted, time, distance).
+ * What to lift next for this exercise. While sets remain, reacts to today's sets (too heavy,
+ * too light, reps falling off faster than normal fatigue); once every set is done it plans the
+ * next session. Null for exercise types where weight suggestions don't apply.
  */
 fun suggestNextWeight(
     splitTitle: String,
     exercise: ExerciseEntry,
     history: List<CompletedWorkout>,
-    step: Float
+    step: Float,
+    now: Long = System.currentTimeMillis()
 ): Suggestion? {
     if (!exercise.type.hasWeightSuggestions || exercise.programmed) return null
-    val isCompound = isCompoundLift(exercise.name)
-    val repRange = exercise.target?.repText ?: if (isCompound) "6–8" else "8–12"
-    val topReps = exercise.target?.repMax ?: if (isCompound) 8 else 10
+    val unit = Units.current
+    val bodyLoad = bodyLoadFor(exercise.type, history, unit)
+    val past = pastSessions(splitTitle, exercise, history, unit, bodyLoad)
+    val goal = repGoal(exercise, past)
 
     val workSets = exercise.sets.filter { !it.isWarmupSet }
-    val doneSets = workSets.filter { it.isCompleted && it.repCount > 0 }
+    val done = workSets.filter { it.isCompleted && it.repCount > 0 }
+    // Weighted bodyweight with nothing added yet and no history: there's no load to build on.
+    if (exercise.type == ExerciseType.WEIGHTED_BODYWEIGHT && past.isEmpty() && workSets.none { it.weightKg > 0f }) return null
 
-    if (doneSets.size >= 2) {
-        val firstReps = parseRepsClean(doneSets.first().reps, 8)
-        val latestReps = parseRepsClean(doneSets.last().reps, 8)
-        if (firstReps >= 6 && latestReps <= (firstReps * 0.62f).toInt()) {
-            val lighter = scaleWeight(doneSets.last().weight, 0.9f, 40f)
-            return Suggestion(
-                "Your reps fell from $firstReps to $latestReps. Try ${shown(lighter)}, or rest a bit longer.",
-                SuggestionTone.CAUTION, lighter
-            )
-        }
+    if (done.isNotEmpty() && workSets.all { it.isCompleted }) {
+        return plan(listOf(Session(now, done, unit, bodyLoad)) + past, goal, step, unit, bodyLoad, now, nextTime = true)
     }
+    if (done.isNotEmpty()) inSession(done, goal, step, unit, bodyLoad)?.let { return it }
+    if (past.isNotEmpty()) return plan(past, goal, step, unit, bodyLoad, now, nextTime = false)
 
-    suggestFromSplitHistory(splitTitle, exercise, history, step)?.let { return it }
-    // Weighted bodyweight with nothing added yet: there's no load to build on.
-    if (exercise.type == ExerciseType.WEIGHTED_BODYWEIGHT && workSets.none { it.weightKg > 0f }) return null
-
-    val unit = Units.current
-    val topWeight = unit.stored(unit.fromKg(workSets.maxOfOrNull { parseWeightClean(it.weight, 40f) } ?: 40f))
-    if (doneSets.isNotEmpty()) {
-        if (doneSets.any { parseRepsClean(it.reps, 8) in 1..4 }) {
-            val lighter = scaleWeight(topWeight, 0.9f, 40f)
-            return Suggestion("That's heavy — 4 reps or fewer. Try ${shown(lighter)}.", SuggestionTone.CAUTION, lighter)
-        }
-        if (doneSets.all { parseRepsClean(it.reps, 8) >= topReps }) {
-            val heavier = stepWeight(topWeight, step, 40f)
-            return Suggestion("Every set hit $topReps+ reps. Go up to ${shown(heavier)}.", SuggestionTone.GOOD, heavier)
-        }
-    }
-
+    val planned = unit.fromKg(workSets.maxOfOrNull { parseWeightClean(it.weight, 0f) }?.takeIf { it > 0f } ?: unit.toKg(unit.defaultWorkWeight))
     return Suggestion(
-        "Aim for $repRange reps at ${shown(topWeight)}. Hit $topReps on every set, then add ${formatKgClean(step)} ${unit.label}.",
-        SuggestionTone.NEUTRAL, topWeight
+        "Aim for ${goal.text} reps at ${formatKgClean(planned)} ${unit.label}. Hit ${goal.max} on every set, then add ${formatKgClean(step)} ${unit.label}.",
+        SuggestionTone.NEUTRAL, unit.stored(planned)
     )
+}
+
+/** Advice for the rest of today's sets, or null when today's sets look as they should. */
+private fun inSession(done: List<SetEntry>, goal: RepGoal, step: Float, unit: WeightUnit, bodyLoad: Float): Suggestion? {
+    // Drop and rest-pause sets are meant to fall short; judge straight sets only.
+    val straight = done.filter { it.intensityType == "NORMAL" }.ifEmpty { return null }
+    val latest = straight.last()
+    val w = unit.fromKg(latest.weightKg)
+    val e1rm = calculateEstimated1Rm(w + bodyLoad, latest.repCount.coerceAtMost(15))
+    fun make(v: Float, tone: SuggestionTone, message: String) =
+        Suggestion(message, tone, unit.stored(unit.round(v.coerceAtLeast(0f))))
+    fun shown(v: Float) = "${formatKgClean(unit.round(v))} ${unit.label}"
+
+    // Losing a rep or two from set to set is normal fatigue; two under the range is not.
+    if (latest.repCount <= goal.min - 2 && w > 0f) {
+        val lighter = minOf(w - step, maxOf(floorTo(weightFor(e1rm, goal.min, bodyLoad), step), floorTo(w * 0.8f, step))).coerceAtLeast(0f)
+        return if (straight.size == 1) {
+            make(lighter, SuggestionTone.CAUTION, "${latest.repCount} reps is under your ${goal.text} range, so this is too heavy today. Use ${shown(lighter)} for the next sets.")
+        } else {
+            make(lighter, SuggestionTone.CAUTION, "Reps fell to ${latest.repCount}. Rest a little longer, or use ${shown(lighter)} for the rest.")
+        }
+    }
+    if (straight.size == 1 && latest.repCount >= goal.max + 3) {
+        val heavier = maxOf(w + step, minOf(floorTo(weightFor(e1rm, goal.mid, bodyLoad), step), floorTo(w * 1.15f, step)))
+        return make(heavier, SuggestionTone.GOOD, "${latest.repCount} reps is light for ${goal.text}. Go up to ${shown(heavier)} for the next sets.")
+    }
+    return null
+}
+
+/** The next session's weight from [sessions], newest first (never empty). */
+private fun plan(
+    sessions: List<Session>,
+    goal: RepGoal,
+    step: Float,
+    unit: WeightUnit,
+    bodyLoad: Float,
+    now: Long,
+    nextTime: Boolean
+): Suggestion {
+    val last = sessions[0]
+    val prev = sessions.getOrNull(1)
+    val w = last.weight
+    val whenText = if (nextTime) "next time" else "today"
+    val lastText = if (nextTime) "today" else "last time"
+    fun shown(v: Float) = "${formatKgClean(unit.round(v))} ${unit.label}"
+    fun make(v: Float, tone: SuggestionTone, message: String) =
+        Suggestion(message, tone, unit.stored(unit.round(v.coerceAtLeast(0f))), forNextTime = nextTime)
+    /** At least one step lighter, aiming at [target] but never more than [maxDrop] off. */
+    fun lighter(target: Float, maxDrop: Float) =
+        minOf(w - step, maxOf(floorTo(target, step), floorTo(w * (1f - maxDrop), step))).coerceAtLeast(0f)
+    val sameWeight = { s: Session -> abs(s.weight - w) < 0.01f }
+
+    // Back after a break. Strength barely drops in 2–3 weeks; after a month, ease back in.
+    val daysOff = ((now - last.time) / DAY_MS).toInt()
+    if (!nextTime && daysOff >= 28 && w > 0f) {
+        val back = floorTo(w * (if (daysOff >= 56) 0.8f else 0.9f), step)
+        return make(back, SuggestionTone.CAUTION, "It's been ${daysOff / 7} weeks since you last did this. Ease back in at ${shown(back)} and build up from there.")
+    }
+
+    // Well under the range once, or under it twice running at this weight: the weight is wrong.
+    val missedTwice = last.firstReps < goal.min && prev != null && sameWeight(prev) && prev.firstReps < goal.min
+    if (w > 0f && (last.firstReps <= goal.min - 3 || missedTwice)) {
+        val down = lighter(weightFor(last.e1rm, goal.mid, bodyLoad), 0.15f)
+        val why = if (missedTwice) "Under ${goal.min} reps at ${shown(w)} two sessions running."
+        else "Only ${last.firstReps} reps at ${shown(w)} $lastText, well under ${goal.text}."
+        return make(down, SuggestionTone.CAUTION, "$why Drop to ${shown(down)} $whenText and build back up.")
+    }
+
+    if (sessions.size >= 3 && w > 0f) {
+        val three = sessions.take(3)
+        // Same weight three times, never reaching the top and no more reps than before: a stall.
+        if (three.all(sameWeight) && three.none { it.minReps >= goal.max } && last.totalReps <= three[2].totalReps) {
+            val reset = lighter(w * 0.9f, 0.1f)
+            return make(reset, SuggestionTone.CAUTION, "No progress at ${shown(w)} in 3 sessions. Reset to ${shown(reset)} $whenText and work back up; you'll usually pass it within a few weeks.")
+        }
+        if (three[0].e1rm < three[1].e1rm * 0.99f && three[1].e1rm < three[2].e1rm * 0.99f) {
+            val down = lighter(w * 0.9f, 0.1f)
+            return make(down, SuggestionTone.CAUTION, "Your numbers have dipped three sessions in a row. Go lighter $whenText: ${shown(down)}, and check your sleep and recovery.")
+        }
+    }
+
+    if (last.minReps >= goal.max) {
+        val total = w + bodyLoad
+        // One step on a light dumbbell can be 20%+. Earn it with extra reps first.
+        val bigJump = total > 0f && step / total > 0.10f
+        if (bigJump && last.minReps < goal.max + 2) {
+            return make(w, SuggestionTone.NEUTRAL, "Every set hit ${goal.max}+ at ${shown(w)}. The next step is a big jump for this weight, so get ${goal.max + 2} reps on every set first.")
+        }
+        if (!nextTime && daysOff >= 14) {
+            return make(w, SuggestionTone.NEUTRAL, "First session in ${daysOff / 7} weeks. Repeat ${shown(w)} before moving up.")
+        }
+        var steps = 1
+        // Beat the top by 2+ on every set: a bigger jump, as long as the reps should stay in range.
+        if (last.minReps >= goal.max + 2 && last.e1rm > 0f) {
+            val cap = maxOf(w * 1.10f, w + step)
+            while (steps < 4 && w + (steps + 1) * step <= cap + 0.001f && repsAt(last.e1rm, w + (steps + 1) * step, bodyLoad) >= goal.mid) steps++
+        }
+        val up = w + steps * step
+        val message = if (steps == 1) "Every set hit ${goal.max}+ reps at ${shown(w)}. Go up to ${shown(up)} $whenText."
+        else "You beat ${goal.max} reps on every set at ${shown(w)}. Jump to ${shown(up)} $whenText."
+        return make(up, SuggestionTone.GOOD, message)
+    }
+
+    if (last.firstReps < goal.min) {
+        return make(w, SuggestionTone.CAUTION, "${last.firstReps} reps at ${shown(w)} $lastText, just under ${goal.text}. Stay there and aim for ${goal.min}.")
+    }
+    if (last.firstReps >= goal.max) {
+        return make(w, SuggestionTone.NEUTRAL, "Your first set hit ${goal.max} at ${shown(w)}. Get every set there, then move up.")
+    }
+    return make(w, SuggestionTone.NEUTRAL, "${shown(w)} for ${last.reps.joinToString(", ")} $lastText. Stay there and add a rep; move up once every set hits ${goal.max}.")
+}
+
+/**
+ * The weight for this exercise's next session from history alone (no sets logged today), used to
+ * lay out a new workout. Null when there is no history of it.
+ */
+fun suggestFromSplitHistory(
+    splitTitle: String,
+    exercise: ExerciseEntry,
+    history: List<CompletedWorkout>,
+    step: Float,
+    now: Long = System.currentTimeMillis()
+): Suggestion? {
+    if (!exercise.type.hasWeightSuggestions) return null
+    val unit = Units.current
+    val bodyLoad = bodyLoadFor(exercise.type, history, unit)
+    val past = pastSessions(splitTitle, exercise, history, unit, bodyLoad).ifEmpty { return null }
+    return plan(past, repGoal(exercise, past), step, unit, bodyLoad, now, nextTime = false)
+}
+
+/** "Go lighter": about 10% off, rounded down to the step and at least one step lighter. */
+fun lighterWeight(storedKg: String, step: Float): String {
+    val u = Units.current
+    val w = u.fromKg(parseWeightClean(storedKg, 0f))
+    return u.stored(u.round(minOf(w - step, floorTo(w * 0.9f, step)).coerceAtLeast(0f)))
 }
