@@ -10,7 +10,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 ## Next up
 
 Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
-Done: Health Connect, and the watch remote (`:wear` + `:watchlink`), built and unit-tested but not yet run on a watch. Next: **the owner installs it on the Galaxy Watch** and reports back; then the ongoing activity (workout shown on the watch face) and merging Phase 6.
+Done: Health Connect, and the watch remote (`:wear` + `:watchlink`), tested by the owner on their Galaxy Watch. Next: **Phase 6, last step**: ongoing activity (a running workout shows on the watch face), then merge Phase 6.
 
 ---
 
@@ -73,7 +73,7 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - [x] Watch → phone: −/+ on both values, set done, +15 s and skip rest (`WatchListenerService`, also while the phone app is closed), through the widget's `applySetAction`
 - [x] Watch UI: current set (scrolls with the bezel), rest countdown ring with +15 s / Skip and a buzz at the end while on screen, messages for no workout / all sets done / phone not connected
 - [ ] Ongoing activity, so a running workout shows on the watch face
-- [ ] Tested on the owner's Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
+- [x] Tested by the owner on their Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
 
 ## Phase 7 — Data in/out
 - [ ] CSV export
