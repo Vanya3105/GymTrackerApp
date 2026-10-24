@@ -66,6 +66,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
@@ -80,7 +81,10 @@ class MainActivity : ComponentActivity() {
         // The logo grows and fades as the app appears behind it.
         splash.setOnExitAnimationListener { provider ->
             val easing = PathInterpolator(0.4f, 0f, 0.2f, 1f)
-            provider.iconView.animate().scaleX(1.35f).scaleY(1.35f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing).start()
+            // Launches from a notification, widget or the watch get a splash without the logo, and
+            // iconView then throws instead of returning null.
+            runCatching { provider.iconView }.getOrNull()
+                ?.animate()?.scaleX(1.35f)?.scaleY(1.35f)?.setDuration(SPLASH_EXIT_MS)?.setInterpolator(easing)?.start()
             provider.view.animate().alpha(0f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing)
                 .withEndAction { provider.remove() }.start()
         }
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val SPLASH_HOLD_MS = 850L
+private const val SPLASH_HOLD_MS = 550L
 private const val SPLASH_EXIT_MS = 320L
 
 @Composable
@@ -211,9 +215,24 @@ fun GymTrackerApp(
         }
     }
 
+    // Weigh-ins from a scale or Samsung Health arrive through Health Connect while the app is away.
+    val healthScope = rememberCoroutineScope()
+    val pullFromHealth = rememberUpdatedState {
+        healthScope.launch {
+            HealthSync.refresh(context)
+            if (HealthSync.importWeights(context)) {
+                weightHistory = LocalStorage.loadWeightHistory(context)
+                userProfile = LocalStorage.loadUserProfile(context)
+            }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) reloadFromDisk.value()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                reloadFromDisk.value()
+                pullFromHealth.value()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

@@ -198,6 +198,7 @@ object LocalStorage {
         MuscleFatigueWidgetProvider.refreshAll(appCtx)
         SquarePulseWidgetProvider.refreshAll(appCtx)
         LockScreenWorkoutController.sync(appCtx)
+        WatchSync.publish(appCtx)
     }
 
     /** Drops in-memory state and closes the database so a test can start from the files on disk. */
@@ -262,11 +263,38 @@ object LocalStorage {
             val profObj = root.optJSONObject("userProfile") ?: JSONObject().also { root.put("userProfile", it) }
             profObj.put("currentWeightKg", rounded.toDouble())
         }
+        HealthSync.weightLogged(context, entry)
+        return loadWeightHistory(context)
+    }
+
+    /**
+     * Weigh-ins read from Health Connect (scales, Samsung Health). Unlike [addWeightLog] they keep
+     * their own time and aren't written back. Entries already logged, or imported before (even if
+     * deleted since, so a deleted weigh-in doesn't come back), are skipped.
+     */
+    fun importWeights(context: Context, entries: List<WeightLogEntry>): List<WeightLogEntry> {
+        val known = loadWeightHistory(context).map { it.id }.toSet() + importedWeightIds(context)
+        val fresh = entries.filter { it.id !in known }.distinctBy { it.id }
+        if (fresh.isEmpty()) return loadWeightHistory(context)
+        edit(context) { root ->
+            val arr = root.optJSONArray("healthImportedWeights") ?: JSONArray().also { root.put("healthImportedWeights", it) }
+            fresh.forEach { arr.put(it.id) }
+        }
+        editData(context, { d -> d.copy(weights = (d.weights + fresh).sortedByDescending { it.id }) }) { db ->
+            fresh.forEach { RoomStore.addBodyWeight(db, it) }
+        }
+        // The profile shows the latest weigh-in, whoever logged it.
+        val newest = loadWeightHistory(context).first()
+        if (fresh.any { it.id == newest.id }) edit(context) { root ->
+            val profObj = root.optJSONObject("userProfile") ?: JSONObject().also { root.put("userProfile", it) }
+            profObj.put("currentWeightKg", newest.weightKg.toDouble())
+        }
         return loadWeightHistory(context)
     }
 
     fun deleteWeightLog(context: Context, id: Long): List<WeightLogEntry> {
         editData(context, { d -> d.copy(weights = d.weights.filter { it.id != id }) }) { RoomStore.deleteBodyWeight(it, id) }
+        HealthSync.weightDeleted(context, id)
         return loadWeightHistory(context)
     }
 
@@ -355,11 +383,28 @@ object LocalStorage {
         })
     }
 
+    // --- Health Connect ---
+
+    /** Whether the user turned sharing on; Health Connect permissions are checked separately. */
+    fun isHealthSyncOn(context: Context): Boolean = root(context).optBoolean("healthConnect", false)
+
+    fun setHealthSyncOn(context: Context, on: Boolean) = edit(context) { root -> root.put("healthConnect", on) }
+
+    /** Weigh-ins that came from Health Connect: never written back to it. */
+    fun importedWeightIds(context: Context): Set<Long> {
+        val arr = root(context).optJSONArray("healthImportedWeights") ?: return emptySet()
+        return (0 until arr.length()).map { arr.optLong(it) }.toSet()
+    }
+
     // --- Rest timer ---
 
     fun setRestEndTimeMillis(context: Context, endTimeMillis: Long, fromWidget: Boolean = false) {
         edit(context, notifyInApp = fromWidget) { root ->
             val activeObj = root.optJSONObject("activeSession") ?: return
+            val now = System.currentTimeMillis()
+            // A new rest starts the clock; extending a running one (+15 s) keeps its start.
+            if (endTimeMillis <= 0L) activeObj.remove("restStartedMillis")
+            else if (activeObj.optLong("restEndTimeMillis", 0L) <= now) activeObj.put("restStartedMillis", now)
             activeObj.put("restEndTimeMillis", endTimeMillis)
         }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, endTimeMillis)
@@ -367,6 +412,10 @@ object LocalStorage {
 
     fun getRestEndTimeMillis(context: Context): Long =
         root(context).optJSONObject("activeSession")?.optLong("restEndTimeMillis", 0L) ?: 0L
+
+    /** When the current rest began; 0 if not resting or it began before this was recorded. */
+    fun getRestStartedMillis(context: Context): Long =
+        root(context).optJSONObject("activeSession")?.optLong("restStartedMillis", 0L) ?: 0L
 
     // --- Backup ---
 
@@ -625,18 +674,21 @@ object LocalStorage {
         }) { RoomStore.insertWorkout(it, workout) }
         edit(context) { root -> root.remove("activeSession") }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
+        HealthSync.workoutSaved(context, workout)
     }
 
     fun updateCompletedWorkout(context: Context, updatedWorkout: CompletedWorkout) {
         editData(context, { d ->
             d.copy(history = d.history.map { if (it.id == updatedWorkout.id) updatedWorkout else it })
         }) { RoomStore.insertWorkout(it, updatedWorkout) }
+        HealthSync.workoutSaved(context, updatedWorkout)
     }
 
     fun deleteWorkoutFromHistory(context: Context, workoutId: Long) {
         editData(context, { d -> d.copy(history = d.history.filter { it.id != workoutId }) }) {
             RoomStore.deleteWorkout(it, workoutId)
         }
+        HealthSync.workoutDeleted(context, workoutId)
     }
 
     /** Newest first. The same list instance is returned until history changes, so callers can use it as a stable key. */

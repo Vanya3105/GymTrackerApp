@@ -1,5 +1,7 @@
 package com.example.gymtracker
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,11 +15,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Icon
@@ -30,6 +35,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.health.connect.client.PermissionController
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -189,6 +196,8 @@ fun SettingsScreen(
             }
         }
 
+        item { HealthConnectGroup(onImported = onDataRestored) }
+
         item {
             SettingsGroup("Your data") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -222,6 +231,96 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HealthConnectGroup(onImported: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val availability = remember { HealthSync.availability(context) }
+    var on by remember { mutableStateOf(LocalStorage.isHealthSyncOn(context)) }
+    val granted = HealthSync.granted
+    LaunchedEffect(Unit) { HealthSync.refresh(context) }
+
+    fun open(intent: Intent) {
+        try {
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "Couldn't open Health Connect", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val askPermissions = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { _ ->
+        scope.launch {
+            HealthSync.refresh(context)
+            if (HealthSync.granted.isEmpty()) {
+                // Android stops showing the dialog after two refusals; access can still be given in Health Connect.
+                Toast.makeText(context, "Nothing was allowed. You can allow it in Health Connect.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            LocalStorage.setHealthSyncOn(context, true)
+            on = true
+            HealthSync.shareExisting(context)
+            if (HealthSync.importWeights(context)) onImported()
+        }
+    }
+
+    SettingsGroup("Health Connect") {
+        when (availability) {
+            HealthSync.Availability.UNAVAILABLE ->
+                Text("Health Connect isn't available on this phone.", style = AppType.caption, color = P.textTertiary)
+            HealthSync.Availability.NEEDS_INSTALL -> {
+                Text(
+                    "Install or update Health Connect to share workouts and body weight with Samsung Health and Google Fit.",
+                    style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(10.dp))
+                SecondaryButton("Get Health Connect", { open(HealthSync.installIntent()) }, Modifier.fillMaxWidth())
+            }
+            HealthSync.Availability.AVAILABLE -> if (!on || granted.isEmpty()) {
+                Text(
+                    "Share your workouts and body weight with Samsung Health, Google Fit and other apps, bring in weigh-ins from your scale, and see your watch's heart rate in your history.",
+                    style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(12.dp))
+                PrimaryButton("Connect", { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
+                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, "Open Health Connect") { open(HealthSync.manageIntent(context)) }
+            } else {
+                SharedRow("Workouts you finish", HealthSync.WRITE_WORKOUTS in granted)
+                SharedRow("Body weight you log", HealthSync.WRITE_WEIGHT in granted)
+                SharedRow("Weigh-ins from scales and other apps", HealthSync.READ_WEIGHT in granted)
+                SharedRow("Heart rate during workouts", HealthSync.READ_HEART_RATE in granted)
+                if (!granted.containsAll(HealthSync.PERMISSIONS)) {
+                    Spacer(Modifier.height(8.dp))
+                    SecondaryButton("Allow the rest", { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
+                }
+                Spacer(Modifier.height(4.dp))
+                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, "Manage in Health Connect") { open(HealthSync.manageIntent(context)) }
+                LinkRow(Icons.Rounded.LinkOff, "Stop sharing") {
+                    HealthSync.disconnect(context)
+                    on = false
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SharedRow(label: String, shared: Boolean) {
+    val P = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (shared) Icons.Rounded.Check else Icons.Rounded.Close,
+            if (shared) "Shared" else "Not shared",
+            tint = if (shared) P.accentPrimary else P.textTertiary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = AppType.body, color = if (shared) P.textPrimary else P.textTertiary)
     }
 }
 

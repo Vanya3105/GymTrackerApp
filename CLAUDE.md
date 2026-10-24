@@ -9,6 +9,15 @@ When the user says "continue", that is what they mean.
 - Don't merge a phase into `master` until the user has tested it on a phone.
 - Leave unrelated `.idea/` changes out of commits.
 
+## Working notes (read after a crash or on a new PC)
+- The real working copy is `C:\Users\evtus\AndroidStudioProjects\GymTrackerApp`. An old clone at `...\GymTracker` is stale: don't work there.
+- Start of a session: `git fetch`, full `git status` (don't truncate it) and `git stash list`. An interrupted session can leave uncommitted work; ask before discarding anything. The stash "Crashed session: Phase 5 plate calculator" is superseded and kept only for reference.
+- Build fails right after a crash with "invalid stream header" or "Configuration cache state could not be cached": a Gradle cache was corrupted. Delete `app/build/intermediates/incremental/*-mergeJavaRes`, `app/build/intermediates/merged_java_res` and `.gradle/configuration-cache`, then rebuild. Source files are not involved.
+- The owner's phone (Galaxy S26 Ultra, `SM-S948B`) is often plugged in: always pass `adb -s emulator-5554`. In Git Bash set `MSYS_NO_PATHCONV=1`, or paths like `/sdcard/...` get rewritten.
+- Health Connect's own screens block screenshots; read them with `uiautomator dump`.
+- Owner's devices: Galaxy S26 Ultra + Galaxy Watch (Wear OS). Heart rate reaches the app through Samsung Health → Health Connect.
+- The owner tests each step on the phone and then asks to commit and push: push the phase branch after each tested step.
+
 ## Commands (Git Bash, from repo root)
 - Unit tests: `./gradlew testDebugUnitTest`
 - Debug APK: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`
@@ -23,6 +32,8 @@ When the user says "continue", that is what they mean.
 - Screens: `HomeScreen`, `ActiveWorkoutScreen`, `HistoryScreen`, `ProgressScreen`, `SettingsScreen`, `OnboardingScreen`.
 - Design system: `Theme.kt` (`P` palette, `AppType`), `Components.kt`.
 - Widgets + lock screen + share image: `WidgetsAndStoryShare.kt`, `WidgetConfigActivity.kt`.
+- Health Connect: `HealthSync.kt` (writes are called from `LocalStorage`), `HealthPrivacyActivity.kt`.
+- Watch: `WatchSync.kt` (phone side: publishes `watchStateOf`, `WatchListenerService` applies button presses); `:wear` module (the Wear OS app); `:watchlink` module (the protocol both share). Build the watch app with `./gradlew :wear:assembleDebug`. `./gradlew :wear:testDebugUnitTest` renders every watch screen to `wear/build/screenshots/*.png` (no emulator needed).
 
 ## Conventions
 - Compose + Material 3, custom design system; no DI framework, no ViewModels so far.

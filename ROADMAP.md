@@ -9,8 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
-Next: **Phase 6, step 1**: Health Connect connection screen and writing finished workouts.
+Phases 0–6 are merged into `master` (v3.6.0). Next: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -62,17 +61,19 @@ Next: **Phase 6, step 1**: Health Connect connection screen and writing finished
 - [x] Brand: new launcher icon (vector adaptive icon + monochrome for themed icons; bitmaps only for Android 7) and a launch screen (core-splashscreen): dark brand background, the arc draws in and the dumbbell settles, then the logo grows and fades into the app. Held at least 850 ms on Android 12+ so the animation isn't cut off
 - Warm-up set generator and RPE/RIR moved to Phase 8 (owner chose watch + Health Connect first)
 
-## Phase 6 — Watch & Health Connect (branch `phase-6-watch-health`)
+## Phase 6 — Watch & Health Connect ✅ (branch `phase-6-watch-health`, v3.6.0)
 Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for the phone's workout; the phone stays the single source of truth.
-- [ ] Health Connect setup: Settings → "Health Connect" row (connect, see what's shared, disconnect); permission rationale screen with the privacy text Health Connect requires; works without Health Connect installed (row hidden or "Install" link)
-- [ ] Write finished workouts as strength-training sessions (title, start/end, exercises as segments with reps). `clientRecordId` = workout id, so editing a past workout updates it and deleting it deletes it
-- [ ] Body weight both ways: write weights logged in the app; read weigh-ins from Samsung Health / a smart scale into the weight log (no duplicates of our own records)
-- [ ] Heart rate per workout: read the heart rate the watch recorded during a workout's time window; show average/max on the finished workout and in History. Read on demand, not stored (Samsung Health syncs to Health Connect with a delay, so it can appear later)
-- [ ] `:wear` module (Compose for Wear OS, minSdk 30, same `applicationId` and signing key so the Data Layer pairs them)
-- [ ] Phone → watch: live session state (exercise, set n of m, weight, reps, type, rest end time, unit) sent over the Wearable Data Layer whenever it changes (same hook that redraws widgets/lock screen)
-- [ ] Watch → phone: −/+ weight, −/+ reps, complete set, skip/adjust rest, using the same session actions as the widget
-- [ ] Watch UI: current set screen, rest countdown with a wrist buzz at the end (scheduled on the watch, so it works if the phone is far), "Open workout on phone" when nothing is running, ongoing activity so it shows on the watch face
-- [ ] Tested on a Wear OS emulator paired with the phone emulator, then on the owner's Galaxy Watch
+- [x] Health Connect setup: Settings → "Health Connect" row (connect, see what's shared, disconnect); permission rationale screen with the privacy text Health Connect requires; works without Health Connect installed (row hidden or "Install" link)
+- [x] Write finished workouts as strength-training sessions (title, start/end, the work sets as notes: Health Connect segments need per-exercise times the app doesn't record). Existing history is shared once on connecting. `clientRecordId` = workout id, so editing a past workout updates it and deleting it deletes it
+- [x] Body weight both ways: write weights logged in the app; read weigh-ins from Samsung Health / a smart scale into the weight log (no duplicates of our own records)
+- [x] Heart rate per workout: read the heart rate the watch recorded during a workout's time window; show average/max on the History card. Read on demand, not stored (Samsung Health syncs to Health Connect with a delay, so it can appear later). Checked on the emulator except heart rate, which needs the owner's watch
+- [x] `:wear` module (Compose for Wear OS, minSdk 30, same `applicationId` and signing key so the Data Layer pairs them). `:watchlink` holds the protocol both sides use (`WatchState` JSON, `WatchAction`, paths)
+- [x] Phone → watch: live session state, formatted like the widget (exercise, set, the two values with labels, sets left, rest end and length), sent over the Data Layer whenever it changes (`WatchSync.publish` from `refreshSurfacesNow`)
+- [x] Watch → phone: −/+ on both values, set done, +15 s and skip rest (`WatchListenerService`, also while the phone app is closed), through the widget's `applySetAction`
+- [x] Watch UI: current set (scrolls with the bezel), rest countdown ring with +15 s / Skip and a buzz at the end while on screen, messages for no workout / all sets done / phone not connected
+- [x] Watch polish: ongoing activity (GymTracker on the watch face during a workout, with the rest counting down; `WorkoutOngoing`), kept current while the app is closed by `PhoneDataService`; a GymTracker tile (current set, rest end time, Open); "Open on phone" when there's no workout or all sets are done; the phone acknowledges every tap so a slow phone shows "Waiting for phone…"; firmer haptic for Set done
+- [x] Set screen fits a 40 mm watch without scrolling. Checked with Robolectric screenshots of every screen on 192 dp and 227 dp round displays (`WatchScreenshotTest`, PNGs in `wear/build/screenshots`)
+- [x] Tested by the owner on their Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
 
 ## Phase 7 — Data in/out
 - [ ] CSV export
@@ -102,3 +103,7 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - 2026-10-23: Units are display-only; the database and backups stay in kg. The current unit is Compose snapshot state (`Units.current`) set from settings on first storage access, so screens redraw on change and widgets/notifications use it without a Context-aware formatter.
 - 2026-10-24: Percentage programs never store progress: week (5/3/1), stage (GZCLP) and TM increases (5/3/1 cycles, nSuns 1+ sets) are recomputed from history since the TM was set. Setting a TM restarts the count. Program days are linked to their main lifts by day title (`PROGRAM_LIFTS`), so renaming such a day makes it a normal day.
 - 2026-10-24: Watch + Health Connect moved ahead of data in/out, at the owner's request. The watch is a remote, not a standalone logger: the phone keeps the only copy of the session, so there's no sync conflict to solve. Heart rate comes from Health Connect (Galaxy Watch → Samsung Health → Health Connect) instead of the watch app measuring it.
+- 2026-10-24: `minSdk` 24 → 26 (Android 8) for Health Connect's client library. Health Connect itself needs Android 9+; below that its Profile section says it isn't available. The app wasn't published, so nobody lost it; launcher icon bitmaps went too (adaptive icons cover 26+).
+- 2026-10-24: Health Connect writes live in `LocalStorage` (save/edit/delete workout, log/delete weight), so no screen can forget them; they are no-ops unless sharing is on and allowed. Weigh-ins read from Health Connect are remembered by id (`healthImportedWeights`): never written back, and a deleted one isn't re-imported.
+- 2026-10-24: Performance pass (release build, Pixel 7 emulator). Cold start 1.35–1.9 s → 0.91–0.97 s; first frame ~0.7–1.3 s → ~0.35–0.45 s, no more "skipped frames" at launch. How: a baseline profile (`app/src/main/baseline-prof.txt`, all app code precompiled at install), a shorter splash (hold 850 → 550 ms, animation 1 s → 0.7 s), set numbers parsed once per `SetEntry` instead of on every read, and single-pass history scans (recovery stops once every muscle group's last session is found; Progress groups history per exercise). `HistoryScanEquivalenceTest` keeps the old scans as references and checks identical results on random histories.
+- 2026-10-24: The rest-over buzz on the wrist comes from two places: the watch app buzzes while it's on screen, and otherwise the phone's existing "Rest's over" notification (exact alarm on the phone) is mirrored to the watch. Scheduling it on the watch would need the exact-alarm permission, which Wear OS denies by default.

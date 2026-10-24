@@ -24,7 +24,7 @@ val WEEKLY_SET_TARGET = 6..16
 
 val RECOVERY_GROUPS = listOf("Chest", "Back", "Shoulders", "Arms", "Legs")
 
-private fun hitsMuscleGroup(splitTitle: String, exName: String, targetMuscle: String, group: String): Boolean {
+internal fun hitsMuscleGroup(splitTitle: String, exName: String, targetMuscle: String, group: String): Boolean {
     val text = "${exName.lowercase(Locale.US)} ${targetMuscle.lowercase(Locale.US)}"
     val split = splitTitle.lowercase(Locale.US)
     fun any(vararg words: String) = words.any { text.contains(it) }
@@ -42,32 +42,51 @@ private fun hitsMuscleGroup(splitTitle: String, exName: String, targetMuscle: St
  * Rough recovery model: a muscle needs 48–78 hours depending on how many sets it got last time.
  * Also counts this week's work sets per group.
  */
-fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>): List<MuscleRecoveryItem> {
-    val now = System.currentTimeMillis()
+fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>, now: Long = System.currentTimeMillis()): List<MuscleRecoveryItem> {
     val weekAgo = now - 7L * 24 * 60 * 60 * 1000
+    val groups = RECOVERY_GROUPS.size
+    val weekly = IntArray(groups)
+    val lastTrained = LongArray(groups) { Long.MIN_VALUE }
+    val lastSessionSets = IntArray(groups)
+    // The word matching is the slow part; the same exercise recurs in almost every week.
+    val groupsOf = HashMap<Triple<String, String, String>, BooleanArray>()
+    // Newest first (as stored), the scan can stop once every group has a last session and the
+    // week is behind it. This runs after every edit while a recovery widget is placed.
+    val newestFirst = history.zipWithNext().all { (a, b) -> a.id >= b.id }
+    val setsInWorkout = IntArray(groups)
 
-    return RECOVERY_GROUPS.map { group ->
-        var weeklySets = 0
-        var lastTrained: Long? = null
-        var lastSessionSets = 0
-
-        for (workout in history) {
-            val sets = workout.exercises
-                .filter { !it.isSkipped && hitsMuscleGroup(workout.splitTitle, it.name, it.targetMuscle, group) }
-                .sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } }
-            if (sets == 0) continue
-            if (lastTrained == null || workout.id > lastTrained) {
-                lastTrained = workout.id
-                lastSessionSets = sets
+    for (workout in history) {
+        if (newestFirst && workout.id < weekAgo && lastTrained.all { it != Long.MIN_VALUE }) break
+        setsInWorkout.fill(0)
+        for (ex in workout.exercises) {
+            if (ex.isSkipped) continue
+            // The split title only matters for exercises without a target muscle.
+            val key = Triple(if (ex.targetMuscle.isBlank()) workout.splitTitle else "", ex.name, ex.targetMuscle)
+            val hits = groupsOf.getOrPut(key) {
+                BooleanArray(groups) { g -> hitsMuscleGroup(workout.splitTitle, ex.name, ex.targetMuscle, RECOVERY_GROUPS[g]) }
             }
-            if (workout.id >= weekAgo) weeklySets += sets
+            if (hits.none { it }) continue
+            val count = ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) }
+            for (g in 0 until groups) if (hits[g]) setsInWorkout[g] += count
         }
+        for (g in 0 until groups) {
+            val sets = setsInWorkout[g]
+            if (sets == 0) continue
+            if (workout.id > lastTrained[g]) {
+                lastTrained[g] = workout.id
+                lastSessionSets[g] = sets
+            }
+            if (workout.id >= weekAgo) weekly[g] += sets
+        }
+    }
 
-        if (lastTrained == null) {
+    return RECOVERY_GROUPS.mapIndexed { g, group ->
+        val weeklySets = weekly[g]
+        if (lastTrained[g] == Long.MIN_VALUE) {
             MuscleRecoveryItem(group, 100, RecoveryStatus.READY, null, weeklySets)
         } else {
-            val hoursAgo = ((now - lastTrained) / (1000L * 60 * 60)).toInt().coerceAtLeast(0)
-            val neededHours = (44f + lastSessionSets * 3.5f).coerceIn(48f, 78f)
+            val hoursAgo = ((now - lastTrained[g]) / (1000L * 60 * 60)).toInt().coerceAtLeast(0)
+            val neededHours = (44f + lastSessionSets[g] * 3.5f).coerceIn(48f, 78f)
             val pct = (hoursAgo / neededHours * 100f).roundToInt().coerceIn(12, 100)
             val status = when {
                 pct < 55 -> RecoveryStatus.TIRED

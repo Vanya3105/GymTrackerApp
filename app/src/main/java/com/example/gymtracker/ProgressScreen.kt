@@ -152,10 +152,11 @@ private data class BestLift(
 )
 
 /** Loaded lifts by estimated 1RM first, then everything else (most recently trained first). */
-private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
-    loggedExerciseNames(history)
+private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> {
+    val byExercise = historyByExercise(history)
+    return loggedExerciseNames(history)
         .map { name ->
-            val rec = computeExerciseRecords(name, history)
+            val rec = computeExerciseRecords(name, byExercise[ignoreCaseKey(name)].orEmpty())
             val type = rec.type
             if (type.hasWeightSuggestions && rec.bestEstimated1Rm > 0f) {
                 BestLift(name, type, rec.bestSet, rec.bestEstimated1Rm, formatWeightKg(rec.bestEstimated1Rm), "est. 1-rep max")
@@ -175,6 +176,7 @@ private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> =
         }
         .filter { it.bestSet != null }
         .sortedWith(compareByDescending<BestLift> { it.estimated1Rm > 0f }.thenByDescending { it.estimated1Rm })
+}
 
 @Composable
 private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, onLog: () -> Unit, modifier: Modifier = Modifier) {

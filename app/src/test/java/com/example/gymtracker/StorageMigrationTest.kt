@@ -286,6 +286,23 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun importedWeighIns_areAddedOnce_andStayDeletedWhenDeleted() {
+        assertFalse(LocalStorage.isHealthSyncOn(context))
+        val before = LocalStorage.loadWeightHistory(context)
+        val scale = WeightLogEntry(id = 1_900_000_000_000, dateKey = "2030-03-17", displayDate = "", weightKg = 79.4f)
+
+        val after = LocalStorage.importWeights(context, listOf(scale, scale))
+        assertEquals(before.size + 1, after.size)
+        assertEquals(scale, after.first())
+        assertEquals(79.4f, LocalStorage.loadUserProfile(context).currentWeightKg)
+        assertEquals(setOf(scale.id), LocalStorage.importedWeightIds(context))
+
+        LocalStorage.deleteWeightLog(context, scale.id)
+        restart()
+        assertEquals(before.size, LocalStorage.importWeights(context, listOf(scale)).size)
+    }
+
+    @Test
     fun freshInstall_startsEmpty() {
         storeFile.delete()
         assertTrue(LocalStorage.loadHistory(context).isEmpty())

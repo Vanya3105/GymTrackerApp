@@ -24,3 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "GymTracker"
 include(":app")
+include(":wear")
+include(":watchlink")

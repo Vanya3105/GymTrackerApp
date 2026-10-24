@@ -1,0 +1,5 @@
+# Precompile all of the app's own code at install time (Compose and the other libraries ship
+# their own profiles). The app is small, so a blanket rule costs little and keeps the first
+# frame from waiting on the JIT.
+HSPLcom/example/gymtracker/**->**(**)**
+Lcom/example/gymtracker/**;
