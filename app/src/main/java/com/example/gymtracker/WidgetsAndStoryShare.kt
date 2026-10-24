@@ -25,6 +25,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
+import com.example.gymtracker.watchlink.WatchState
 import android.widget.Toast
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
@@ -155,6 +156,36 @@ private class LiveSession(
             setCount = ex.sets.size
         )
     }
+}
+
+/** The live workout for the watch, formatted the same way as the widget. */
+fun watchStateOf(context: Context): WatchState {
+    val live = readLiveSession(context) ?: return WatchState(active = false)
+    val next = live.nextSet
+    val type = live.currentExercise?.type
+    val restEnd = LocalStorage.getRestEndTimeMillis(context).takeIf { live.isResting } ?: 0L
+    val restStart = LocalStorage.getRestStartedMillis(context)
+    return WatchState(
+        active = true,
+        workoutName = live.splitName,
+        exerciseName = next?.exerciseName,
+        setLabel = next?.label.orEmpty(),
+        primary = next?.primary.orEmpty(),
+        primaryLabel = when (type) {
+            ExerciseType.BODYWEIGHT -> "reps"
+            ExerciseType.DURATION -> "time"
+            ExerciseType.DISTANCE_TIME -> "distance"
+            ExerciseType.WEIGHTED_BODYWEIGHT -> "added"
+            ExerciseType.ASSISTED -> "assist"
+            else -> "weight"
+        },
+        secondary = next?.secondary,
+        secondaryLabel = next?.secondary?.let { if (type == ExerciseType.DISTANCE_TIME) "time" else "reps" },
+        summary = next?.summary.orEmpty(),
+        setsLeft = live.totalSetsLeft,
+        restEndsAtMillis = restEnd,
+        restTotalMillis = if (restEnd > 0L && restStart in 1 until restEnd) restEnd - restStart else 0L
+    )
 }
 
 private fun readLiveSession(context: Context): LiveSession? {
@@ -364,7 +395,7 @@ class GymWidgetProvider : AppWidgetProvider() {
         super.onReceive(context, intent)
         val action = intent.action ?: return
         if (action in SET_ACTIONS) {
-            handleWidgetSetAction(context.applicationContext, action)
+            applySetAction(context.applicationContext, action)
             LocalStorage.flush(context)
         }
     }
@@ -388,7 +419,8 @@ class GymWidgetProvider : AppWidgetProvider() {
         const val ACTION_COMPLETE_SET = "com.example.gymtracker.ACTION_COMPLETE_SET"
         private val SET_ACTIONS = setOf(ACTION_WEIGHT_MINUS, ACTION_WEIGHT_PLUS, ACTION_REPS_MINUS, ACTION_REPS_PLUS, ACTION_COMPLETE_SET)
 
-        private fun handleWidgetSetAction(context: Context, action: String) {
+        /** One tap on the widget, lock-screen card or watch, applied to the next unfinished set. */
+        fun applySetAction(context: Context, action: String) {
             // Set controls are hidden while resting; ignore stale taps (the caller's flush redraws).
             if (LocalStorage.getRestEndTimeMillis(context) - System.currentTimeMillis() > 1000L) return
 

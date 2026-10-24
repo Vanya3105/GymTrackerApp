@@ -198,6 +198,7 @@ object LocalStorage {
         MuscleFatigueWidgetProvider.refreshAll(appCtx)
         SquarePulseWidgetProvider.refreshAll(appCtx)
         LockScreenWorkoutController.sync(appCtx)
+        WatchSync.publish(appCtx)
     }
 
     /** Drops in-memory state and closes the database so a test can start from the files on disk. */
@@ -400,6 +401,10 @@ object LocalStorage {
     fun setRestEndTimeMillis(context: Context, endTimeMillis: Long, fromWidget: Boolean = false) {
         edit(context, notifyInApp = fromWidget) { root ->
             val activeObj = root.optJSONObject("activeSession") ?: return
+            val now = System.currentTimeMillis()
+            // A new rest starts the clock; extending a running one (+15 s) keeps its start.
+            if (endTimeMillis <= 0L) activeObj.remove("restStartedMillis")
+            else if (activeObj.optLong("restEndTimeMillis", 0L) <= now) activeObj.put("restStartedMillis", now)
             activeObj.put("restEndTimeMillis", endTimeMillis)
         }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, endTimeMillis)
@@ -407,6 +412,10 @@ object LocalStorage {
 
     fun getRestEndTimeMillis(context: Context): Long =
         root(context).optJSONObject("activeSession")?.optLong("restEndTimeMillis", 0L) ?: 0L
+
+    /** When the current rest began; 0 if not resting or it began before this was recorded. */
+    fun getRestStartedMillis(context: Context): Long =
+        root(context).optJSONObject("activeSession")?.optLong("restStartedMillis", 0L) ?: 0L
 
     // --- Backup ---
 

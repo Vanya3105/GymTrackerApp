@@ -10,7 +10,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 ## Next up
 
 Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
-Done: Health Connect (workouts, body weight both ways, heart rate in History). Next: **Phase 6, step 2**: the `:wear` module and the phone ↔ watch Data Layer.
+Done: Health Connect, and the watch remote (`:wear` + `:watchlink`), built and unit-tested but not yet run on a watch. Next: **the owner installs it on the Galaxy Watch** and reports back; then the ongoing activity (workout shown on the watch face) and merging Phase 6.
 
 ---
 
@@ -68,11 +68,12 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - [x] Write finished workouts as strength-training sessions (title, start/end, the work sets as notes: Health Connect segments need per-exercise times the app doesn't record). Existing history is shared once on connecting. `clientRecordId` = workout id, so editing a past workout updates it and deleting it deletes it
 - [x] Body weight both ways: write weights logged in the app; read weigh-ins from Samsung Health / a smart scale into the weight log (no duplicates of our own records)
 - [x] Heart rate per workout: read the heart rate the watch recorded during a workout's time window; show average/max on the History card. Read on demand, not stored (Samsung Health syncs to Health Connect with a delay, so it can appear later). Checked on the emulator except heart rate, which needs the owner's watch
-- [ ] `:wear` module (Compose for Wear OS, minSdk 30, same `applicationId` and signing key so the Data Layer pairs them)
-- [ ] Phone → watch: live session state (exercise, set n of m, weight, reps, type, rest end time, unit) sent over the Wearable Data Layer whenever it changes (same hook that redraws widgets/lock screen)
-- [ ] Watch → phone: −/+ weight, −/+ reps, complete set, skip/adjust rest, using the same session actions as the widget
-- [ ] Watch UI: current set screen, rest countdown with a wrist buzz at the end (scheduled on the watch, so it works if the phone is far), "Open workout on phone" when nothing is running, ongoing activity so it shows on the watch face
-- [ ] Tested on a Wear OS emulator paired with the phone emulator, then on the owner's Galaxy Watch
+- [x] `:wear` module (Compose for Wear OS, minSdk 30, same `applicationId` and signing key so the Data Layer pairs them). `:watchlink` holds the protocol both sides use (`WatchState` JSON, `WatchAction`, paths)
+- [x] Phone → watch: live session state, formatted like the widget (exercise, set, the two values with labels, sets left, rest end and length), sent over the Data Layer whenever it changes (`WatchSync.publish` from `refreshSurfacesNow`)
+- [x] Watch → phone: −/+ on both values, set done, +15 s and skip rest (`WatchListenerService`, also while the phone app is closed), through the widget's `applySetAction`
+- [x] Watch UI: current set (scrolls with the bezel), rest countdown ring with +15 s / Skip and a buzz at the end while on screen, messages for no workout / all sets done / phone not connected
+- [ ] Ongoing activity, so a running workout shows on the watch face
+- [ ] Tested on the owner's Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
 
 ## Phase 7 — Data in/out
 - [ ] CSV export
@@ -105,3 +106,4 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - 2026-10-24: `minSdk` 24 → 26 (Android 8) for Health Connect's client library. Health Connect itself needs Android 9+; below that its Profile section says it isn't available. The app wasn't published, so nobody lost it; launcher icon bitmaps went too (adaptive icons cover 26+).
 - 2026-10-24: Health Connect writes live in `LocalStorage` (save/edit/delete workout, log/delete weight), so no screen can forget them; they are no-ops unless sharing is on and allowed. Weigh-ins read from Health Connect are remembered by id (`healthImportedWeights`): never written back, and a deleted one isn't re-imported.
 - 2026-10-24: Performance pass (release build, Pixel 7 emulator). Cold start 1.35–1.9 s → 0.91–0.97 s; first frame ~0.7–1.3 s → ~0.35–0.45 s, no more "skipped frames" at launch. How: a baseline profile (`app/src/main/baseline-prof.txt`, all app code precompiled at install), a shorter splash (hold 850 → 550 ms, animation 1 s → 0.7 s), set numbers parsed once per `SetEntry` instead of on every read, and single-pass history scans (recovery stops once every muscle group's last session is found; Progress groups history per exercise). `HistoryScanEquivalenceTest` keeps the old scans as references and checks identical results on random histories.
+- 2026-10-24: The rest-over buzz on the wrist comes from two places: the watch app buzzes while it's on screen, and otherwise the phone's existing "Rest's over" notification (exact alarm on the phone) is mirrored to the watch. Scheduling it on the watch would need the exact-alarm permission, which Wear OS denies by default.

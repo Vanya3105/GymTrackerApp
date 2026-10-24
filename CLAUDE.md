@@ -32,6 +32,8 @@ When the user says "continue", that is what they mean.
 - Screens: `HomeScreen`, `ActiveWorkoutScreen`, `HistoryScreen`, `ProgressScreen`, `SettingsScreen`, `OnboardingScreen`.
 - Design system: `Theme.kt` (`P` palette, `AppType`), `Components.kt`.
 - Widgets + lock screen + share image: `WidgetsAndStoryShare.kt`, `WidgetConfigActivity.kt`.
+- Health Connect: `HealthSync.kt` (writes are called from `LocalStorage`), `HealthPrivacyActivity.kt`.
+- Watch: `WatchSync.kt` (phone side: publishes `watchStateOf`, `WatchListenerService` applies button presses); `:wear` module (the Wear OS app); `:watchlink` module (the protocol both share). Build the watch app with `./gradlew :wear:assembleDebug`.
 
 ## Conventions
 - Compose + Material 3, custom design system; no DI framework, no ViewModels so far.
