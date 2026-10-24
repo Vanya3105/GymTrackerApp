@@ -24,82 +24,175 @@ data class MuscleRecoveryItem(
 /** Weekly hard sets per muscle that tends to work well for building muscle. */
 val WEEKLY_SET_TARGET = 6..16
 
-val RECOVERY_GROUPS = listOf("Chest", "Back", "Shoulders", "Arms", "Legs")
+/** The library's muscles, minus cardio. */
+val RECOVERY_GROUPS = listOf(
+    "Chest", "Back", "Shoulders", "Biceps", "Triceps", "Forearms",
+    "Quads", "Hamstrings", "Glutes", "Calves", "Core"
+)
 
-internal fun hitsMuscleGroup(splitTitle: String, exName: String, targetMuscle: String, group: String): Boolean {
-    val text = "${exName.lowercase(Locale.US)} ${targetMuscle.lowercase(Locale.US)}"
-    val split = splitTitle.lowercase(Locale.US)
+/**
+ * Hours each group needs after a hard session of about 6 sets, in [RECOVERY_GROUPS] order.
+ * Big muscles under long, loaded stretches (quads, hamstrings, back) take ~72 h; chest and
+ * shoulders ~48 h; arms, calves, forearms and abs recover fastest.
+ */
+private val BASE_RECOVERY_HOURS = floatArrayOf(48f, 72f, 48f, 36f, 42f, 30f, 72f, 72f, 60f, 36f, 30f)
+
+/** Short names where the full one crowds a ring label. */
+fun recoveryLabel(group: String): String = if (group == "Hamstrings") "Hams" else group
+
+/**
+ * How much one set of an exercise works each group, in [RECOVERY_GROUPS] order: 1 for the
+ * target muscle, 0.5 for muscles that assist a compound lift (triceps on bench, biceps on rows),
+ * 0.25 for smaller roles such as grip. Counting assisting muscles as half a set is what predicted
+ * growth best in the Pelland et al. volume meta-regression.
+ */
+internal fun muscleLoads(splitTitle: String, exName: String, targetMuscle: String): FloatArray {
+    val loads = FloatArray(RECOVERY_GROUPS.size)
+    fun add(group: String, share: Float) {
+        val i = RECOVERY_GROUPS.indexOf(group)
+        if (i >= 0 && share > loads[i]) loads[i] = share
+    }
+    val name = exName.lowercase(Locale.US)
+    fun has(vararg words: String) = words.any { name.contains(it) }
+    val muscle = ExerciseDatabase.find(exName)?.muscle ?: targetMuscle.trim()
+    if (muscle.equals("Cardio", ignoreCase = true)) return loads
+
+    val primary = RECOVERY_GROUPS.firstOrNull { it.equals(muscle, ignoreCase = true) } ?: guessPrimary(name, muscle.lowercase(Locale.US), splitTitle.lowercase(Locale.US))
+    if (primary == null) {
+        // Older custom exercises could be tagged "Arms": split it by the movement.
+        if (muscle.equals("Arms", ignoreCase = true)) { add("Biceps", 0.5f); add("Triceps", 0.5f) }
+        return loads
+    }
+    add(primary, 1f)
+
+    when (primary) {
+        "Chest" -> if (!has("fly", "pec deck", "crossover", "pullover")) { add("Triceps", 0.5f); add("Shoulders", 0.5f) }
+        "Triceps" -> if (has("bench", "press", "dip")) { add("Chest", 0.5f); add("Shoulders", 0.25f) }
+        "Shoulders" -> when {
+            has("press") -> add("Triceps", 0.5f)
+            has("upright row") -> { add("Back", 0.25f); add("Biceps", 0.25f) }
+            has("rear delt", "reverse pec", "face pull") -> add("Back", 0.25f)
+        }
+        "Back" -> when {
+            has("deadlift", "rack pull") -> { add("Hamstrings", 0.5f); add("Glutes", 0.5f); add("Forearms", 0.5f); add("Quads", 0.25f) }
+            has("back extension", "hyperextension") -> { add("Hamstrings", 0.5f); add("Glutes", 0.5f) }
+            has("shrug") -> add("Forearms", 0.25f)
+            has("straight-arm", "straight arm", "pullover") -> {}
+            has("pull-up", "pullup", "chin", "pulldown") -> { add("Biceps", 0.5f); add("Forearms", 0.25f) }
+            has("row") -> { add("Biceps", 0.5f); add("Shoulders", 0.25f); add("Forearms", 0.25f) }
+        }
+        "Biceps" -> add("Forearms", if (has("hammer", "reverse")) 0.5f else 0.25f)
+        "Forearms" -> when {
+            has("reverse curl") -> add("Biceps", 0.5f)
+            has("farmer", "carry") -> { add("Back", 0.25f); add("Core", 0.25f) }
+            has("hang") -> add("Back", 0.25f)
+        }
+        "Quads" -> if (!has("extension", "sissy")) {
+            add("Glutes", 0.5f)
+            if (has("lunge", "split", "step-up", "step up")) add("Hamstrings", 0.25f)
+        }
+        "Hamstrings" -> if (has("deadlift", "good morning")) {
+            add("Glutes", 0.5f); add("Back", 0.25f)
+            if (has("deadlift")) add("Forearms", 0.25f)
+        }
+        "Glutes" -> when {
+            has("deadlift") -> { add("Quads", 0.5f); add("Hamstrings", 0.5f); add("Back", 0.5f); add("Forearms", 0.5f) }
+            has("thrust", "bridge", "pull-through", "pull through") -> add("Hamstrings", 0.25f)
+        }
+        "Core" -> if (has("hanging")) add("Forearms", 0.25f)
+    }
+    return loads
+}
+
+/** Target group for an exercise that isn't in the library, from its name and free-text muscle. */
+private fun guessPrimary(name: String, muscle: String, split: String): String? {
+    val text = "$name $muscle"
     fun any(vararg words: String) = words.any { text.contains(it) }
-    return when (group) {
-        "Chest" -> any("chest", "bench", "pec", "fly", "dip", "push-up") || (targetMuscle.isBlank() && split.contains("push"))
-        "Back" -> any("lat", "back", "row", "pull-up", "pullup", "chin", "deadlift", "shrug") || (targetMuscle.isBlank() && split.contains("pull"))
-        "Shoulders" -> any("shoulder", "delt", "lateral", "overhead press", "face pull", "arnold", "raise")
-        "Arms" -> any("bicep", "tricep", "curl", "pushdown", "extension", "brachialis", "hammer", "skull", "forearm") && !any("leg curl", "leg extension")
-        "Legs" -> any("quad", "hamstring", "glute", "calf", "calves", "squat", "rdl", "leg", "lunge", "hip thrust")
-        else -> false
+    return when {
+        any("calf", "calves") -> "Calves"
+        any("wrist", "forearm", "grip") -> "Forearms"
+        any("leg curl", "hamstring", "rdl", "romanian", "nordic") -> "Hamstrings"
+        any("leg extension", "quad", "squat", "leg press", "lunge") -> "Quads"
+        any("glute", "hip thrust") -> "Glutes"
+        any("back extension", "hyperextension") -> "Back"
+        any("abs", "abdominal", "core", "crunch", "plank", "sit-up", "leg raise", "knee raise") -> "Core"
+        any("tricep", "pushdown", "skull", "kickback", "extension") -> "Triceps"
+        any("bicep", "curl", "brachialis") -> "Biceps"
+        any("lateral", "delt", "shoulder", "overhead press", "face pull", "arnold", "raise") -> "Shoulders"
+        any("chest", "bench", "pec", "fly", "dip", "push-up", "pushup") -> "Chest"
+        any("lat", "back", "row", "pull-up", "pullup", "chin", "deadlift", "shrug") -> "Back"
+        any("leg") -> "Quads"
+        // Untagged exercise on a push or pull day: assume the day's main muscle.
+        muscle.isBlank() && split.contains("push") -> "Chest"
+        muscle.isBlank() && split.contains("pull") -> "Back"
+        else -> null
     }
 }
 
 /**
- * Rough recovery model: a muscle needs 48–78 hours depending on how many sets it got last time.
- * Also counts this week's work sets per group.
+ * Recovery per muscle group. Each session leaves fatigue that fades linearly over the group's
+ * recovery time, scaled by how many sets it got (assisting muscles count part sets), and
+ * sessions close together stack. Also counts this week's sets per group.
  */
 fun computeMuscleRecoveryStatus(history: List<CompletedWorkout>, now: Long = System.currentTimeMillis()): List<MuscleRecoveryItem> {
     val weekAgo = now - 7L * 24 * 60 * 60 * 1000
     val groups = RECOVERY_GROUPS.size
-    val weekly = IntArray(groups)
+    val weekly = FloatArray(groups)
+    val readiness = FloatArray(groups) { 1f }
     val lastTrained = LongArray(groups) { Long.MIN_VALUE }
-    val lastSessionSets = IntArray(groups)
     // The word matching is the slow part; the same exercise recurs in almost every week.
-    val groupsOf = HashMap<Triple<String, String, String>, BooleanArray>()
+    val loadsOf = HashMap<Triple<String, String, String>, FloatArray>()
     // Newest first (as stored), the scan can stop once every group has a last session and the
     // week is behind it. This runs after every edit while a recovery widget is placed.
     val newestFirst = history.zipWithNext().all { (a, b) -> a.id >= b.id }
-    val setsInWorkout = IntArray(groups)
+    val setsInWorkout = FloatArray(groups)
 
     for (workout in history) {
         if (newestFirst && workout.id < weekAgo && lastTrained.all { it != Long.MIN_VALUE }) break
-        setsInWorkout.fill(0)
+        setsInWorkout.fill(0f)
         for (ex in workout.exercises) {
             if (ex.isSkipped) continue
             // The split title only matters for exercises without a target muscle.
             val key = Triple(if (ex.targetMuscle.isBlank()) workout.splitTitle else "", ex.name, ex.targetMuscle)
-            val hits = groupsOf.getOrPut(key) {
-                BooleanArray(groups) { g -> hitsMuscleGroup(workout.splitTitle, ex.name, ex.targetMuscle, RECOVERY_GROUPS[g]) }
-            }
-            if (hits.none { it }) continue
+            val loads = loadsOf.getOrPut(key) { muscleLoads(workout.splitTitle, ex.name, ex.targetMuscle) }
+            if (loads.all { it == 0f }) continue
             val count = ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) }
-            for (g in 0 until groups) if (hits[g]) setsInWorkout[g] += count
+            for (g in 0 until groups) setsInWorkout[g] += count * loads[g]
         }
+        val hours = ((now - workout.id) / 3_600_000f).coerceAtLeast(0f)
         for (g in 0 until groups) {
             val sets = setsInWorkout[g]
-            if (sets == 0) continue
-            if (workout.id > lastTrained[g]) {
-                lastTrained[g] = workout.id
-                lastSessionSets[g] = sets
-            }
-            if (workout.id >= weekAgo) weekly[g] += sets
+            if (sets <= 0f) continue
+            // A quarter-set of grip work isn't "training" forearms.
+            if (sets >= 1f && workout.id > lastTrained[g]) lastTrained[g] = workout.id
+            if (workout.id < weekAgo) continue
+            weekly[g] += sets
+            readiness[g] *= 1f - recoveryLeft(BASE_RECOVERY_HOURS[g], sets, hours)
         }
     }
 
     return RECOVERY_GROUPS.mapIndexed { g, group ->
-        val weeklySets = weekly[g]
-        if (lastTrained[g] == Long.MIN_VALUE) {
-            MuscleRecoveryItem(group, 100, RecoveryStatus.READY, null, weeklySets)
-        } else {
-            val hoursAgo = ((now - lastTrained[g]) / (1000L * 60 * 60)).toInt().coerceAtLeast(0)
-            val neededHours = (44f + lastSessionSets[g] * 3.5f).coerceIn(48f, 78f)
-            val pct = (hoursAgo / neededHours * 100f).roundToInt().coerceIn(12, 100)
-            val status = when {
-                pct < 55 -> RecoveryStatus.TIRED
-                pct < 85 -> RecoveryStatus.RECOVERING
-                else -> RecoveryStatus.READY
-            }
-            MuscleRecoveryItem(group, pct, status, hoursAgo, weeklySets)
+        val weeklySets = weekly[g].roundToInt()
+        val pct = (readiness[g] * 100f).roundToInt().coerceIn(12, 100)
+        val status = when {
+            pct < 55 -> RecoveryStatus.TIRED
+            pct < 85 -> RecoveryStatus.RECOVERING
+            else -> RecoveryStatus.READY
         }
+        val hoursAgo = if (lastTrained[g] == Long.MIN_VALUE) null else ((now - lastTrained[g]) / (1000L * 60 * 60)).toInt().coerceAtLeast(0)
+        MuscleRecoveryItem(group, pct, status, hoursAgo, weeklySets)
     }
 }
 
+/**
+ * Share of a session's fatigue still left [hours] later. Four or more sets tire a muscle fully;
+ * more sets also stretch the recovery time (6 sets → the base time, 12 → 1.4×, 2 → 0.73×).
+ */
+internal fun recoveryLeft(baseHours: Float, sets: Float, hours: Float): Float {
+    val needed = baseHours * (0.6f + 0.4f * sets.coerceAtMost(12f) / 6f)
+    val severity = (sets / 4f).coerceAtMost(1f)
+    return severity * (1f - hours / needed).coerceAtLeast(0f)
+}
 
 // ============================================================================
 // WEIGHT SUGGESTIONS
