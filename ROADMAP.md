@@ -9,8 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
-Phase 6 is complete on `phase-6-watch-health`: Health Connect, the watch remote, and the watch polish (watch face, tile, Open on phone). Next: **the owner installs the new phone + watch builds**, then merge Phase 6 to `master` as v3.6.0 and go back to the phone app (Phase 7).
+Phases 0–6 are merged into `master` (v3.6.0). Next: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -62,7 +61,7 @@ Phase 6 is complete on `phase-6-watch-health`: Health Connect, the watch remote,
 - [x] Brand: new launcher icon (vector adaptive icon + monochrome for themed icons; bitmaps only for Android 7) and a launch screen (core-splashscreen): dark brand background, the arc draws in and the dumbbell settles, then the logo grows and fades into the app. Held at least 850 ms on Android 12+ so the animation isn't cut off
 - Warm-up set generator and RPE/RIR moved to Phase 8 (owner chose watch + Health Connect first)
 
-## Phase 6 — Watch & Health Connect (branch `phase-6-watch-health`)
+## Phase 6 — Watch & Health Connect ✅ (branch `phase-6-watch-health`, v3.6.0)
 Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for the phone's workout; the phone stays the single source of truth.
 - [x] Health Connect setup: Settings → "Health Connect" row (connect, see what's shared, disconnect); permission rationale screen with the privacy text Health Connect requires; works without Health Connect installed (row hidden or "Install" link)
 - [x] Write finished workouts as strength-training sessions (title, start/end, the work sets as notes: Health Connect segments need per-exercise times the app doesn't record). Existing history is shared once on connecting. `clientRecordId` = workout id, so editing a past workout updates it and deleting it deletes it
