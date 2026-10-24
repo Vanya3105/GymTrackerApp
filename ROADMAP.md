@@ -10,7 +10,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 ## Next up
 
 Phase 4 is merged to `master` (v3.4.0). Phase 5 is in progress on branch `phase-5-gym-tools`.
-Next: **Phase 5, step 1**: plate calculator (bar weight, available plates, kg/lb), reachable from any weight field in a workout.
+Done so far: save safety, plate calculator. Next: **Phase 5, step 2**: warm-up set generator.
 
 ---
 
@@ -58,7 +58,7 @@ Next: **Phase 5, step 1**: plate calculator (bar weight, available plates, kg/lb
 
 ## Phase 5 — Gym tools (branch `phase-5-gym-tools`)
 - [x] Save safety: a restore only accepts a GymTracker backup (any other JSON used to wipe everything) and first keeps a copy of the data it replaces (`before-import-*.json`, last 3); the JSON store keeps its previous version as `.bak` and falls back to it if the file is unreadable
-- [ ] Plate calculator (bar weight, available plates, kg/lb)
+- [x] Plate calculator (`PlateCalculator.kt`): from a set's number menu (weight & reps lifts). Edits the set's weight live, draws one side of the bar, lists plates per side. Exact search, not greedy, so gaps in the plate set don't hide loads; if the weight can't be made it offers the nearest lighter/heavier load. Bar (or no bar) and owned plates saved per unit in the JSON store (`plateSetup`), so they travel in backups
 - [ ] Warm-up set generator
 - [ ] Optional RPE/RIR per set; feed it into weight suggestions
 

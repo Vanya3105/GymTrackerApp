@@ -336,6 +336,25 @@ object LocalStorage {
         Units.set(settings.weightUnit)
     }
 
+    // --- Plate calculator (bar and plates per unit, values in that unit) ---
+
+    fun loadPlateSetup(context: Context, unit: WeightUnit): PlateSetup {
+        val obj = root(context).optJSONObject("plateSetup")?.optJSONObject(unit.name) ?: return defaultPlateSetup(unit)
+        val arr = obj.optJSONArray("plates") ?: JSONArray()
+        return PlateSetup(
+            barWeight = obj.optDouble("bar", defaultPlateSetup(unit).barWeight.toDouble()).toFloat(),
+            plates = (0 until arr.length()).map { arr.optDouble(it).toFloat() }.filter { it > 0f }
+        )
+    }
+
+    fun savePlateSetup(context: Context, unit: WeightUnit, setup: PlateSetup) = edit(context) { root ->
+        val all = root.optJSONObject("plateSetup") ?: JSONObject().also { root.put("plateSetup", it) }
+        all.put(unit.name, JSONObject().apply {
+            put("bar", setup.barWeight.toDouble())
+            put("plates", JSONArray().apply { setup.plates.forEach { put(it.toDouble()) } })
+        })
+    }
+
     // --- Rest timer ---
 
     fun setRestEndTimeMillis(context: Context, endTimeMillis: Long, fromWidget: Boolean = false) {

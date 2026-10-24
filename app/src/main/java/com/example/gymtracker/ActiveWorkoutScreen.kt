@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.IosShare
@@ -143,7 +144,7 @@ fun ActiveWorkoutScreen(
         listOf(
             TutorialStepInfo("HANDLE", "Change the order", "Hold and drag the handle to move an exercise up or down."),
             TutorialStepInfo("SUGGESTION", "Weight suggestions", "Based on your last sessions. Tap \"Use\" to fill in the suggested weight."),
-            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set number to mark it as a warm-up or drop set, change its rest, or delete it.")
+            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set number to mark it as a warm-up or drop set, change its rest, work out the plates, or delete it.")
         )
     }
     fun finishTips() {
@@ -973,6 +974,7 @@ private fun SetRow(
     val P = LocalPalette.current
     val rowBg by animateColorAsState(if (set.isCompleted) P.successSurface else Color.Transparent, tween(250), label = "set_row")
     var menuOpen by remember { mutableStateOf(false) }
+    var platesOpen by remember { mutableStateOf(false) }
     val (badgeText, badgeFg, badgeBg) = when {
         set.isWarmupSet -> Triple("W", P.warningText, P.warningSurface)
         set.intensityType == "DROP" -> Triple("D", P.dangerText, P.dangerSurface)
@@ -1015,6 +1017,15 @@ private fun SetRow(
                 }
                 HorizontalDivider(color = P.borderSubtle)
                 RestChooser("Rest after this set", set.restSeconds) { menuOpen = false; onSetRest(it) }
+                // Only a plain lift goes on a bar; added or assisted weight is a single plate or a machine pin.
+                if (type == ExerciseType.WEIGHT_REPS) {
+                    HorizontalDivider(color = P.borderSubtle)
+                    DropdownMenuItem(
+                        text = { Text("Plate calculator", style = AppType.body) },
+                        leadingIcon = { Icon(Icons.Rounded.FitnessCenter, null, tint = P.textSecondary) },
+                        onClick = { menuOpen = false; platesOpen = true }
+                    )
+                }
                 if (canDelete) {
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
@@ -1073,6 +1084,15 @@ private fun SetRow(
         }
         Spacer(Modifier.width(8.dp))
         CheckButton(done = set.isCompleted, onClick = onToggle)
+    }
+
+    if (platesOpen) {
+        PlateCalculatorSheet(
+            storedKg = set.weight,
+            step = step,
+            onChange = { w -> onChange { it.copy(weight = w) } },
+            onDismiss = { platesOpen = false }
+        )
     }
 }
 

@@ -271,6 +271,21 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun plateSetup_persistsPerUnit_andTravelsInBackups() {
+        assertEquals(defaultPlateSetup(WeightUnit.LB), LocalStorage.loadPlateSetup(context, WeightUnit.LB))
+        val home = PlateSetup(15f, listOf(20f, 10f, 5f))
+        LocalStorage.savePlateSetup(context, WeightUnit.KG, home)
+        restart()
+        assertEquals(home, LocalStorage.loadPlateSetup(context, WeightUnit.KG))
+        assertEquals(defaultPlateSetup(WeightUnit.LB), LocalStorage.loadPlateSetup(context, WeightUnit.LB))
+
+        val backup = LocalStorage.exportJsonBackupString(context)
+        LocalStorage.savePlateSetup(context, WeightUnit.KG, defaultPlateSetup(WeightUnit.KG))
+        assertTrue(LocalStorage.importJsonBackupString(context, backup))
+        assertEquals(home, LocalStorage.loadPlateSetup(context, WeightUnit.KG))
+    }
+
+    @Test
     fun freshInstall_startsEmpty() {
         storeFile.delete()
         assertTrue(LocalStorage.loadHistory(context).isEmpty())
