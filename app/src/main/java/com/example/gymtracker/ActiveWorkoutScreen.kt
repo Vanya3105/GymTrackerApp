@@ -846,6 +846,7 @@ private fun ExerciseCard(
                     canDelete = exercise.sets.size > 1,
                     badgeModifier = if (setIdx == 0) firstBadgeModifier else Modifier,
                     step = settings.weightStep,
+                    usesPlates = usesPlates(exercise.name, exercise.type),
                     onChange = { transform ->
                         onUpdate { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[setIdx] = transform(it[setIdx]) }) }
                     },
@@ -964,6 +965,7 @@ private fun SetRow(
     badgeModifier: Modifier,
     type: ExerciseType,
     step: Float,
+    usesPlates: Boolean,
     onChange: ((SetEntry) -> SetEntry) -> Unit,
     onSetType: (String) -> Unit,
     onSetRest: (Int) -> Unit,
@@ -1017,8 +1019,7 @@ private fun SetRow(
                 }
                 HorizontalDivider(color = P.borderSubtle)
                 RestChooser("Rest after this set", set.restSeconds) { menuOpen = false; onSetRest(it) }
-                // Only a plain lift goes on a bar; added or assisted weight is a single plate or a machine pin.
-                if (type == ExerciseType.WEIGHT_REPS) {
+                if (usesPlates) {
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
                         text = { Text("Plate calculator", style = AppType.body) },

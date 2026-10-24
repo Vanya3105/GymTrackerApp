@@ -49,4 +49,15 @@ class PlateCalculatorTest {
         assertNull(math.exact)
         assertEquals(20f, math.lighter!!.total)
     }
+
+    @Test
+    fun onlyBarLifts_getTheCalculator() {
+        assertEquals(true, usesPlates("Back Squat", ExerciseType.WEIGHT_REPS))
+        assertEquals(true, usesPlates("EZ-Bar Curl", ExerciseType.WEIGHT_REPS))
+        assertEquals(true, usesPlates("Smith Machine Squat", ExerciseType.WEIGHT_REPS))
+        assertEquals(true, usesPlates("My Custom Lift", ExerciseType.WEIGHT_REPS))
+        assertEquals(false, usesPlates("Dumbbell Bench Press", ExerciseType.WEIGHT_REPS))
+        assertEquals(false, usesPlates("Lat Pulldown", ExerciseType.WEIGHT_REPS))
+        assertEquals(false, usesPlates("Back Squat", ExerciseType.DURATION))
+    }
 }

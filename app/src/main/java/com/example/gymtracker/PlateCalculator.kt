@@ -103,6 +103,15 @@ fun calculatePlates(target: Float, setup: PlateSetup): PlateMath {
     return PlateMath(null, loadFor(below), above?.let(::loadFor))
 }
 
+private val PLATE_LOADED_EQUIPMENT = setOf("Barbell", "EZ bar", "Smith machine")
+
+/** Lifts loaded with plates on a bar. Custom exercises (equipment unknown) get the calculator too. */
+fun usesPlates(exerciseName: String, type: ExerciseType): Boolean {
+    if (type != ExerciseType.WEIGHT_REPS) return false
+    val equipment = ExerciseDatabase.find(exerciseName)?.equipment ?: return true
+    return equipment in PLATE_LOADED_EQUIPMENT
+}
+
 /** "62.5 kg" for a value already in [unit] (plates and bars, not stored kg). */
 private fun formatInUnit(value: Float, unit: WeightUnit) = "${formatKgClean(value)} ${unit.label}"
 
