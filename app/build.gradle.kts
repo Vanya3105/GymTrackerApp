@@ -23,8 +23,8 @@ android {
         applicationId = "com.vanyaevtushenko.gymtracker"
         minSdk = 24
         targetSdk = 37
-        versionCode = 34
-        versionName = "3.4.0"
+        versionCode = 35
+        versionName = "3.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

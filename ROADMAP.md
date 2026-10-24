@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 4 is merged to `master` (v3.4.0). Phase 5 is in progress on branch `phase-5-gym-tools`.
-Done so far: save safety, plate calculator. Next: **Phase 5, step 2**: warm-up set generator.
+Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
+Next: **Phase 6, step 1**: Health Connect connection screen and writing finished workouts.
 
 ---
 
@@ -56,29 +56,42 @@ Done so far: save safety, plate calculator. Next: **Phase 5, step 2**: warm-up s
 - [x] 5/3/1 (`PercentPrograms.kt`, Room v5 for training maxes): four days built around Squat/Bench/Deadlift/Press; warm-ups 40/50/60% + the week's sets rounded down to plates, last set "as many as you can"; week and cycle derived from sessions since the TM was set; +2.5/5 kg (5/10 lb) per cycle. TM is set from the exercise page or Notes & history (prefilled at 90% of best e1RM) and re-lays out an untouched exercise mid-workout
 - [x] GZCLP (T1 5×3+ → 6×2+ → 10×1+, T2 3×10 → 3×8 → 3×6; add a step on success, next stage on a miss, restart at 85% after the last stage) and nSuns 5-day (9-set percentage days; secondary lifts use another lift's TM; each "1+" set adds 0–3 plate steps to the TM). All derived from history; GZCLP's T3 lifts are ordinary exercises
 
-## Phase 5 — Gym tools (branch `phase-5-gym-tools`)
+## Phase 5 — Gym tools ✅ (branch `phase-5-gym-tools`, v3.5.0)
 - [x] Save safety: a restore only accepts a GymTracker backup (any other JSON used to wipe everything) and first keeps a copy of the data it replaces (`before-import-*.json`, last 3); the JSON store keeps its previous version as `.bak` and falls back to it if the file is unreadable
 - [x] Plate calculator (`PlateCalculator.kt`): from a set's number menu on bar lifts (barbell, EZ bar, Smith machine, and custom exercises whose equipment is unknown). Edits the set's weight live, draws one side of the bar, lists plates per side. Exact search, not greedy, so gaps in the plate set don't hide loads; if the weight can't be made it offers the nearest lighter/heavier load. Bar (or no bar) and owned plates saved per unit in the JSON store (`plateSetup`), so they travel in backups
 - [x] Brand: new launcher icon (vector adaptive icon + monochrome for themed icons; bitmaps only for Android 7) and a launch screen (core-splashscreen): dark brand background, the arc draws in and the dumbbell settles, then the logo grows and fades into the app. Held at least 850 ms on Android 12+ so the animation isn't cut off
-- [ ] Warm-up set generator
-- [ ] Optional RPE/RIR per set; feed it into weight suggestions
+- Warm-up set generator and RPE/RIR moved to Phase 8 (owner chose watch + Health Connect first)
 
-## Phase 6 — Data in/out
+## Phase 6 — Watch & Health Connect (branch `phase-6-watch-health`)
+Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for the phone's workout; the phone stays the single source of truth.
+- [ ] Health Connect setup: Settings → "Health Connect" row (connect, see what's shared, disconnect); permission rationale screen with the privacy text Health Connect requires; works without Health Connect installed (row hidden or "Install" link)
+- [ ] Write finished workouts as strength-training sessions (title, start/end, exercises as segments with reps). `clientRecordId` = workout id, so editing a past workout updates it and deleting it deletes it
+- [ ] Body weight both ways: write weights logged in the app; read weigh-ins from Samsung Health / a smart scale into the weight log (no duplicates of our own records)
+- [ ] Heart rate per workout: read the heart rate the watch recorded during a workout's time window; show average/max on the finished workout and in History. Read on demand, not stored (Samsung Health syncs to Health Connect with a delay, so it can appear later)
+- [ ] `:wear` module (Compose for Wear OS, minSdk 30, same `applicationId` and signing key so the Data Layer pairs them)
+- [ ] Phone → watch: live session state (exercise, set n of m, weight, reps, type, rest end time, unit) sent over the Wearable Data Layer whenever it changes (same hook that redraws widgets/lock screen)
+- [ ] Watch → phone: −/+ weight, −/+ reps, complete set, skip/adjust rest, using the same session actions as the widget
+- [ ] Watch UI: current set screen, rest countdown with a wrist buzz at the end (scheduled on the watch, so it works if the phone is far), "Open workout on phone" when nothing is running, ongoing activity so it shows on the watch face
+- [ ] Tested on a Wear OS emulator paired with the phone emulator, then on the owner's Galaxy Watch
+
+## Phase 7 — Data in/out
 - [ ] CSV export
 - [ ] Import from Strong and Hevy CSV (map exercise names to the library)
 - [ ] Auto-backup to a user-chosen folder (SAF), with rotation
-- [ ] Health Connect: write workouts + body weight, read body weight
 
-## Phase 7 — Stats & polish
+## Phase 8 — Gym tools 2
+- [ ] Warm-up set generator
+- [ ] Optional RPE/RIR per set; feed it into weight suggestions
+
+## Phase 9 — Stats & polish
 - [ ] Weekly sets per muscle vs target range, body heat map
 - [ ] Yearly calendar heat map, streaks
 - [ ] Body measurements; progress-photo side-by-side
 - [ ] Exercise instructions (cues + primary/secondary muscles)
 - [ ] PR celebration on finish; per-workout notes
 
-## Phase 8 — Reach
+## Phase 10 — Reach
 - [ ] Move UI strings to `strings.xml` (localization-ready)
-- [ ] Wear OS companion module (current set, log, rest timer)
 
 ---
 
@@ -88,3 +101,4 @@ Done so far: save safety, plate calculator. Next: **Phase 5, step 2**: warm-up s
 - 2026-10-23: The exercise detail screen scans the in-memory history instead of querying Room. History is already in memory and a scan of a few hundred workouts is instant; a Room query would add async loading for no gain.
 - 2026-10-23: Units are display-only; the database and backups stay in kg. The current unit is Compose snapshot state (`Units.current`) set from settings on first storage access, so screens redraw on change and widgets/notifications use it without a Context-aware formatter.
 - 2026-10-24: Percentage programs never store progress: week (5/3/1), stage (GZCLP) and TM increases (5/3/1 cycles, nSuns 1+ sets) are recomputed from history since the TM was set. Setting a TM restarts the count. Program days are linked to their main lifts by day title (`PROGRAM_LIFTS`), so renaming such a day makes it a normal day.
+- 2026-10-24: Watch + Health Connect moved ahead of data in/out, at the owner's request. The watch is a remote, not a standalone logger: the phone keeps the only copy of the session, so there's no sync conflict to solve. Heart rate comes from Health Connect (Galaxy Watch → Samsung Health → Health Connect) instead of the watch app measuring it.
