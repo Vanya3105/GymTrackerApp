@@ -43,7 +43,8 @@ fun HomeScreen(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val week = remember(history, userProfile.splitProgram) { computeWeekSummary(history, 0, userProfile.splitProgram) }
+    val program = programFor(userProfile.splitProgram)
+    val week = remember(history, program) { computeWeekSummary(history, 0, userProfile.splitProgram) }
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
     val upNext = splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
 

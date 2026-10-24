@@ -132,7 +132,7 @@ fun OnboardingScreen(
                     Spacer(Modifier.height(6.dp))
                     Text("Pick the split closest to yours. You can change it any time in Profile.", style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(24.dp))
-                    SPLIT_PROGRAMS.values.forEach { prog ->
+                    allPrograms().forEach { prog ->
                         ProgramOption(prog, selected = program == prog.id) {
                             haptics.tick()
                             program = prog.id

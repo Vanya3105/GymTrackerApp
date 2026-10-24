@@ -60,8 +60,21 @@ data class ExerciseEntry(
     val sets: List<SetEntry> = emptyList(),
     val isSuperset: Boolean = false,
     /** Copied from the exercise's definition when loaded; not stored per workout. */
-    val type: ExerciseType = ExerciseType.WEIGHT_REPS
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS,
+    /** The day's plan for this exercise, if one is set; guides set count, reps and coaching. */
+    val target: ExerciseTarget? = null,
+    /** A program's word on this exercise today, e.g. "5/3/1 · Week 2 of 4 (3s) · TM 100 kg". */
+    val planNote: String? = null,
+    /** Sets are laid out by a percentage program, so weight suggestions stay out of the way. */
+    val programmed: Boolean = false
 )
+
+/** A planned "sets × rep range" for an exercise on one day of a program. */
+@Immutable
+data class ExerciseTarget(val sets: Int, val repMin: Int, val repMax: Int) {
+    val repText: String get() = if (repMin == repMax) "$repMin" else "$repMin–$repMax"
+    val label: String get() = "$sets × $repText"
+}
 
 /** What a set of this exercise records. Belongs to the exercise, not to each workout. */
 enum class ExerciseType(val label: String, val example: String) {

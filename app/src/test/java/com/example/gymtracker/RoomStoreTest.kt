@@ -170,6 +170,48 @@ class RoomStoreTest {
         assertEquals(ExerciseType.DISTANCE_TIME, types["sled push"])
     }
 
+    private val myPpl = SplitProgramInfo(
+        id = "custom-1", name = "My PPL", tagline = "Mine", weeklyGoal = 5,
+        splits = listOf(WorkoutSplit("Push", "Chest", "01"), WorkoutSplit("Pull", "Back", "02"))
+    )
+
+    @Test
+    fun programs_roundTrip_inOrder() {
+        val other = myPpl.copy(id = "custom-2", name = "Other", splits = listOf(WorkoutSplit("Legs", "", "01")))
+        val data = StoreData(programs = listOf(other, myPpl))
+        RoomStore.replaceAll(db, data)
+        assertEquals(data.programs, RoomStore.load(db).programs)
+        RoomStore.deleteProgram(db, "custom-2")
+        assertEquals(listOf(myPpl), RoomStore.load(db).programs)
+        assertTrue(db.dao().programSplits().none { it.programId == "custom-2" }) // days go with it
+    }
+
+    @Test
+    fun renameSplit_movesTemplateAndHistory_orCopiesWhenStillUsed() {
+        RoomStore.saveTemplate(db, "Push", listOf("Barbell Bench Press" to "Chest"))
+        RoomStore.insertWorkout(db, workout(1, bench).copy(splitTitle = "Push"))
+
+        RoomStore.renameSplit(db, "Push", "Push Day", keepTemplate = true, keepHistory = true)
+        var data = RoomStore.load(db)
+        assertEquals(data.templates["Push"], data.templates["Push Day"])
+        assertEquals("Push", data.history.single().splitTitle)
+
+        RoomStore.renameSplit(db, "Push", "Chest Day", keepTemplate = false, keepHistory = false)
+        data = RoomStore.load(db)
+        assertEquals(null, data.templates["Push"])
+        assertEquals(listOf("Barbell Bench Press" to "Chest"), data.templates["Chest Day"])
+        assertEquals("Chest Day", data.history.single().splitTitle)
+    }
+
+    @Test
+    fun targets_roundTrip_withTheirDay() {
+        val data = full.copy(targets = mapOf("Push" to mapOf("barbell bench press" to ExerciseTarget(4, 5, 8))))
+        RoomStore.replaceAll(db, data)
+        assertEquals(data, RoomStore.load(db))
+        RoomStore.renameSplit(db, "Push", "Chest Day", keepTemplate = true, keepHistory = true)
+        assertEquals(ExerciseTarget(4, 5, 8), RoomStore.load(db).targets["Chest Day"]?.get("barbell bench press"))
+    }
+
     @Test
     fun mergedOver_keepsNewerEntriesAndAddsMissingOnes() {
         val room = StoreData(history = listOf(workout(3, custom), workout(1, custom).copy(splitTitle = "Room")))

@@ -493,6 +493,13 @@ fun ActiveWorkoutScreen(
             onRemove = { detailsFor = null; removeCandidate = name },
             onOpenHistory = { detailsFor = null; onOpenExercise(name) },
             onChangeType = { type -> onChangeExerciseType(name, type) },
+            onTrainingMaxChanged = {
+                // Nothing logged yet: lay the exercise out again from the new training max.
+                val current = latestExercises.getOrNull(idx)
+                if (current != null && current.sets.none { it.isCompleted }) {
+                    updateAt(idx) { newExerciseEntry(context, split.title, it.name, it.targetMuscle, history, settings).copy(restSeconds = it.restSeconds) }
+                }
+            },
             splitTitle = split.title,
             onDismiss = { detailsFor = null }
         )
@@ -733,6 +740,7 @@ private fun ExerciseCard(
                 Text(exercise.name, style = AppType.headline, color = P.textPrimary, maxLines = 2)
                 val sub = buildList {
                     if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
+                    exercise.target?.let { add("Plan ${it.label}") }
                     records.bestSet?.let { add("Best ${formatSet(it, exercise.type)}") }
                 }.joinToString(" · ")
                 if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary)
@@ -772,6 +780,9 @@ private fun ExerciseCard(
         }
 
         Column(Modifier.padding(start = 10.dp)) {
+            exercise.planNote?.let {
+                Text(it, style = AppType.caption, color = P.accentPrimary, modifier = Modifier.padding(top = 2.dp))
+            }
             if (lastTime != null) {
                 Text("Last time  $lastTime", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.padding(top = 2.dp))
             }
@@ -1200,6 +1211,7 @@ private fun ExerciseDetailsSheet(
     onRemove: () -> Unit,
     onOpenHistory: () -> Unit,
     onChangeType: (ExerciseType) -> Unit,
+    onTrainingMaxChanged: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -1230,6 +1242,10 @@ private fun ExerciseDetailsSheet(
             Spacer(Modifier.height(12.dp))
             val type = exercise.type
             ExerciseTypeRow(type, onChangeType)
+            if (programsUsingTrainingMaxOf(exercise.name).isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                TrainingMaxRow(exercise.name, history, rec.bestEstimated1Rm, onChanged = onTrainingMaxChanged)
+            }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (type.hasWeightSuggestions) {

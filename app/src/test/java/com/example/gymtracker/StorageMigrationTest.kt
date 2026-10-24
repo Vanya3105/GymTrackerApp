@@ -7,6 +7,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -167,6 +168,68 @@ class StorageMigrationTest {
         assertEquals(WeightUnit.LB, Units.current)
         assertEquals(5f, LocalStorage.loadSettings(context).weightStep)
         Units.set(WeightUnit.KG)
+    }
+
+    @Test
+    fun renamingADayOfACustomizedProgram_keepsHistory_butLeavesTheBuiltInItsExercises() {
+        val copy = SPLIT_PROGRAMS.getValue("CLASSIC_PPL").copy(id = "custom-1", name = "My PPL")
+        LocalStorage.saveProgram(context, copy)
+        LocalStorage.saveTemplateForSplit(context, "Pull", listOf("Barbell Row" to "Back"))
+        LocalStorage.renameSplit(context, "custom-1", "Pull", "Back Day")
+        restart()
+
+        val history = LocalStorage.loadHistory(context)
+        assertEquals("Back Day", history.first { it.id == 1759500000000 }.splitTitle) // history follows
+        assertEquals(listOf("Barbell Row" to "Back"), LocalStorage.loadTemplateForSplit(context, "Back Day"))
+        assertEquals(listOf("Barbell Row" to "Back"), LocalStorage.loadTemplateForSplit(context, "Pull")) // built-ins keep theirs
+        assertEquals(listOf("Push", "Back Day", "Legs"), programFor("custom-1").splits.map { it.title })
+        assertEquals("Back Day", LocalStorage.loadActiveSession(context)?.first) // the open workout follows too
+    }
+
+    @Test
+    fun targets_surviveListEdits_andShapeNewWorkouts() {
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Barbell Bench Press" to "Chest", "Cable Fly" to "Chest"))
+        LocalStorage.setTarget(context, "Push", "Barbell Bench Press", ExerciseTarget(4, 6, 10))
+        // Reordering (as the workout screen does) keeps it; removing the exercise drops it.
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Cable Fly" to "Chest", "Barbell Bench Press" to "Chest"))
+        restart()
+        assertEquals(ExerciseTarget(4, 6, 10), LocalStorage.getTarget(context, "Push", "barbell bench press"))
+
+        val entry = newExerciseEntry(context, "Push", "Barbell Bench Press", "Chest", emptyList(), AppSettings())
+        assertEquals(ExerciseTarget(4, 6, 10), entry.target)
+        assertEquals(1 + 4, entry.sets.size) // warm-up + 4 work sets
+        assertEquals(listOf("10", "10", "10", "10"), entry.sets.drop(1).map { it.reps })
+
+        LocalStorage.saveTemplateForSplit(context, "Push", listOf("Cable Fly" to "Chest"))
+        restart()
+        assertNull(LocalStorage.getTarget(context, "Push", "Barbell Bench Press"))
+    }
+
+    @Test
+    fun trainingMax_persists_andLaysOut531Days() {
+        // No training max yet: a normal entry with a prompt.
+        val before = newExerciseEntry(context, "5/3/1 Squat", "Back Squat", "Quads", emptyList(), AppSettings())
+        assertFalse(before.programmed)
+        assertTrue(before.planNote!!.contains("training max"))
+
+        LocalStorage.setTrainingMax(context, "Back Squat", 100f)
+        restart()
+        assertEquals(100f, LocalStorage.getTrainingMax(context, "back squat")!!.kg)
+
+        val entry = newExerciseEntry(context, "5/3/1 Squat", "Back Squat", "Quads", LocalStorage.loadHistory(context), AppSettings())
+        assertTrue(entry.programmed)
+        assertEquals(listOf("40", "50", "60", "65", "75", "85"), entry.sets.map { it.weight })
+        assertEquals(3, entry.sets.count { it.isWarmupSet })
+        assertTrue(entry.planNote!!.startsWith("5/3/1 · Week 1 of 4"))
+
+        // Other days and other exercises are untouched.
+        assertFalse(newExerciseEntry(context, "Legs", "Back Squat", "Quads", emptyList(), AppSettings()).programmed)
+
+        // It's in backups too.
+        val backup = LocalStorage.exportJsonBackupString(context)
+        LocalStorage.setTrainingMax(context, "Back Squat", null)
+        assertTrue(LocalStorage.importJsonBackupString(context, backup))
+        assertEquals(100f, LocalStorage.getTrainingMax(context, "Back Squat")!!.kg)
     }
 
     @Test

@@ -23,6 +23,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -177,6 +178,43 @@ val SPLIT_PROGRAMS = mapOf(
             WorkoutSplit("Lower B", "Glutes, hamstrings, quads", "04")
         )
     ),
+    "WENDLER_531" to SplitProgramInfo(
+        id = "WENDLER_531",
+        name = "5/3/1",
+        tagline = "Four big lifts in four-week waves of a training max",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("5/3/1 Squat", "Back squat, then legs", "01"),
+            WorkoutSplit("5/3/1 Bench", "Bench press, then back and arms", "02"),
+            WorkoutSplit("5/3/1 Deadlift", "Deadlift, then legs and core", "03"),
+            WorkoutSplit("5/3/1 Press", "Overhead press, then back and arms", "04")
+        )
+    ),
+    "GZCLP" to SplitProgramInfo(
+        id = "GZCLP",
+        name = "GZCLP",
+        tagline = "Linear progression in tiers: heavy T1, volume T2, light T3",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("GZCLP A1", "T1 squat, T2 bench, T3 pulldown", "01"),
+            WorkoutSplit("GZCLP B1", "T1 press, T2 deadlift, T3 row", "02"),
+            WorkoutSplit("GZCLP A2", "T1 bench, T2 squat, T3 pulldown", "03"),
+            WorkoutSplit("GZCLP B2", "T1 deadlift, T2 press, T3 row", "04")
+        )
+    ),
+    "NSUNS_5" to SplitProgramInfo(
+        id = "NSUNS_5",
+        name = "nSuns 5-day",
+        tagline = "High-volume percentages; the 1+ sets raise your training max",
+        weeklyGoal = 5,
+        splits = listOf(
+            WorkoutSplit("nSuns Day 1", "Bench volume, overhead press", "01"),
+            WorkoutSplit("nSuns Day 2", "Squat, sumo deadlift", "02"),
+            WorkoutSplit("nSuns Day 3", "Overhead press, incline bench", "03"),
+            WorkoutSplit("nSuns Day 4", "Deadlift, front squat", "04"),
+            WorkoutSplit("nSuns Day 5", "Heavy bench, close-grip bench", "05")
+        )
+    ),
     "FULL_BODY" to SplitProgramInfo(
         id = "FULL_BODY",
         name = "Full body",
@@ -190,8 +228,28 @@ val SPLIT_PROGRAMS = mapOf(
     )
 )
 
+const val DEFAULT_PROGRAM_ID = "PPL_ARNOLD"
+
+/**
+ * Programs the user built or customized. Kept current by LocalStorage whenever its data loads
+ * or changes; snapshot state, so program lists redraw on edits.
+ */
+object UserPrograms {
+    private val state = mutableStateOf<List<SplitProgramInfo>>(emptyList())
+    val all: List<SplitProgramInfo> get() = state.value
+
+    fun set(programs: List<SplitProgramInfo>) {
+        if (state.value != programs) state.value = programs
+    }
+}
+
+/** Built-in programs first, then the user's own. */
+fun allPrograms(): List<SplitProgramInfo> = SPLIT_PROGRAMS.values.toList() + UserPrograms.all
+
 fun programFor(programId: String): SplitProgramInfo =
-    SPLIT_PROGRAMS[programId] ?: SPLIT_PROGRAMS.getValue("PPL_ARNOLD")
+    SPLIT_PROGRAMS[programId] ?: UserPrograms.all.find { it.id == programId } ?: SPLIT_PROGRAMS.getValue(DEFAULT_PROGRAM_ID)
+
+val SplitProgramInfo.isBuiltIn: Boolean get() = id in SPLIT_PROGRAMS
 
 val REST_PRESETS = listOf(0, 60, 90, 120, 180, 240)
 
@@ -434,6 +492,19 @@ fun defaultTemplateForSplit(splitTitle: String): List<Pair<String, String>> {
         "Pull" -> listOf("Lat Pulldown", "T-Bar Row", "Face Pull", "Preacher Curl")
         "Legs", "Lower A" -> listOf("Hack Squat", "Romanian Deadlift", "Leg Extension", "Seated Leg Curl", "Standing Calf Raise")
         "Lower B" -> listOf("Leg Press", "Lying Leg Curl", "Bulgarian Split Squat", "Seated Calf Raise")
+        "5/3/1 Squat" -> listOf("Back Squat", "Leg Press", "Lying Leg Curl", "Hanging Leg Raise")
+        "5/3/1 Bench" -> listOf("Barbell Bench Press", "Dumbbell Row", "Tricep Pushdown", "Face Pull")
+        "5/3/1 Deadlift" -> listOf("Deadlift", "Bulgarian Split Squat", "Ab Wheel Rollout")
+        "5/3/1 Press" -> listOf("Overhead Press", "Chin-Up", "Dips", "Face Pull")
+        "GZCLP A1" -> listOf("Back Squat", "Barbell Bench Press", "Lat Pulldown")
+        "GZCLP B1" -> listOf("Overhead Press", "Deadlift", "Dumbbell Row")
+        "GZCLP A2" -> listOf("Barbell Bench Press", "Back Squat", "Lat Pulldown")
+        "GZCLP B2" -> listOf("Deadlift", "Overhead Press", "Dumbbell Row")
+        "nSuns Day 1" -> listOf("Barbell Bench Press", "Overhead Press", "Lat Pulldown", "Lateral Raise")
+        "nSuns Day 2" -> listOf("Back Squat", "Sumo Deadlift", "Lying Leg Curl", "Hanging Leg Raise")
+        "nSuns Day 3" -> listOf("Overhead Press", "Incline Barbell Bench Press", "Chin-Up", "Face Pull")
+        "nSuns Day 4" -> listOf("Deadlift", "Front Squat", "Barbell Row", "Ab Wheel Rollout")
+        "nSuns Day 5" -> listOf("Barbell Bench Press", "Close-Grip Bench Press", "Dumbbell Row", "Barbell Curl")
         "Arms & Shoulders" -> listOf(
             "Seated Dumbbell Shoulder Press", "Cable Lateral Raise", "Incline Dumbbell Curl",
             "Overhead Cable Tricep Extension", "Hammer Curl"
@@ -620,8 +691,12 @@ fun suggestFromSplitHistory(
     val prevText = formatWeightKg(prevWeight)
 
     fun volume(sets: List<SetEntry>) = sets.sumOf { (it.weightKg * it.repCount).toDouble() }
-    fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= 8 }
-    fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..6 }
+    // A target's rep range sets the thresholds; without one: 8+ moves up, 6 or fewer moves down.
+    val top = exercise.target?.repMax ?: 8
+    val low = exercise.target?.let { it.repMin - 1 } ?: 6
+    val rangeText = exercise.target?.repText ?: "6–8"
+    fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= top }
+    fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..low }
     fun suggest(value: Float, tone: SuggestionTone, message: (String) -> String): Suggestion {
         val v = unit.round(value.coerceAtLeast(0f))
         return Suggestion(message("${formatKgClean(v)} ${unit.label}"), tone, suggestedWeight = unit.stored(v))
@@ -646,33 +721,33 @@ fun suggestFromSplitHistory(
     val completedToday = exercise.sets.filter { !it.isWarmupSet && it.isCompleted && it.repCount > 0 }
     if (completedToday.isNotEmpty()) {
         if (prevHad8Plus && hit8Plus(completedToday)) {
-            return increase { w -> "8+ reps two sessions running. Move up to $w." }
+            return increase { w -> "$top+ reps two sessions running. Move up to $w." }
         }
         if (prevHad6OrLess && hit6OrLess(completedToday)) {
-            return decrease { w -> "Under 7 reps two sessions running. Drop to $w." }
+            return decrease { w -> "Under ${low + 1} reps two sessions running. Drop to $w." }
         }
     }
 
     if (pastSessions.size >= 2) {
         if (prevHad8Plus && hit8Plus(pastSessions[1])) {
-            return increase { w -> "You hit 8+ reps the last two times. Try $w today." }
+            return increase { w -> "You hit $top+ reps the last two times. Try $w today." }
         }
         if (prevHad6OrLess && hit6OrLess(pastSessions[1])) {
-            return decrease { w -> "Under 7 reps the last two times. Try $w today." }
+            return decrease { w -> "Under ${low + 1} reps the last two times. Try $w today." }
         }
     }
 
     return when {
         prevHad8Plus -> Suggestion(
-            "Last time: $prevText for 8+ reps. Do it again to move up.",
+            "Last time: $prevText for $top+ reps. Do it again to move up.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
         prevHad6OrLess -> Suggestion(
-            "Last time: $prevText for 6 or fewer. Aim for 7–8 reps.",
+            "Last time: $prevText for $low or fewer. Aim for ${low + 1}–$top reps.",
             SuggestionTone.CAUTION, prevWeightStr
         )
         else -> Suggestion(
-            "Last time: $prevText. Aim for 6–8 reps.",
+            "Last time: $prevText. Aim for $rangeText reps.",
             SuggestionTone.NEUTRAL, prevWeightStr
         )
     }

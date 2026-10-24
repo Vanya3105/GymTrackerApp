@@ -46,7 +46,9 @@ fun ExercisePickerSheet(
     existingNames: Set<String>,
     onPick: (ExerciseInfo) -> Unit,
     onCreateCustom: (String, ExerciseType) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** Shown under exercises that are already in the list being edited. */
+    addedLabel: String = "In this workout"
 ) {
     val P = LocalPalette.current
     val focus = LocalFocusManager.current
@@ -134,6 +136,7 @@ fun ExercisePickerSheet(
                     val added = info.name.lowercase() in lowerExisting
                     PickerRow(
                         title = info.name,
+                        addedLabel = addedLabel,
                         subtitle = listOfNotNull(info.muscle, info.equipment, info.type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label).joinToString(" · "),
                         added = added,
                         onClick = { if (!added) onPick(info) },
@@ -255,7 +258,8 @@ private fun PickerRow(
     added: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    leadingAccent: Boolean = false
+    leadingAccent: Boolean = false,
+    addedLabel: String = ""
 ) {
     val P = LocalPalette.current
     Row(
@@ -276,7 +280,7 @@ private fun PickerRow(
                     else -> P.textPrimary
                 }
             )
-            Text(if (added) "In this workout" else subtitle, style = AppType.caption, color = P.textSecondary)
+            Text(if (added) addedLabel else subtitle, style = AppType.caption, color = P.textSecondary)
         }
         AnimatedContent(
             targetState = added,

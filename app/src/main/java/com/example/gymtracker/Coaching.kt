@@ -105,10 +105,10 @@ fun suggestNextWeight(
     history: List<CompletedWorkout>,
     step: Float
 ): Suggestion? {
-    if (!exercise.type.hasWeightSuggestions) return null
+    if (!exercise.type.hasWeightSuggestions || exercise.programmed) return null
     val isCompound = isCompoundLift(exercise.name)
-    val repRange = if (isCompound) "6–8" else "8–12"
-    val topReps = if (isCompound) 8 else 10
+    val repRange = exercise.target?.repText ?: if (isCompound) "6–8" else "8–12"
+    val topReps = exercise.target?.repMax ?: if (isCompound) 8 else 10
 
     val workSets = exercise.sets.filter { !it.isWarmupSet }
     val doneSets = workSets.filter { it.isCompleted && it.repCount > 0 }

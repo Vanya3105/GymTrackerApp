@@ -109,6 +109,27 @@ class StoreCodecTest {
     }
 
     @Test
+    fun programs_areWrittenAndRead_andMissingMeansNone() {
+        val p = SplitProgramInfo("custom-9", "Bro split", "Five days", 5, listOf(WorkoutSplit("Chest", "Pecs", "01"), WorkoutSplit("Back", "", "02")))
+        val root = JSONObject()
+        StoreCodec.writeData(root, StoreData(programs = listOf(p)))
+        assertEquals(listOf(p), StoreCodec.readData(JSONObject(root.toString())).programs)
+        assertTrue(StoreCodec.readData(JSONObject("{}")).programs.isEmpty())
+    }
+
+    @Test
+    fun targets_inBackups_andOnTheOpenWorkout() {
+        val targets = mapOf("Push" to mapOf("barbell bench press" to ExerciseTarget(3, 8, 12)))
+        val root = JSONObject()
+        StoreCodec.writeData(root, StoreData(targets = targets))
+        assertEquals(targets, StoreCodec.readData(JSONObject(root.toString())).targets)
+
+        val ex = ExerciseEntry("Barbell Bench Press", target = ExerciseTarget(3, 8, 12))
+        assertEquals(ex.target, StoreCodec.deserializeExercises(StoreCodec.serializeExercises(listOf(ex))).single().target)
+        assertNull(StoreCodec.deserializeExercises(StoreCodec.serializeExercises(listOf(ex.copy(target = null)))).single().target)
+    }
+
+    @Test
     fun exportedBackupShape_isReadable() {
         // Guards the backup format users already have on disk.
         val root = JSONObject().put("history", JSONArray().put(StoreCodec.serializeWorkout(sample)))

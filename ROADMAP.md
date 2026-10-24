@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 3 is done on branch `phase-3-exercise-types`, waiting for an on-device check by the owner, then merge to `master`.
-Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and delete their own splits and programs (today they are hardcoded in `SPLIT_PROGRAMS`); this needs Room tables for programs/splits (schema v3).
+Phase 4 is done on branch `phase-4-routines` (v3.4.0), waiting for an on-device check by the owner, then merge to `master`.
+Then start **Phase 5, step 1**: plate calculator (bar weight, available plates, kg/lb), reachable from any weight field in a workout.
 
 ---
 
@@ -49,10 +49,12 @@ Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and 
 - [x] Logging UI per type: set rows and headers per type (`DurationStepper` types like a microwave timer, `DistanceStepper` in km/mi), drop sets only for loaded lifts, new exercises start from your last session of it, custom exercises ask for a type, "Logged as" in Notes & history changes it
 - [x] Results per type: exercise page tiles and chart metrics (reps, assistance, time, distance, pace), rep records only for loaded lifts, Progress lists every type with its own best, widget/lock-screen boxes and +/- follow the type, set-done notification and share image use per-type wording. Zero added weight / zero assistance reads as a bodyweight set
 
-## Phase 4 — Routines & programs
-- [ ] Create, rename, reorder and delete your own splits and programs
-- [ ] Per-exercise targets (sets × rep range, rest)
-- [ ] Built-in programs: 5/3/1, GZCLP, nSuns (percentage-based, with training max)
+## Phase 4 — Routines & programs ✅ (branch `phase-4-routines`)
+- [x] Your own programs (Room v3, auto-migrated): Profile lists built-in + yours; "Customize" copies a built-in, "New program" starts blank; the editor sets name, workouts per week and days (add, rename, reorder, remove) and each day's exercise list. Built-in programs stay read-only presets
+- [x] Days are identified by title, shared across programs. Renaming a day moves its history unless another of *your* programs uses the old title, and copies its exercise list if any other program (built-ins included) still uses it
+- [x] Per-exercise targets on a day (sets × rep range; Room v4 auto-migrated, backup `splitTargets`): new workouts lay out that many sets at the top of the range, the workout card shows "Plan 3 × 8–12", coaching moves up at the top and down below the bottom of the range (defaults unchanged without a target). Rest stays per exercise as before
+- [x] 5/3/1 (`PercentPrograms.kt`, Room v5 for training maxes): four days built around Squat/Bench/Deadlift/Press; warm-ups 40/50/60% + the week's sets rounded down to plates, last set "as many as you can"; week and cycle derived from sessions since the TM was set; +2.5/5 kg (5/10 lb) per cycle. TM is set from the exercise page or Notes & history (prefilled at 90% of best e1RM) and re-lays out an untouched exercise mid-workout
+- [x] GZCLP (T1 5×3+ → 6×2+ → 10×1+, T2 3×10 → 3×8 → 3×6; add a step on success, next stage on a miss, restart at 85% after the last stage) and nSuns 5-day (9-set percentage days; secondary lifts use another lift's TM; each "1+" set adds 0–3 plate steps to the TM). All derived from history; GZCLP's T3 lifts are ordinary exercises
 
 ## Phase 5 — Gym tools
 - [ ] Plate calculator (bar weight, available plates, kg/lb)
@@ -83,3 +85,4 @@ Then start **Phase 4, step 1**: routines. Let users create, rename, reorder and 
 - 2026-10-23: Room holds history, body weight, templates and per-exercise notes/rest. Settings, profile, active session and widget settings stay in the JSON file: they are small and written on every tap. `LocalStorage` stays synchronous via an in-memory copy, so the UI didn't need rewriting. Set weight/reps stay strings in Room for now (exact round trip of half-typed sets); Phase 3 revisits this with exercise types.
 - 2026-10-23: The exercise detail screen scans the in-memory history instead of querying Room. History is already in memory and a scan of a few hundred workouts is instant; a Room query would add async loading for no gain.
 - 2026-10-23: Units are display-only; the database and backups stay in kg. The current unit is Compose snapshot state (`Units.current`) set from settings on first storage access, so screens redraw on change and widgets/notifications use it without a Context-aware formatter.
+- 2026-10-24: Percentage programs never store progress: week (5/3/1), stage (GZCLP) and TM increases (5/3/1 cycles, nSuns 1+ sets) are recomputed from history since the TM was set. Setting a TM restarts the count. Program days are linked to their main lifts by day title (`PROGRAM_LIFTS`), so renaming such a day makes it a normal day.

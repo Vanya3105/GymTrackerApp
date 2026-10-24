@@ -5,6 +5,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,6 +58,57 @@ class DatabaseMigrationTest {
                 assertEquals("", c.getString(3))
             }
         }
+    }
+
+    @Test
+    fun v2ToV3_addsProgramTables_andKeepsData() {
+        helper.createDatabase(dbName, 2).use { db ->
+            db.execSQL("INSERT INTO workouts (id, splitTitle, dateKey, displayDate, durationSeconds, bodyWeightKg, photoPath, skippedExercises, totalVolumeKg, prsHit) VALUES (7, 'Push', '', '', 0, 80, NULL, '[]', 0, 0)")
+        }
+        helper.runMigrationsAndValidate(dbName, 3, true).use { db ->
+            db.query("SELECT splitTitle FROM workouts").use { c -> c.moveToFirst(); assertEquals("Push", c.getString(0)) }
+            db.query("SELECT COUNT(*) FROM programs").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
+            db.query("SELECT COUNT(*) FROM program_splits").use { c -> c.moveToFirst(); assertEquals(0, c.getInt(0)) }
+        }
+    }
+
+    @Test
+    fun v3ToV4_addsTargetColumns_leavingExistingListsWithoutTargets() {
+        helper.createDatabase(dbName, 3).use { db ->
+            db.execSQL("INSERT INTO exercises (id, name, nameKey, muscle, note, type) VALUES (1, 'Row', 'row', '', '', 'WEIGHT_REPS')")
+            db.execSQL("INSERT INTO split_template_items (splitTitle, position, exerciseId, muscle) VALUES ('Pull', 0, 1, 'Back')")
+        }
+        helper.runMigrationsAndValidate(dbName, 4, true).use { db ->
+            db.query("SELECT targetSets, repMin, repMax FROM split_template_items").use { c ->
+                c.moveToFirst()
+                assertTrue(c.isNull(0) && c.isNull(1) && c.isNull(2))
+            }
+        }
+    }
+
+    @Test
+    fun v4ToV5_addsTrainingMaxColumns() {
+        helper.createDatabase(dbName, 4).use { db ->
+            db.execSQL("INSERT INTO exercises (id, name, nameKey, muscle, note, type) VALUES (1, 'Back Squat', 'back squat', '', '', 'WEIGHT_REPS')")
+        }
+        helper.runMigrationsAndValidate(dbName, 5, true).use { db ->
+            db.query("SELECT trainingMaxKg, trainingMaxSetAt FROM exercises").use { c ->
+                c.moveToFirst()
+                assertTrue(c.isNull(0) && c.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun v1ToV5_inOneGo() {
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(dbName, 5, true, MIGRATION_1_2).close()
+    }
+
+    @Test
+    fun v1ToV3_inOneGo() {
+        helper.createDatabase(dbName, 1).close()
+        helper.runMigrationsAndValidate(dbName, 3, true, MIGRATION_1_2).close()
     }
 
     @Test

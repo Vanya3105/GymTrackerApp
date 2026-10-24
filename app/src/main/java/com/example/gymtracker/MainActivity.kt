@@ -163,7 +163,8 @@ fun GymTrackerApp(
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
-    val activeProgram = remember(userProfile.splitProgram) { programFor(userProfile.splitProgram) }
+    // Not remembered: programFor reads the user's programs, so edits to the active one show at once.
+    val activeProgram = programFor(userProfile.splitProgram)
     val splits = activeProgram.splits
 
     var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
@@ -171,6 +172,7 @@ fun GymTrackerApp(
     var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
     // Exercise detail screen, shown over everything else (including a running workout).
     var openExercise by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -321,7 +323,8 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                             weightHistory = LocalStorage.loadWeightHistory(context)
                             onUpdateSettings(LocalStorage.loadSettings(context))
-                        }
+                        },
+                        onEditProgram = { haptics.tick(); editingProgramId = it }
                     )
                 }
             }
@@ -468,6 +471,35 @@ fun GymTrackerApp(
             }
         }
 
+        var shownProgramId by remember { mutableStateOf(editingProgramId) }
+        if (editingProgramId != null) shownProgramId = editingProgramId
+        AnimatedVisibility(
+            visible = editingProgramId != null,
+            enter = slideInHorizontallyBy(1f) + fadeIn(tween(150)),
+            exit = fadeOut(tween(180))
+        ) {
+            shownProgramId?.let { id ->
+                ProgramEditorScreen(
+                    programId = id,
+                    isActive = userProfile.splitProgram == id,
+                    haptics = haptics,
+                    onUseProgram = {
+                        userProfile = userProfile.copy(splitProgram = id)
+                        LocalStorage.saveUserProfile(context, userProfile)
+                    },
+                    onDeleted = {
+                        if (userProfile.splitProgram == id) {
+                            userProfile = userProfile.copy(splitProgram = DEFAULT_PROGRAM_ID)
+                            LocalStorage.saveUserProfile(context, userProfile)
+                        }
+                        editingProgramId = null
+                    },
+                    onHistoryChanged = { history = LocalStorage.loadHistory(context) },
+                    onBack = { editingProgramId = null }
+                )
+            }
+        }
+
         // Keep the last name while the screen animates out.
         var shownExercise by remember { mutableStateOf(openExercise) }
         if (openExercise != null) shownExercise = openExercise
@@ -533,38 +565,85 @@ fun newExerciseEntry(
     history: List<CompletedWorkout>,
     settings: AppSettings
 ): ExerciseEntry {
+    val plan = liftPlanFor(splitTitle, name)
+        ?: return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
+
+    // A program's main lift: its sets come from a training max (its own, or another lift's for
+    // nSuns' secondary lifts).
+    val tm = LocalStorage.getTrainingMax(context, plan.trainingMaxOf)
+    if (tm == null) {
+        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) "a training max (tap the name)" else "a ${plan.trainingMaxOf} training max"
+        return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
+            .copy(planNote = "Set $whose to get your ${plan.scheme.label} weights")
+    }
     val type = LocalStorage.exerciseType(context, name)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    val day = planLiftDay(plan, tm, history)
+    val note = buildList {
+        add(day.title)
+        if (day.weightKg == null) add("TM ${formatWeightKg(day.trainingMaxKg)}")
+        day.amrapText()?.let(::add)
+    }.joinToString(" · ")
+    return ExerciseEntry(
+        name = name, targetMuscle = muscle, restSeconds = rest, type = type, programmed = true,
+        planNote = note,
+        sets = day.sets.mapIndexed { i, p ->
+            SetEntry(
+                setNumber = i + 1,
+                weight = day.weightFor(p),
+                reps = "${p.reps}",
+                isWarmup = p.warmup,
+                intensityType = if (p.warmup) "WARMUP" else "NORMAL",
+                restSeconds = if (p.warmup) minOf(60, rest) else rest
+            )
+        }
+    )
+}
+
+/** A new entry without a percentage program: targets, last session, or plain defaults. */
+private fun newExerciseEntryDefault(
+    context: Context,
+    splitTitle: String,
+    name: String,
+    muscle: String,
+    history: List<CompletedWorkout>,
+    settings: AppSettings
+): ExerciseEntry {
+    val type = LocalStorage.exerciseType(context, name)
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    val target = LocalStorage.getTarget(context, splitTitle, name)
+    val workSetCount = target?.sets
+    val targetReps = target?.repMax?.toString()
 
     if (!type.hasWeightSuggestions) {
         // No weight to suggest: start from your own last session, else plain defaults.
         val last = history.firstNotNullOfOrNull { w ->
             w.exercises.find { !it.isSkipped && exerciseKey(it.name) == exerciseKey(name) }?.workSets?.takeIf { it.isNotEmpty() }
         }
-        val template = last ?: List(if (type == ExerciseType.DISTANCE_TIME) 1 else 3) {
-            SetEntry(
-                setNumber = 0,
-                weight = "",
-                reps = if (type.usesReps) "10" else "",
-                seconds = if (type == ExerciseType.DURATION) "60" else ""
-            )
-        }
+        val defaultSet = SetEntry(
+            setNumber = 0,
+            weight = "",
+            reps = if (type.usesReps) targetReps ?: "10" else "",
+            seconds = if (type == ExerciseType.DURATION) "60" else ""
+        )
+        val count = workSetCount ?: last?.size ?: if (type == ExerciseType.DISTANCE_TIME) 1 else 3
+        val template = List(count) { i -> last?.getOrNull(i) ?: last?.lastOrNull() ?: defaultSet }
         return ExerciseEntry(
-            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type, target = target,
             sets = template.mapIndexed { i, s ->
-                SetEntry(i + 1, weight = s.weight, reps = s.reps, seconds = s.seconds, distanceM = s.distanceM, restSeconds = rest)
+                SetEntry(i + 1, weight = s.weight, reps = (if (type.usesReps) targetReps else null) ?: s.reps, seconds = s.seconds, distanceM = s.distanceM, restSeconds = rest)
             }
         )
     }
 
-    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle, type = type), history, settings.weightStep)
+    val suggestion = suggestFromSplitHistory(splitTitle, ExerciseEntry(name, muscle, type = type, target = target), history, settings.weightStep)
     val unit = Units.current
     if (type == ExerciseType.WEIGHTED_BODYWEIGHT) {
         // Added weight; no warm-up set (the warm-up is the bodyweight version).
         val added = suggestion?.suggestedWeight?.ifBlank { null } ?: "0"
         return ExerciseEntry(
-            name = name, targetMuscle = muscle, restSeconds = rest, type = type,
-            sets = List(3) { i -> SetEntry(i + 1, weight = added, reps = "8", restSeconds = rest) }
+            name = name, targetMuscle = muscle, restSeconds = rest, type = type, target = target,
+            sets = List(workSetCount ?: 3) { i -> SetEntry(i + 1, weight = added, reps = targetReps ?: "8", restSeconds = rest) }
         )
     }
     val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
@@ -576,11 +655,9 @@ fun newExerciseEntry(
         targetMuscle = muscle,
         restSeconds = rest,
         type = type,
-        sets = listOf(
-            SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest)),
-            SetEntry(2, weight = workWeight, reps = "8", restSeconds = rest),
-            SetEntry(3, weight = workWeight, reps = "8", restSeconds = rest)
-        )
+        target = target,
+        sets = listOf(SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest))) +
+            List(workSetCount ?: 2) { i -> SetEntry(i + 2, weight = workWeight, reps = targetReps ?: "8", restSeconds = rest) }
     )
 }
 

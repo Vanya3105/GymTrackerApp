@@ -19,6 +19,11 @@ A simple, offline workout log. Pick your split, follow the suggested weights, an
 * **Rest timer:** a floating countdown with −15 / +15 / skip, plus an alarm-backed beep and notification that work with the phone locked.
 * **Minimize a workout:** go back to browse your history mid-session; a "Resume" bar brings you back.
 
+### Programs
+* **Built-in programs:** Push/Pull + Arnold split, Push/Pull/Legs, Upper/Lower, Full body, plus **5/3/1**, **GZCLP** and **nSuns 5-day**, which lay out your main lifts from a training max and move you through weeks, stages and increases on their own.
+* **Your own programs:** customize a built-in one or start from scratch: name, workouts per week, days, and each day's exercises.
+* **Plans per exercise:** e.g. 3 × 8–12. Workouts start with those sets, and weight suggestions follow the range.
+
 ### History & progress
 * Week and month views, each workout card with share, edit and delete.
 * Body weight log with a trend chart, muscle recovery details and your best lifts (estimated 1-rep max).

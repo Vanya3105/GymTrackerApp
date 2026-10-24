@@ -37,11 +37,15 @@ object LocalStorage {
     private const val SURFACE_REFRESH_DEBOUNCE_MS = 250L
 
     /** JSON sections that moved to Room. Old store files and backups still carry them. */
-    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults", "exerciseTypes")
+    private val ROOM_SECTIONS = listOf("history", "weightHistory", "splitTemplates", "exerciseNotes", "exerciseRestDefaults", "exerciseTypes", "programs", "splitTargets", "trainingMaxes")
 
     private val lock = Any()
     private var cachedRoot: JSONObject? = null
     private var cachedData: StoreData? = null
+        set(value) {
+            field = value
+            value?.let { UserPrograms.set(it.programs) }
+        }
 
     @Volatile private var ioThread: Thread? = null
     private val ioExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "gym-storage").also { ioThread = it } }
@@ -205,6 +209,8 @@ object LocalStorage {
     // --- Profile & body weight ---
 
     fun loadUserProfile(context: Context): UserProfile {
+        // The profile names a program that may be one of the user's own: make sure they're loaded.
+        data(context)
         val obj = root(context).optJSONObject("userProfile") ?: return UserProfile()
         return UserProfile(
             hasCompletedOnboarding = obj.optBoolean("hasCompletedOnboarding", false),
@@ -427,15 +433,91 @@ object LocalStorage {
         return true
     }
 
+    // --- Programs ---
+
+    /** The user's own programs (built-in ones are in [SPLIT_PROGRAMS]). */
+    fun loadPrograms(context: Context): List<SplitProgramInfo> = data(context).programs
+
+    /** Adds the program, or replaces the one with the same id, keeping its place in the list. */
+    fun saveProgram(context: Context, program: SplitProgramInfo) {
+        val current = data(context).programs
+        val index = current.indexOfFirst { it.id == program.id }.takeIf { it >= 0 } ?: current.size
+        val updated = if (index < current.size) current.toMutableList().also { it[index] = program } else current + program
+        editData(context, { it.copy(programs = updated) }) { RoomStore.saveProgram(it, program, index) }
+    }
+
+    fun deleteProgram(context: Context, id: String) {
+        editData(context, { d -> d.copy(programs = d.programs.filter { it.id != id }) }) { RoomStore.deleteProgram(it, id) }
+    }
+
+    /**
+     * Renames a day of one of the user's programs. Its exercise list is copied if any other
+     * program (built-in ones included) still uses the old title, else moved. Logged workouts move
+     * with it unless another of the user's own programs still uses the old title: renaming
+     * "Push" in a customized copy should keep its history, not leave it with the built-in preset.
+     */
+    fun renameSplit(context: Context, programId: String, oldTitle: String, newTitle: String) {
+        synchronized(lock) {
+            val program = data(context).programs.find { it.id == programId } ?: return
+            val renamed = program.copy(splits = program.splits.map { if (it.title == oldTitle) it.copy(title = newTitle) else it })
+            fun usedBy(programs: List<SplitProgramInfo>) = programs.any { p -> p.id != programId && p.splits.any { it.title == oldTitle } }
+            val keepTemplate = usedBy(allPrograms())
+            val keepHistory = usedBy(UserPrograms.all)
+            saveProgram(context, renamed)
+            cachedData = onIoThread(context) { db ->
+                RoomStore.renameSplit(db, oldTitle, newTitle, keepTemplate, keepHistory)
+                RoomStore.load(db)
+            }
+            if (!keepHistory) {
+                loadActiveSession(context)?.let { (split, exercises) ->
+                    if (split == oldTitle) saveActiveSession(context, newTitle, exercises)
+                }
+            }
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = true)
+    }
+
     // --- Split templates ---
 
     fun loadTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>> =
         data(context).templates[splitTitle]
             ?: defaultTemplateForSplit(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
 
+    /** Replaces a day's exercise list. Targets of exercises that stay on it are kept. */
     fun saveTemplateForSplit(context: Context, splitTitle: String, list: List<Pair<String, String>>) {
-        editData(context, { it.copy(templates = it.templates + (splitTitle to list)) }) {
-            RoomStore.saveTemplate(it, splitTitle, list)
+        val keys = list.mapTo(HashSet()) { exerciseKey(it.first) }
+        val kept = data(context).targets[splitTitle].orEmpty().filterKeys { it in keys }
+        editData(context, { it.copy(templates = it.templates + (splitTitle to list), targets = it.targets + (splitTitle to kept)) }) {
+            RoomStore.saveTemplate(it, splitTitle, list, kept)
+        }
+    }
+
+    fun getTrainingMax(context: Context, exerciseName: String): TrainingMax? =
+        data(context).trainingMaxes[exerciseKey(exerciseName)]
+
+    /**
+     * Sets (or clears) a lift's training max. Setting it starts its program over at week 1,
+     * because the week is counted from sessions after this moment.
+     */
+    fun setTrainingMax(context: Context, exerciseName: String, kg: Float?) {
+        val key = exerciseKey(exerciseName)
+        val tm = kg?.let { TrainingMax(it, System.currentTimeMillis()) }
+        editData(context, { d -> d.copy(trainingMaxes = if (tm == null) d.trainingMaxes - key else d.trainingMaxes + (key to tm)) }) {
+            RoomStore.setTrainingMax(it, exerciseName, tm)
+        }
+    }
+
+    fun getTarget(context: Context, splitTitle: String, exerciseName: String): ExerciseTarget? =
+        data(context).targets[splitTitle]?.get(exerciseKey(exerciseName))
+
+    /** Sets or clears ([target] null) an exercise's target on a day. */
+    fun setTarget(context: Context, splitTitle: String, exerciseName: String, target: ExerciseTarget?) {
+        val list = loadTemplateForSplit(context, splitTitle)
+        val key = exerciseKey(exerciseName)
+        val current = data(context).targets[splitTitle].orEmpty()
+        val updated = if (target == null) current - key else current + (key to target)
+        editData(context, { it.copy(targets = it.targets + (splitTitle to updated)) }) {
+            RoomStore.saveTemplate(it, splitTitle, list, updated)
         }
     }
 
@@ -521,7 +603,10 @@ fun StoreData.mergedOver(base: StoreData): StoreData {
         notes = base.notes + notes,
         restDefaults = base.restDefaults + restDefaults,
         // Unknown on either side (data from before types) means the merge can't know them either.
-        types = types?.let { mine -> base.types?.let { it + mine } }
+        types = types?.let { mine -> base.types?.let { it + mine } },
+        programs = programs + base.programs.filter { b -> programs.none { it.id == b.id } },
+        targets = base.targets + targets,
+        trainingMaxes = base.trainingMaxes + trainingMaxes
     )
 }
 
@@ -573,6 +658,13 @@ internal object StoreCodec {
                 put("restSeconds", ex.restSeconds)
                 put("isSkipped", ex.isSkipped)
                 put("isSuperset", ex.isSuperset)
+                ex.planNote?.let { put("planNote", it) }
+                if (ex.programmed) put("programmed", true)
+                ex.target?.let { t ->
+                    put("targetSets", t.sets)
+                    put("repMin", t.repMin)
+                    put("repMax", t.repMax)
+                }
                 put("sets", JSONArray().apply {
                     for (s in ex.sets) {
                         put(JSONObject().apply {
@@ -621,7 +713,12 @@ internal object StoreCodec {
                 restSeconds = exRest,
                 isSkipped = exObj.optBoolean("isSkipped", false),
                 sets = sets,
-                isSuperset = exObj.optBoolean("isSuperset", false)
+                isSuperset = exObj.optBoolean("isSuperset", false),
+                planNote = exObj.optString("planNote").ifBlank { null },
+                programmed = exObj.optBoolean("programmed", false),
+                target = if (exObj.has("targetSets")) {
+                    ExerciseTarget(exObj.optInt("targetSets", 3), exObj.optInt("repMin", 8), exObj.optInt("repMax", 12))
+                } else null
             )
         }
     }
@@ -649,8 +746,43 @@ internal object StoreCodec {
         // Missing in files from before exercise types: null tells Room to work them out safely.
         types = root.optJSONObject("exerciseTypes")?.let { obj ->
             obj.keys().asSequence().associate { exerciseKey(it) to ExerciseType.fromKey(obj.optString(it)) }
-        }
+        },
+        programs = parsePrograms(root.optJSONArray("programs")),
+        trainingMaxes = root.optJSONObject("trainingMaxes")?.let { obj ->
+            obj.keys().asSequence().mapNotNull { key ->
+                val t = obj.optJSONObject(key) ?: return@mapNotNull null
+                exerciseKey(key) to TrainingMax(t.optDouble("kg", 0.0).toFloat(), t.optLong("setAt", 0L))
+            }.filter { it.second.kg > 0f }.toMap()
+        }.orEmpty(),
+        targets = root.optJSONObject("splitTargets")?.let { days ->
+            days.keys().asSequence().associateWith { day ->
+                val obj = days.optJSONObject(day) ?: JSONObject()
+                obj.keys().asSequence().mapNotNull { key ->
+                    val t = obj.optJSONObject(key) ?: return@mapNotNull null
+                    exerciseKey(key) to ExerciseTarget(t.optInt("sets", 3), t.optInt("repMin", 8), t.optInt("repMax", 12))
+                }.toMap()
+            }
+        }.orEmpty()
     )
+
+    fun parsePrograms(arr: JSONArray?): List<SplitProgramInfo> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val splitsArr = o.optJSONArray("splits") ?: JSONArray()
+            SplitProgramInfo(
+                id = id,
+                name = o.optString("name", "My program"),
+                tagline = o.optString("tagline", ""),
+                weeklyGoal = o.optInt("weeklyGoal", 3).coerceIn(1, 7),
+                splits = (0 until splitsArr.length()).mapNotNull { j ->
+                    val s = splitsArr.optJSONObject(j) ?: return@mapNotNull null
+                    s.optString("title").takeIf { it.isNotBlank() }?.let { WorkoutSplit(it, s.optString("subtitle"), "%02d".format(j + 1)) }
+                }
+            )
+        }
+    }
 
     fun writeData(root: JSONObject, data: StoreData) {
         root.put("history", JSONArray().apply { data.history.forEach { put(serializeWorkout(it)) } })
@@ -674,6 +806,29 @@ internal object StoreCodec {
         root.put("exerciseNotes", JSONObject().apply { data.notes.forEach { (k, v) -> put(k, v) } })
         root.put("exerciseRestDefaults", JSONObject().apply { data.restDefaults.forEach { (k, v) -> put(k, v) } })
         data.types?.let { types -> root.put("exerciseTypes", JSONObject().apply { types.forEach { (k, v) -> put(k, v.name) } }) }
+        root.put("trainingMaxes", JSONObject().apply {
+            data.trainingMaxes.forEach { (key, tm) -> put(key, JSONObject().put("kg", tm.kg.toDouble()).put("setAt", tm.setAtMillis)) }
+        })
+        root.put("splitTargets", JSONObject().apply {
+            data.targets.forEach { (day, byExercise) ->
+                put(day, JSONObject().apply {
+                    byExercise.forEach { (key, t) -> put(key, JSONObject().put("sets", t.sets).put("repMin", t.repMin).put("repMax", t.repMax)) }
+                })
+            }
+        })
+        root.put("programs", JSONArray().apply {
+            data.programs.forEach { p ->
+                put(JSONObject().apply {
+                    put("id", p.id)
+                    put("name", p.name)
+                    put("tagline", p.tagline)
+                    put("weeklyGoal", p.weeklyGoal)
+                    put("splits", JSONArray().apply {
+                        p.splits.forEach { s -> put(JSONObject().put("title", s.title).put("subtitle", s.subtitle)) }
+                    })
+                })
+            }
+        })
     }
 
     fun parseWeights(arr: JSONArray?): List<WeightLogEntry> {

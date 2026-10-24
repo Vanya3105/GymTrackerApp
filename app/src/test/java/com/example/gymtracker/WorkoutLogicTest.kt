@@ -125,6 +125,50 @@ class WorkoutLogicTest {
         assertEquals("54", advice.suggestedWeight)
     }
 
+    // --- Targets (sets × rep range) ---
+
+    private val target = ExerciseTarget(3, 8, 12)
+
+    @Test
+    fun target_movesUpOnlyAtTheTopOfItsRange() {
+        val tenAndTen = listOf(
+            workout(2, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "10")))),
+            workout(1, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "10"))))
+        )
+        // 10 reps is "8+" by default, but not the top of an 8–12 target.
+        assertEquals(SuggestionTone.GOOD, suggestFromSplitHistory("Push", ExerciseEntry("Bench"), tenAndTen, 2.5f)!!.tone)
+        assertEquals(SuggestionTone.NEUTRAL, suggestFromSplitHistory("Push", ExerciseEntry("Bench", target = target), tenAndTen, 2.5f)!!.tone)
+
+        val twelves = listOf(
+            workout(2, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "12")))),
+            workout(1, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "12"))))
+        )
+        val up = suggestFromSplitHistory("Push", ExerciseEntry("Bench", target = target), twelves, 2.5f)!!
+        assertEquals("62.5", up.suggestedWeight)
+        assertTrue(up.message, up.message.contains("12+"))
+    }
+
+    @Test
+    fun target_movesDownBelowTheBottomOfItsRange() {
+        val sevens = listOf(
+            workout(2, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "7")))),
+            workout(1, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "7"))))
+        )
+        // 7 reps is fine by default (not "6 or fewer") but under an 8–12 target.
+        assertEquals(SuggestionTone.NEUTRAL, suggestFromSplitHistory("Push", ExerciseEntry("Bench"), sevens, 2.5f)!!.tone)
+        val down = suggestFromSplitHistory("Push", ExerciseEntry("Bench", target = target), sevens, 2.5f)!!
+        assertEquals("57.5", down.suggestedWeight)
+        assertTrue(down.message, down.message.contains("Under 8"))
+    }
+
+    @Test
+    fun target_rangeShowsInTodaysAdvice() {
+        val advice = suggestNextWeight("Push", ExerciseEntry("Bench", sets = listOf(set("60", "", done = false)), target = target), emptyList(), 2.5f)!!
+        assertTrue(advice.message, advice.message.contains("8–12"))
+        assertEquals("3 × 8–12", target.label)
+        assertEquals("3 × 5", ExerciseTarget(3, 5, 5).label)
+    }
+
     // --- Exercise library ---
 
     @Test

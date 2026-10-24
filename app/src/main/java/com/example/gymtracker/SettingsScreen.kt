@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
@@ -38,7 +39,8 @@ fun SettingsScreen(
     onUpdateProfile: (UserProfile) -> Unit,
     onOpenOnboarding: () -> Unit,
     onReplayTips: () -> Unit,
-    onDataRestored: () -> Unit
+    onDataRestored: () -> Unit,
+    onEditProgram: (String) -> Unit
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -101,12 +103,31 @@ fun SettingsScreen(
                 Spacer(Modifier.height(16.dp))
                 Text("Training split", style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
-                SPLIT_PROGRAMS.values.forEach { prog ->
-                    ProgramOption(prog, selected = userProfile.splitProgram == prog.id) {
+                allPrograms().forEach { prog ->
+                    val selected = userProfile.splitProgram == prog.id
+                    ProgramOption(
+                        prog,
+                        selected = selected,
+                        actionLabel = if (prog.isBuiltIn) "Customize" else "Edit",
+                        onAction = {
+                            if (prog.isBuiltIn) {
+                                // Built-in programs stay as they are; edits go to a copy.
+                                val copy = customizedCopy(prog)
+                                LocalStorage.saveProgram(context, copy)
+                                if (selected) onUpdateProfile(userProfile.copy(splitProgram = copy.id))
+                                onEditProgram(copy.id)
+                            } else onEditProgram(prog.id)
+                        }
+                    ) {
                         onUpdateProfile(userProfile.copy(splitProgram = prog.id))
                     }
                     Spacer(Modifier.height(8.dp))
                 }
+                SecondaryButton("New program", {
+                    val program = SplitProgramInfo(newProgramId(), "My program", "", 3, listOf(WorkoutSplit("Day 1", "", "01")))
+                    LocalStorage.saveProgram(context, program)
+                    onEditProgram(program.id)
+                }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
             }
         }
 
@@ -224,7 +245,13 @@ private fun LabeledStepper(label: String, modifier: Modifier = Modifier, content
 }
 
 @Composable
-fun ProgramOption(prog: SplitProgramInfo, selected: Boolean, onClick: () -> Unit) {
+fun ProgramOption(
+    prog: SplitProgramInfo,
+    selected: Boolean,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
     val P = LocalPalette.current
     val border by animateColorAsState(if (selected) P.accentPrimary else P.borderSubtle, label = "prog_border")
     val bg by animateColorAsState(if (selected) P.accentSoft else P.bgCard.copy(alpha = 0f), label = "prog_bg")
@@ -240,7 +267,17 @@ fun ProgramOption(prog: SplitProgramInfo, selected: Boolean, onClick: () -> Unit
     ) {
         Column(Modifier.weight(1f)) {
             Text(prog.name, style = AppType.bodyStrong, color = P.textPrimary)
-            Text("${prog.tagline} · ${prog.weeklyGoal} days a week", style = AppType.caption, color = P.textSecondary)
+            val tagline = prog.tagline.ifBlank { prog.splits.joinToString(", ") { it.title } }
+            Text("$tagline · ${prog.weeklyGoal} days a week", style = AppType.caption, color = P.textSecondary)
+        }
+        if (actionLabel != null && onAction != null) {
+            Text(
+                actionLabel,
+                style = AppType.label,
+                color = P.accentPrimary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onAction).padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+            Spacer(Modifier.width(6.dp))
         }
         Box(
             Modifier
