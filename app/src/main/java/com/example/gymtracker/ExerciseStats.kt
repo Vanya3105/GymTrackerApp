@@ -210,7 +210,38 @@ fun compactNumber(v: Float): String = when {
 }
 
 /** Every exercise that has at least one valid work set, most recently trained first. */
-fun loggedExerciseNames(history: List<CompletedWorkout>): List<String> =
-    history.sortedByDescending { it.id }
-        .flatMap { w -> w.exercises.filter { ex -> !ex.isSkipped && ex.workSets.isNotEmpty() }.map { it.name } }
-        .distinctBy { exerciseKey(it) }
+fun loggedExerciseNames(history: List<CompletedWorkout>): List<String> {
+    val seen = HashSet<String>()
+    val names = ArrayList<String>()
+    for (w in history.sortedByDescending { it.id }) {
+        for (ex in w.exercises) {
+            if (ex.isSkipped) continue
+            val key = exerciseKey(ex.name)
+            // Checking the sets is the costly part; skip it for names already found.
+            if (key in seen || ex.workSets.isEmpty()) continue
+            seen += key
+            names += ex.name
+        }
+    }
+    return names
+}
+
+/**
+ * History split per exercise, keyed by [ignoreCaseKey] (order kept), so per-exercise scans like
+ * [computeExerciseRecords] only walk the workouts that contain the exercise.
+ */
+fun historyByExercise(history: List<CompletedWorkout>): Map<String, List<CompletedWorkout>> {
+    val out = HashMap<String, ArrayList<CompletedWorkout>>()
+    for (w in history) {
+        w.exercises.mapTo(HashSet()) { ignoreCaseKey(it.name) }.forEach { out.getOrPut(it) { ArrayList() } += w }
+    }
+    return out
+}
+
+/**
+ * Two names have the same key exactly when `a.equals(b, ignoreCase = true)`, the match
+ * [computeExerciseRecords] uses. Plain `lowercase()` differs for a few letters (Turkish İ).
+ */
+fun ignoreCaseKey(name: String): String = buildString(name.length) {
+    name.forEach { append(Character.toLowerCase(Character.toUpperCase(it))) }
+}

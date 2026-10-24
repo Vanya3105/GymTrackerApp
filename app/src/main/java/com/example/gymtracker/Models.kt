@@ -114,14 +114,16 @@ data class SetEntry(
     val seconds: String = "",
     /** Distance sets: metres ("" when unused). */
     val distanceM: String = ""
-)
+) {
+    // Parsed once per set rather than on every read: records, stats, suggestions and charts read
+    // these for every set in history. Body properties, so they stay out of equals() and copy().
+    val weightKg: Float = parseWeightClean(weight, 0f)
+    val repCount: Int = parseRepsClean(reps, 0)
+    val secondCount: Int = seconds.filter(Char::isDigit).toIntOrNull() ?: 0
+    val distanceMeters: Float = distanceM.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
+}
 
 val SetEntry.isWarmupSet: Boolean get() = isWarmup || intensityType == "WARMUP"
-val SetEntry.weightKg: Float get() = parseWeightClean(weight, 0f)
-val SetEntry.repCount: Int get() = parseRepsClean(reps, 0)
-
-val SetEntry.secondCount: Int get() = seconds.filter(Char::isDigit).toIntOrNull() ?: 0
-val SetEntry.distanceMeters: Float get() = distanceM.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
 
 /** Non-warmup set with real numbers for [type] — the unit every stat and suggestion counts. */
 fun SetEntry.isValidWorkSet(type: ExerciseType): Boolean = !isWarmupSet && hasNumbers(type)

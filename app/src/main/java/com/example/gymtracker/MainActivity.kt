@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val SPLASH_HOLD_MS = 850L
+private const val SPLASH_HOLD_MS = 550L
 private const val SPLASH_EXIT_MS = 320L
 
 @Composable
