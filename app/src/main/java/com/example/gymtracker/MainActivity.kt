@@ -66,6 +66,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
@@ -211,9 +212,24 @@ fun GymTrackerApp(
         }
     }
 
+    // Weigh-ins from a scale or Samsung Health arrive through Health Connect while the app is away.
+    val healthScope = rememberCoroutineScope()
+    val pullFromHealth = rememberUpdatedState {
+        healthScope.launch {
+            HealthSync.refresh(context)
+            if (HealthSync.importWeights(context)) {
+                weightHistory = LocalStorage.loadWeightHistory(context)
+                userProfile = LocalStorage.loadUserProfile(context)
+            }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) reloadFromDisk.value()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                reloadFromDisk.value()
+                pullFromHealth.value()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

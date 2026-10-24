@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
@@ -340,6 +341,14 @@ fun WorkoutHistoryCard(
             Pill("${workout.exercises.size} exercises", icon = Icons.Rounded.FitnessCenter)
             Pill("$sets sets")
             Pill(formatDuration(workout.durationSeconds), icon = Icons.Rounded.Schedule)
+        }
+        // From the watch via Health Connect; keyed on the permissions so it appears once allowed.
+        val heart by produceState<HeartRateSummary?>(null, workout.id, HealthSync.granted) {
+            value = HealthSync.heartRate(context, workout)
+        }
+        heart?.let {
+            Spacer(Modifier.height(8.dp))
+            Pill("${it.average} bpm avg · ${it.max} max", icon = Icons.Rounded.Favorite, color = P.dangerText, container = P.dangerSurface)
         }
         if (workout.skippedExercises.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))

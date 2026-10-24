@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.vanyaevtushenko.gymtracker"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
         versionCode = 35
         versionName = "3.5.0"
@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.health.connect)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
