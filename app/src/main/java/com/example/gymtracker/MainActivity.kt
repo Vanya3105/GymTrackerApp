@@ -81,7 +81,10 @@ class MainActivity : ComponentActivity() {
         // The logo grows and fades as the app appears behind it.
         splash.setOnExitAnimationListener { provider ->
             val easing = PathInterpolator(0.4f, 0f, 0.2f, 1f)
-            provider.iconView.animate().scaleX(1.35f).scaleY(1.35f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing).start()
+            // Launches from a notification, widget or the watch get a splash without the logo, and
+            // iconView then throws instead of returning null.
+            runCatching { provider.iconView }.getOrNull()
+                ?.animate()?.scaleX(1.35f)?.scaleY(1.35f)?.setDuration(SPLASH_EXIT_MS)?.setInterpolator(easing)?.start()
             provider.view.animate().alpha(0f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing)
                 .withEndAction { provider.remove() }.start()
         }
