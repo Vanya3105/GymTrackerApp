@@ -6,12 +6,17 @@ import org.json.JSONObject
  * Phone → watch: the live workout as one Data Layer item at [STATE_PATH], already formatted by
  * the phone (units, exercise types), so the watch only displays it.
  * Watch → phone: one message per button press at [ACTION_PREFIX] + [WatchAction.name], and a
- * [REQUEST_STATE] message when the watch app opens.
+ * [REQUEST_STATE] message when the watch app opens. The phone answers every action with [ACK],
+ * so the watch can tell a slow phone from a tap that simply changed nothing.
  */
 object WatchLink {
     const val STATE_PATH = "/gymtracker/session"
     const val ACTION_PREFIX = "/gymtracker/action/"
     const val REQUEST_STATE = "/gymtracker/request-state"
+    const val ACK = "/gymtracker/ack"
+
+    /** Opens the phone app (its MainActivity handles this link), e.g. from the watch's "Open on phone". */
+    const val OPEN_PHONE_APP_URI = "gymtracker://open"
 
     fun actionPath(action: WatchAction) = ACTION_PREFIX + action.name
 

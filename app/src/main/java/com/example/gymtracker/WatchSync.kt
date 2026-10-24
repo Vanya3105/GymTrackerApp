@@ -67,5 +67,6 @@ class WatchListenerService : WearableListenerService() {
         val action = WatchLink.actionFromPath(event.path) ?: return
         WatchSync.apply(context, action)
         LocalStorage.flush(context)
+        Wearable.getMessageClient(context).sendMessage(event.sourceNodeId, WatchLink.ACK, null)
     }
 }

@@ -10,7 +10,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 ## Next up
 
 Phases 0–5 are merged into `master` (v3.5.0). Phase 6 (watch + Health Connect) starts on branch `phase-6-watch-health`.
-Done: Health Connect, and the watch remote (`:wear` + `:watchlink`), tested by the owner on their Galaxy Watch. Next: **Phase 6, last step**: ongoing activity (a running workout shows on the watch face), then merge Phase 6.
+Phase 6 is complete on `phase-6-watch-health`: Health Connect, the watch remote, and the watch polish (watch face, tile, Open on phone). Next: **the owner installs the new phone + watch builds**, then merge Phase 6 to `master` as v3.6.0 and go back to the phone app (Phase 7).
 
 ---
 
@@ -72,7 +72,8 @@ Target: Samsung Galaxy Watch 4 or newer (Wear OS 3+). The watch is a remote for 
 - [x] Phone → watch: live session state, formatted like the widget (exercise, set, the two values with labels, sets left, rest end and length), sent over the Data Layer whenever it changes (`WatchSync.publish` from `refreshSurfacesNow`)
 - [x] Watch → phone: −/+ on both values, set done, +15 s and skip rest (`WatchListenerService`, also while the phone app is closed), through the widget's `applySetAction`
 - [x] Watch UI: current set (scrolls with the bezel), rest countdown ring with +15 s / Skip and a buzz at the end while on screen, messages for no workout / all sets done / phone not connected
-- [ ] Ongoing activity, so a running workout shows on the watch face
+- [x] Watch polish: ongoing activity (GymTracker on the watch face during a workout, with the rest counting down; `WorkoutOngoing`), kept current while the app is closed by `PhoneDataService`; a GymTracker tile (current set, rest end time, Open); "Open on phone" when there's no workout or all sets are done; the phone acknowledges every tap so a slow phone shows "Waiting for phone…"; firmer haptic for Set done
+- [x] Set screen fits a 40 mm watch without scrolling. Checked with Robolectric screenshots of every screen on 192 dp and 227 dp round displays (`WatchScreenshotTest`, PNGs in `wear/build/screenshots`)
 - [x] Tested by the owner on their Galaxy Watch (a Wear emulator pair was skipped: the PC runs out of memory with two emulators)
 
 ## Phase 7 — Data in/out

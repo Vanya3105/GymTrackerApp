@@ -1,15 +1,21 @@
 package com.example.gymtracker.wear
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
+import androidx.wear.remote.interactions.RemoteActivityHelper
 import com.example.gymtracker.watchlink.WatchAction
 import com.example.gymtracker.watchlink.WatchLink
 import com.example.gymtracker.watchlink.WatchState
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.PutDataRequest
 import com.google.android.gms.wearable.Wearable
 
@@ -30,14 +36,23 @@ class PhoneLink(context: Context) {
     var phoneConnected by mutableStateOf(true)
         private set
 
-    private val listener = DataClient.OnDataChangedListener { events ->
+    /** Uptime of the oldest tap the phone hasn't acknowledged yet; 0 when none. */
+    var waitingSince by mutableLongStateOf(0L)
+        private set
+
+    private val dataListener = DataClient.OnDataChangedListener { events ->
         events.forEach { e ->
             if (e.type == DataEvent.TYPE_CHANGED && e.dataItem.uri.path == WatchLink.STATE_PATH) read(e.dataItem.data)
         }
     }
 
+    private val messageListener = MessageClient.OnMessageReceivedListener { event ->
+        if (event.path == WatchLink.ACK) waitingSince = 0L
+    }
+
     fun start() {
-        dataClient.addListener(listener)
+        dataClient.addListener(dataListener)
+        messageClient.addListener(messageListener)
         // The Data Layer keeps the last state the phone sent, so this shows something at once.
         val uri = Uri.Builder().scheme(PutDataRequest.WEAR_URI_SCHEME).path(WatchLink.STATE_PATH).build()
         dataClient.getDataItems(uri).addOnSuccessListener { items ->
@@ -48,10 +63,21 @@ class PhoneLink(context: Context) {
     }
 
     fun stop() {
-        dataClient.removeListener(listener)
+        dataClient.removeListener(dataListener)
+        messageClient.removeListener(messageListener)
+        waitingSince = 0L
     }
 
-    fun send(action: WatchAction) = sendPath(WatchLink.actionPath(action))
+    fun send(action: WatchAction) {
+        if (waitingSince == 0L) waitingSince = SystemClock.uptimeMillis()
+        sendPath(WatchLink.actionPath(action))
+    }
+
+    /** Opens GymTracker on the phone, e.g. to start or save a workout. */
+    fun openOnPhone() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(WatchLink.OPEN_PHONE_APP_URI)).addCategory(Intent.CATEGORY_BROWSABLE)
+        RemoteActivityHelper(appCtx, ContextCompat.getMainExecutor(appCtx)).startRemoteActivity(intent)
+    }
 
     private fun sendPath(path: String) {
         nodeClient.connectedNodes
