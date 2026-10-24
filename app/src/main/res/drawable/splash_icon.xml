@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="108dp"
+            android:height="108dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+            <group android:scaleX="0.16" android:scaleY="0.16" android:translateX="13.04" android:translateY="13.04">
+                <path android:pathData="M256,59.5a196.5,196.5 0,1 1,0,393a196.5,196.5 0,1 1,0,-393z" android:strokeColor="#262626" android:strokeWidth="6" android:fillColor="#00000000"/>
+                <path android:name="arc" android:pathData="M98.6,210A164,164 0,0 1,413.4,210" android:strokeColor="#FF6B1A" android:strokeWidth="10" android:strokeLineCap="round" android:trimPathEnd="0" android:fillColor="#00000000"/>
+                <group android:name="dumbbell" android:pivotX="256" android:pivotY="256" android:scaleX="0.82" android:scaleY="0.82">
+                    <path android:pathData="M164,244h184a4,4 0,0 1,4,4v16a4,4 0,0 1,-4,4h-184a4,4 0,0 1,-4,-4v-16a4,4 0,0 1,4,-4z M134,172h22a10,10 0,0 1,10,10v148a10,10 0,0 1,-10,10h-22a10,10 0,0 1,-10,-10v-148a10,10 0,0 1,10,-10z M356,172h22a10,10 0,0 1,10,10v148a10,10 0,0 1,-10,10h-22a10,10 0,0 1,-10,-10v-148a10,10 0,0 1,10,-10z M94,204h18a8,8 0,0 1,8,8v88a8,8 0,0 1,-8,8h-18a8,8 0,0 1,-8,-8v-88a8,8 0,0 1,8,-8z M400,204h18a8,8 0,0 1,8,8v88a8,8 0,0 1,-8,8h-18a8,8 0,0 1,-8,-8v-88a8,8 0,0 1,8,-8z M70,238h12a6,6 0,0 1,6,6v24a6,6 0,0 1,-6,6h-12a6,6 0,0 1,-6,-6v-24a6,6 0,0 1,6,-6z M430,238h12a6,6 0,0 1,6,6v24a6,6 0,0 1,-6,6h-12a6,6 0,0 1,-6,-6v-24a6,6 0,0 1,6,-6z" android:fillColor="#FF6B1A"/>
+                </group>
+            </group>
+        </vector>
+    </aapt:attr>
+    <target android:name="arc">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+                    android:startOffset="150" android:duration="650" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+                <objectAnimator android:propertyName="strokeColor" android:valueType="colorType" android:valueFrom="#FF6B1A" android:valueTo="#612D11"
+                    android:startOffset="650" android:duration="350"/>
+            </set>
+        </aapt:attr>
+    </target>
+    <target android:name="dumbbell">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator android:propertyName="scaleX" android:valueFrom="0.82" android:valueTo="1" android:duration="550" android:interpolator="@android:interpolator/overshoot"/>
+                <objectAnimator android:propertyName="scaleY" android:valueFrom="0.82" android:valueTo="1" android:duration="550" android:interpolator="@android:interpolator/overshoot"/>
+            </set>
+        </aapt:attr>
+    </target>
+</animated-vector>

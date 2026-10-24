@@ -7,5 +7,14 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
+    <!-- Launch screen, same in light and dark: the brand mark on the icon's own background. -->
+    <style name="Theme.GymTracker.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="postSplashScreenTheme">@style/Theme.GymTracker</item>
+    </style>
+
     <color name="window_background">#F5F3EF</color>
+    <color name="brand_background">#0D0D0D</color>
 </resources>

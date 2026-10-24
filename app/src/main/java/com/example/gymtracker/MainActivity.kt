@@ -9,7 +9,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
+import android.view.animation.PathInterpolator
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -58,6 +60,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -67,11 +70,28 @@ import java.util.Date
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
+        // The app is ready almost at once, which would cut the logo animation off after a few
+        // frames. Hold it until the arc has drawn (Android 12+; older versions show a still icon).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val shownAt = SystemClock.uptimeMillis()
+            splash.setKeepOnScreenCondition { SystemClock.uptimeMillis() - shownAt < SPLASH_HOLD_MS }
+        }
+        // The logo grows and fades as the app appears behind it.
+        splash.setOnExitAnimationListener { provider ->
+            val easing = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            provider.iconView.animate().scaleX(1.35f).scaleY(1.35f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing).start()
+            provider.view.animate().alpha(0f).setDuration(SPLASH_EXIT_MS).setInterpolator(easing)
+                .withEndAction { provider.remove() }.start()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { GymTrackerRoot(activity = this) }
     }
 }
+
+private const val SPLASH_HOLD_MS = 850L
+private const val SPLASH_EXIT_MS = 320L
 
 @Composable
 fun GymTrackerRoot(activity: Activity) {

@@ -145,6 +145,44 @@ class StorageMigrationTest {
     }
 
     @Test
+    fun importingJsonThatIsNotABackup_changesNothing() {
+        val before = LocalStorage.loadHistory(context)
+        for (json in listOf("{}", """{"theme":"dark"}""", """{"history":"none"}""")) {
+            assertFalse(json, LocalStorage.importJsonBackupString(context, json))
+        }
+        restart()
+        assertEquals(before, LocalStorage.loadHistory(context))
+    }
+
+    @Test
+    fun importing_keepsACopyOfTheReplacedData() {
+        val before = LocalStorage.loadHistory(context)
+        val empty = JSONObject().put("history", org.json.JSONArray()).toString()
+        assertTrue(LocalStorage.importJsonBackupString(context, empty))
+        assertTrue(LocalStorage.loadHistory(context).isEmpty())
+
+        val copies = context.filesDir.listFiles { f -> f.name.startsWith("before-import-") }!!
+        assertEquals(1, copies.size)
+        assertTrue(LocalStorage.importJsonBackupString(context, copies[0].readText()))
+        assertEquals(before, LocalStorage.loadHistory(context))
+
+        repeat(3) { Thread.sleep(2); LocalStorage.importJsonBackupString(context, empty) }
+        assertEquals(3, context.filesDir.listFiles { f -> f.name.startsWith("before-import-") }!!.size)
+    }
+
+    @Test
+    fun unreadableStoreFile_fallsBackToThePreviousVersion() {
+        LocalStorage.saveUserProfile(context, LocalStorage.loadUserProfile(context).copy(age = 40))
+        restart()
+        LocalStorage.saveUserProfile(context, LocalStorage.loadUserProfile(context).copy(age = 41))
+        restart()
+        storeFile.writeText("{\"userProfile\": {\"age\": 4")
+
+        assertEquals(40, LocalStorage.loadUserProfile(context).age)
+        assertTrue(context.filesDir.listFiles()!!.any { it.name.startsWith("gym_tracker_store_v2.json.corrupt-") })
+    }
+
+    @Test
     fun renameExercise_updatesHistoryAndActiveSession() {
         // Never logged or saved anywhere → nothing to rename.
         assertFalse(LocalStorage.renameExercise(context, "Barbell Row", "Pendlay Row"))
@@ -230,6 +268,21 @@ class StorageMigrationTest {
         LocalStorage.setTrainingMax(context, "Back Squat", null)
         assertTrue(LocalStorage.importJsonBackupString(context, backup))
         assertEquals(100f, LocalStorage.getTrainingMax(context, "Back Squat")!!.kg)
+    }
+
+    @Test
+    fun plateSetup_persistsPerUnit_andTravelsInBackups() {
+        assertEquals(defaultPlateSetup(WeightUnit.LB), LocalStorage.loadPlateSetup(context, WeightUnit.LB))
+        val home = PlateSetup(15f, listOf(20f, 10f, 5f))
+        LocalStorage.savePlateSetup(context, WeightUnit.KG, home)
+        restart()
+        assertEquals(home, LocalStorage.loadPlateSetup(context, WeightUnit.KG))
+        assertEquals(defaultPlateSetup(WeightUnit.LB), LocalStorage.loadPlateSetup(context, WeightUnit.LB))
+
+        val backup = LocalStorage.exportJsonBackupString(context)
+        LocalStorage.savePlateSetup(context, WeightUnit.KG, defaultPlateSetup(WeightUnit.KG))
+        assertTrue(LocalStorage.importJsonBackupString(context, backup))
+        assertEquals(home, LocalStorage.loadPlateSetup(context, WeightUnit.KG))
     }
 
     @Test
