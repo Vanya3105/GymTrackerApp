@@ -56,6 +56,11 @@ object LocalStorage {
     private val refreshRunnable = Runnable { refreshContext?.let(::refreshSurfacesNow) }
 
     private fun storeFile(context: Context) = File(context.applicationContext.filesDir, FILE_NAME)
+    private fun previousFile(file: File) = File(file.parentFile, "${file.name}.bak")
+
+    /** Copies of the data a restore replaced, newest last; a wrong file picked in the restore dialog stays recoverable. */
+    private const val PRE_IMPORT_PREFIX = "before-import-"
+    private const val PRE_IMPORT_KEEP = 3
 
     private fun db(context: Context) = GymDatabase.get(context)
 
@@ -64,19 +69,27 @@ object LocalStorage {
     private fun root(context: Context): JSONObject = synchronized(lock) {
         cachedRoot ?: run {
             val file = storeFile(context)
-            val parsed = try {
-                if (file.exists()) JSONObject(file.readText()) else JSONObject()
-            } catch (e: Exception) {
-                // Keep the unreadable file aside: the next save would otherwise overwrite all history.
-                try {
-                    file.copyTo(File(file.parentFile, "$FILE_NAME.corrupt-${System.currentTimeMillis()}"))
-                } catch (_: Exception) {}
-                JSONObject()
-            }
+            val parsed = readJson(file) ?: run {
+                if (file.exists()) {
+                    // Keep the unreadable file aside: the next save would otherwise overwrite all history.
+                    Log.e(TAG, "Store file unreadable, falling back to the previous copy")
+                    try {
+                        file.copyTo(File(file.parentFile, "$FILE_NAME.corrupt-${System.currentTimeMillis()}"))
+                    } catch (_: Exception) {}
+                }
+                // Also covers a crash between the two renames in writeAtomically.
+                readJson(previousFile(file))
+            } ?: JSONObject()
             cachedRoot = parsed
             Units.set(unitIn(parsed))
             parsed
         }
+    }
+
+    private fun readJson(file: File): JSONObject? = try {
+        if (file.exists()) JSONObject(file.readText()) else null
+    } catch (e: Exception) {
+        null
     }
 
     private fun unitIn(root: JSONObject) = WeightUnit.fromKey(root.optJSONObject("settings")?.optString("weightUnit"))
@@ -95,14 +108,16 @@ object LocalStorage {
         pendingSnapshot.set(root.toString())
         ioExecutor.execute {
             val snapshot = pendingSnapshot.getAndSet(null) ?: return@execute
-            writeAtomically(file, snapshot)
+            writeAtomically(file, snapshot, keepPrevious = true)
         }
     }
 
-    private fun writeAtomically(file: File, content: String) {
+    /** [keepPrevious] keeps the last good version as `*.bak`, which [root] reads if the file is ever unreadable. */
+    private fun writeAtomically(file: File, content: String, keepPrevious: Boolean = false) {
         try {
             val tmp = File(file.parentFile, "${file.name}.tmp")
             tmp.writeText(content)
+            if (keepPrevious && file.exists()) file.renameTo(previousFile(file))
             if (!tmp.renameTo(file)) {
                 file.writeText(content)
                 tmp.delete()
@@ -162,7 +177,7 @@ object LocalStorage {
 
         ROOM_SECTIONS.forEach(root::remove)
         pendingSnapshot.set(null)
-        onIoThread(context) { writeAtomically(file, root.toString()) }
+        onIoThread(context) { writeAtomically(file, root.toString(), keepPrevious = true) }
     }
 
     private fun scheduleSurfaceRefresh(context: Context, notifyInApp: Boolean) {
@@ -349,6 +364,14 @@ object LocalStorage {
         } catch (e: Exception) {
             return false
         }
+        // Any other JSON file would read as "no data" and replace everything with nothing.
+        if (!StoreCodec.looksLikeBackup(parsed)) return false
+        try {
+            savePreImportCopy(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Couldn't save a copy before restoring", e)
+            return false
+        }
         val restored = StoreCodec.readData(parsed)
         ROOM_SECTIONS.forEach(parsed::remove)
         synchronized(lock) {
@@ -368,6 +391,15 @@ object LocalStorage {
         }
         scheduleSurfaceRefresh(context, notifyInApp = false)
         return true
+    }
+
+    private fun savePreImportCopy(context: Context) {
+        val dir = context.applicationContext.filesDir
+        File(dir, "$PRE_IMPORT_PREFIX${System.currentTimeMillis()}.json").writeText(exportJsonBackupString(context))
+        dir.listFiles { f -> f.name.startsWith(PRE_IMPORT_PREFIX) }.orEmpty()
+            .sortedByDescending { it.name }
+            .drop(PRE_IMPORT_KEEP)
+            .forEach { it.delete() }
     }
 
     // --- Per-exercise notes & rest defaults ---
@@ -615,6 +647,11 @@ fun StoreData.mergedOver(base: StoreData): StoreData {
  * and reused by data migrations. Reading is lenient: older saves and hand-edited backups must still load.
  */
 internal object StoreCodec {
+    /** Every export has a `history` array; store files from before history existed always have a profile. */
+    fun looksLikeBackup(root: JSONObject): Boolean =
+        if (root.has("history")) root.optJSONArray("history") != null
+        else root.optJSONObject("userProfile") != null
+
     fun parseHistory(arr: JSONArray?): List<CompletedWorkout> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { i ->

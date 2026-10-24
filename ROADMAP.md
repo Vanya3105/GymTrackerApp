@@ -9,8 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phase 4 is done on branch `phase-4-routines` (v3.4.0), waiting for an on-device check by the owner, then merge to `master`.
-Then start **Phase 5, step 1**: plate calculator (bar weight, available plates, kg/lb), reachable from any weight field in a workout.
+Phase 4 is merged to `master` (v3.4.0). Phase 5 is in progress on branch `phase-5-gym-tools`.
+Next: **Phase 5, step 1**: plate calculator (bar weight, available plates, kg/lb), reachable from any weight field in a workout.
 
 ---
 
@@ -56,7 +56,8 @@ Then start **Phase 5, step 1**: plate calculator (bar weight, available plates, 
 - [x] 5/3/1 (`PercentPrograms.kt`, Room v5 for training maxes): four days built around Squat/Bench/Deadlift/Press; warm-ups 40/50/60% + the week's sets rounded down to plates, last set "as many as you can"; week and cycle derived from sessions since the TM was set; +2.5/5 kg (5/10 lb) per cycle. TM is set from the exercise page or Notes & history (prefilled at 90% of best e1RM) and re-lays out an untouched exercise mid-workout
 - [x] GZCLP (T1 5×3+ → 6×2+ → 10×1+, T2 3×10 → 3×8 → 3×6; add a step on success, next stage on a miss, restart at 85% after the last stage) and nSuns 5-day (9-set percentage days; secondary lifts use another lift's TM; each "1+" set adds 0–3 plate steps to the TM). All derived from history; GZCLP's T3 lifts are ordinary exercises
 
-## Phase 5 — Gym tools
+## Phase 5 — Gym tools (branch `phase-5-gym-tools`)
+- [x] Save safety: a restore only accepts a GymTracker backup (any other JSON used to wipe everything) and first keeps a copy of the data it replaces (`before-import-*.json`, last 3); the JSON store keeps its previous version as `.bak` and falls back to it if the file is unreadable
 - [ ] Plate calculator (bar weight, available plates, kg/lb)
 - [ ] Warm-up set generator
 - [ ] Optional RPE/RIR per set; feed it into weight suggestions
