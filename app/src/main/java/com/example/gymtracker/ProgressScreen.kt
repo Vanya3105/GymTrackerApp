@@ -244,7 +244,9 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
     val P = LocalPalette.current
     AppCard(modifier.fillMaxWidth()) {
         Text(
-            "Based on when you last trained each area and how many sets you did. Most people do well with " +
+            "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
+                "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
+                "half a set, like biceps on rows or triceps on bench. Most people do well with " +
                 "${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle each week.",
             style = AppType.caption,
             color = P.textSecondary

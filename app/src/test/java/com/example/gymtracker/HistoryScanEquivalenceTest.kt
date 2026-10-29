@@ -47,36 +47,35 @@ class HistoryScanEquivalenceTest {
         return if (rnd.nextInt(4) == 0) list.shuffled(rnd) else list.sortedByDescending { it.id }
     }
 
-    // The versions before the optimization, kept as references.
+    // Straightforward versions without the early exit and caching, kept as references.
     private fun recoveryReference(history: List<CompletedWorkout>): List<MuscleRecoveryItem> {
         val weekAgo = now - 7L * day
-        return RECOVERY_GROUPS.map { group ->
-            var weeklySets = 0
+        val base = floatArrayOf(48f, 72f, 48f, 36f, 42f, 30f, 72f, 72f, 60f, 36f, 30f)
+        return RECOVERY_GROUPS.mapIndexed { g, group ->
+            var weeklySets = 0f
+            var readiness = 1f
             var lastTrained: Long? = null
-            var lastSessionSets = 0
             for (workout in history) {
-                val sets = workout.exercises
-                    .filter { !it.isSkipped && hitsMuscleGroup(workout.splitTitle, it.name, it.targetMuscle, group) }
-                    .sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } }
-                if (sets == 0) continue
-                if (lastTrained == null || workout.id > lastTrained) {
-                    lastTrained = workout.id
-                    lastSessionSets = sets
+                // Summed in Float, in the same order, so rounding matches exactly.
+                var sets = 0f
+                for (ex in workout.exercises.filter { !it.isSkipped }) {
+                    sets += ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } *
+                        muscleLoads(workout.splitTitle, ex.name, ex.targetMuscle)[g]
                 }
-                if (workout.id >= weekAgo) weeklySets += sets
+                if (sets <= 0f) continue
+                if (sets >= 1f && (lastTrained == null || workout.id > lastTrained)) lastTrained = workout.id
+                if (workout.id < weekAgo) continue
+                weeklySets += sets
+                readiness *= 1f - recoveryLeft(base[g], sets, ((now - workout.id) / 3_600_000f).coerceAtLeast(0f))
             }
-            if (lastTrained == null) MuscleRecoveryItem(group, 100, RecoveryStatus.READY, null, weeklySets)
-            else {
-                val hoursAgo = ((now - lastTrained) / (1000L * 60 * 60)).toInt().coerceAtLeast(0)
-                val neededHours = (44f + lastSessionSets * 3.5f).coerceIn(48f, 78f)
-                val pct = (hoursAgo / neededHours * 100f).roundToInt().coerceIn(12, 100)
-                val status = when {
-                    pct < 55 -> RecoveryStatus.TIRED
-                    pct < 85 -> RecoveryStatus.RECOVERING
-                    else -> RecoveryStatus.READY
-                }
-                MuscleRecoveryItem(group, pct, status, hoursAgo, weeklySets)
+            val pct = (readiness * 100f).roundToInt().coerceIn(12, 100)
+            val status = when {
+                pct < 55 -> RecoveryStatus.TIRED
+                pct < 85 -> RecoveryStatus.RECOVERING
+                else -> RecoveryStatus.READY
             }
+            val hoursAgo = lastTrained?.let { ((now - it) / (1000L * 60 * 60)).toInt().coerceAtLeast(0) }
+            MuscleRecoveryItem(group, pct, status, hoursAgo, weeklySets.roundToInt())
         }
     }
 

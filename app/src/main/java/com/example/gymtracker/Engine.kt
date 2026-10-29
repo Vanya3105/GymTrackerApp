@@ -520,7 +520,7 @@ fun defaultTemplateForSplit(splitTitle: String): List<Pair<String, String>> {
 }
 
 // ============================================================================
-// RECORDS, WEEKLY SUMMARY & SPLIT-ISOLATED PROGRESSION AI
+// RECORDS & WEEKLY SUMMARY
 // ============================================================================
 
 fun calculateEstimated1Rm(weightKg: Float, reps: Int): Float {
@@ -656,101 +656,6 @@ fun computeWeekSummary(
         recommendedSplit = recommendedSplit,
         weeklyGoal = prog.weeklyGoal
     )
-}
-
-/**
- * Weight suggestion based only on past sessions of the same split, using a 6–8 rep target:
- * two sessions in a row at 8+ reps → go up; two at 6 or fewer → go down; volume falling three
- * sessions in a row → back off 10%. Returns null when this exercise has no history in the split.
- */
-fun suggestFromSplitHistory(
-    splitTitle: String,
-    exercise: ExerciseEntry,
-    history: List<CompletedWorkout>,
-    step: Float
-): Suggestion? {
-    if (!exercise.type.hasWeightSuggestions) return null
-    // Work sets of this exercise from each past session of the same split, newest first.
-    val pastSessions = history
-        .filter { it.splitTitle.equals(splitTitle, ignoreCase = true) }
-        .mapNotNull { workout ->
-            workout.exercises
-                .find { !it.isSkipped && it.name.equals(exercise.name, ignoreCase = true) }
-                ?.workSets
-                ?.takeIf { it.isNotEmpty() }
-        }
-    if (pastSessions.isEmpty()) return null
-
-    val prevSessionSets = pastSessions[0]
-    val prevTopSet = prevSessionSets.maxBy { it.weightKg }
-    val prevWeight = prevTopSet.weightKg
-    val prevWeightStr = prevTopSet.weight
-    // Steps and rounding happen in the display unit so pounds land on whole plates.
-    val unit = Units.current
-    val prev = unit.fromKg(prevWeight)
-    val prevText = formatWeightKg(prevWeight)
-
-    fun volume(sets: List<SetEntry>) = sets.sumOf { (it.weightKg * it.repCount).toDouble() }
-    // A target's rep range sets the thresholds; without one: 8+ moves up, 6 or fewer moves down.
-    val top = exercise.target?.repMax ?: 8
-    val low = exercise.target?.let { it.repMin - 1 } ?: 6
-    val rangeText = exercise.target?.repText ?: "6–8"
-    fun hit8Plus(sets: List<SetEntry>) = sets.any { it.repCount >= top }
-    fun hit6OrLess(sets: List<SetEntry>) = sets.any { it.repCount in 1..low }
-    fun suggest(value: Float, tone: SuggestionTone, message: (String) -> String): Suggestion {
-        val v = unit.round(value.coerceAtLeast(0f))
-        return Suggestion(message("${formatKgClean(v)} ${unit.label}"), tone, suggestedWeight = unit.stored(v))
-    }
-    fun increase(message: (String) -> String) = suggest(prev + step, SuggestionTone.GOOD, message)
-    fun decrease(message: (String) -> String) = suggest(prev - step, SuggestionTone.CAUTION, message)
-
-    if (pastSessions.size >= 3) {
-        val vol1 = volume(pastSessions[0])
-        val vol2 = volume(pastSessions[1])
-        val vol3 = volume(pastSessions[2])
-        if (vol1 > 0 && vol1 < vol2 && vol2 < vol3) {
-            return suggest(prev * 0.9f, SuggestionTone.CAUTION) { w ->
-                "Your numbers have dipped three sessions in a row. Go lighter today: $w."
-            }
-        }
-    }
-
-    val prevHad8Plus = hit8Plus(prevSessionSets)
-    val prevHad6OrLess = hit6OrLess(prevSessionSets)
-
-    val completedToday = exercise.sets.filter { !it.isWarmupSet && it.isCompleted && it.repCount > 0 }
-    if (completedToday.isNotEmpty()) {
-        if (prevHad8Plus && hit8Plus(completedToday)) {
-            return increase { w -> "$top+ reps two sessions running. Move up to $w." }
-        }
-        if (prevHad6OrLess && hit6OrLess(completedToday)) {
-            return decrease { w -> "Under ${low + 1} reps two sessions running. Drop to $w." }
-        }
-    }
-
-    if (pastSessions.size >= 2) {
-        if (prevHad8Plus && hit8Plus(pastSessions[1])) {
-            return increase { w -> "You hit $top+ reps the last two times. Try $w today." }
-        }
-        if (prevHad6OrLess && hit6OrLess(pastSessions[1])) {
-            return decrease { w -> "Under ${low + 1} reps the last two times. Try $w today." }
-        }
-    }
-
-    return when {
-        prevHad8Plus -> Suggestion(
-            "Last time: $prevText for $top+ reps. Do it again to move up.",
-            SuggestionTone.NEUTRAL, prevWeightStr
-        )
-        prevHad6OrLess -> Suggestion(
-            "Last time: $prevText for $low or fewer. Aim for ${low + 1}–$top reps.",
-            SuggestionTone.CAUTION, prevWeightStr
-        )
-        else -> Suggestion(
-            "Last time: $prevText. Aim for $rangeText reps.",
-            SuggestionTone.NEUTRAL, prevWeightStr
-        )
-    }
 }
 
 // ============================================================================

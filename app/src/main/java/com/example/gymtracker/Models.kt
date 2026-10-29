@@ -198,5 +198,7 @@ enum class SuggestionTone { GOOD, CAUTION, NEUTRAL }
 data class Suggestion(
     val message: String,
     val tone: SuggestionTone,
-    val suggestedWeight: String
+    val suggestedWeight: String,
+    /** Advice for the next session (every set is done), so there's nothing to fill in today. */
+    val forNextTime: Boolean = false
 )

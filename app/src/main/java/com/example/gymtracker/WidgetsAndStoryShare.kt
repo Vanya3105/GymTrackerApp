@@ -567,13 +567,16 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
             val canvas = Canvas(bmp)
             val p = drawWidgetCard(canvas, context, settings, w, h, s)
 
-            val items = computeMuscleRecoveryStatus(LocalStorage.loadHistory(context))
-            val ready = items.count { it.status == RecoveryStatus.READY }
+            val all = computeMuscleRecoveryStatus(LocalStorage.loadHistory(context))
+            val ready = all.count { it.status == RecoveryStatus.READY }
             val pad = 16 * s
+            // As many of the least rested groups as fit at ~56 dp a column.
+            val fit = ((w - pad * 2) / (56 * s)).toInt().coerceIn(3, all.size)
+            val items = all.sortedBy { it.recoveryPercent }.take(fit)
 
             canvas.drawText("Recovery", pad, pad + 14 * s, textPaint(p.textPrimary.toArgb(), 15 * s))
             canvas.drawText(
-                if (ready == items.size) "All rested" else "$ready of ${items.size} rested",
+                if (ready == all.size) "All rested" else "$ready of ${all.size} rested",
                 w - pad, pad + 14 * s,
                 textPaint(p.textSecondary.toArgb(), 12 * s, REGULAR, Paint.Align.RIGHT)
             )
@@ -605,7 +608,7 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
                 canvas.drawText("${item.recoveryPercent}", cx, cy + pctPaint.textSize * 0.35f, pctPaint)
 
                 var y = top + ringD + 16 * s
-                canvas.drawText(item.muscleGroup, cx, y, textPaint(p.textPrimary.toArgb(), 11.5f * s, MEDIUM, Paint.Align.CENTER))
+                canvas.drawText(recoveryLabel(item.muscleGroup), cx, y, textPaint(p.textPrimary.toArgb(), 11.5f * s, MEDIUM, Paint.Align.CENTER))
                 if (showSets) {
                     y += 15 * s
                     val inTarget = item.weeklyWorkingSets in WEEKLY_SET_TARGET

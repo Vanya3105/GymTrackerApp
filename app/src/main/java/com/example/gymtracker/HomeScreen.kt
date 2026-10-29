@@ -314,7 +314,8 @@ fun RecoveryStrip(items: List<MuscleRecoveryItem>, onClick: () -> Unit, modifier
         }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            items.forEach { item ->
+            // Eleven rings don't fit a phone's width: show the least rested; the rest are a tap away.
+            items.sortedBy { it.recoveryPercent }.take(5).forEach { item ->
                 val color = recoveryColor(item.status, P)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ProgressRing(
@@ -326,7 +327,7 @@ fun RecoveryStrip(items: List<MuscleRecoveryItem>, onClick: () -> Unit, modifier
                         Text("${item.recoveryPercent}", style = AppType.caption.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = P.textPrimary)
                     }
                     Spacer(Modifier.height(6.dp))
-                    Text(item.muscleGroup, style = AppType.caption, color = P.textSecondary)
+                    Text(recoveryLabel(item.muscleGroup), style = AppType.caption, color = P.textSecondary, maxLines = 1)
                 }
             }
         }
