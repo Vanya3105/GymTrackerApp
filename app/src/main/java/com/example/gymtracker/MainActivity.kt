@@ -20,7 +20,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
@@ -37,7 +36,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -53,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -419,16 +418,7 @@ fun GymTrackerApp(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = {
-                    val forward = targetState.ordinal > initialState.ordinal
-                    (fadeIn(tween(220, delayMillis = 60)) + slideInHorizontallyBy(if (forward) 0.06f else -0.06f))
-                        .togetherWith(fadeOut(tween(120)))
-                },
-                modifier = Modifier.weight(1f),
-                label = "tab_content"
-            ) { tab ->
+            TabHost(selected = selectedTab, modifier = Modifier.weight(1f)) { tab ->
                 when (tab) {
                     AppTab.TODAY -> HomeScreen(
                         splits = splits,
@@ -1077,6 +1067,49 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
                 Spacer(Modifier.width(8.dp))
             }
             Text("Resume", style = AppType.label, color = P.accentPrimary)
+        }
+    }
+}
+
+/**
+ * Keeps each tab composed after its first visit: switching back is instant (no rebuilding the
+ * screen and measuring its text again) and returns to where it was scrolled. Hidden tabs aren't
+ * measured, placed or drawn, so they take no touches and cost nothing per frame. The tab that
+ * comes in fades and slides a little from the side it's on.
+ */
+@Composable
+private fun TabHost(selected: AppTab, modifier: Modifier, content: @Composable (AppTab) -> Unit) {
+    val visited = remember { mutableStateListOf(selected) }
+    if (selected !in visited) visited += selected
+    val startTab = remember { selected }
+    var lastShown by remember { mutableStateOf(selected) }
+    val fromRight = remember(selected) { selected.ordinal > lastShown.ordinal }
+    SideEffect { lastShown = selected }
+
+    Box(modifier) {
+        for (tab in AppTab.entries) {
+            if (tab !in visited) continue
+            key(tab) {
+                val shown = tab == selected
+                val enter = remember { Animatable(1f) }
+                var opened by remember { mutableStateOf(false) }
+                LaunchedEffect(shown) {
+                    if (!shown) return@LaunchedEffect
+                    // The tab the app opens on just appears.
+                    if (!opened && tab == startTab) { opened = true; return@LaunchedEffect }
+                    opened = true
+                    enter.snapTo(0f)
+                    enter.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
+                }
+                Box(
+                    Modifier.fillMaxSize().then(
+                        if (shown) Modifier.graphicsLayer {
+                            alpha = enter.value
+                            translationX = (1f - enter.value) * size.width * 0.06f * (if (fromRight) 1f else -1f)
+                        } else Modifier.layout { _, constraints -> layout(constraints.maxWidth, constraints.maxHeight) {} }
+                    )
+                ) { content(tab) }
+            }
         }
     }
 }

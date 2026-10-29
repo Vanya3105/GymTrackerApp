@@ -11,11 +11,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -119,22 +117,26 @@ val LocalPalette = staticCompositionLocalOf { DarkPalette }
 // tabular numbers for anything that counts.
 // ============================================================================
 
-/** One variable font file; each weight (and optical size) is a variation of it. */
-@OptIn(ExperimentalTextApi::class)
-private fun interFamily(opticalSize: Float) = FontFamily(
-    listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map { w ->
-        Font(
-            R.font.inter,
-            weight = w,
-            variationSettings = FontVariation.Settings(FontVariation.weight(w.weight), FontVariation.Setting("opsz", opticalSize))
-        )
-    }
+/**
+ * Fixed weights of Inter rather than its variable font: laying out text with a variable font
+ * (each weight computed from one file at run time) measured ~40% slower, and every screen lays
+ * out dozens of texts on its first frame. The files are instances of the variable font at these
+ * weights, trimmed to Latin, Cyrillic, Greek and the symbols the app uses.
+ */
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold)
 )
 
-/** Text and UI sizes. */
-val Inter = interFamily(opticalSize = 14f)
 /** Headings and big numbers: Inter's display cut, tighter and crisper when large. */
-val InterDisplay = interFamily(opticalSize = 28f)
+val InterDisplay = FontFamily(
+    Font(R.font.inter_display_regular, FontWeight.Normal),
+    Font(R.font.inter_display_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_display_bold, FontWeight.Bold),
+    Font(R.font.inter_display_extrabold, FontWeight.ExtraBold)
+)
 
 object AppType {
     val display = TextStyle(fontFamily = InterDisplay, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)

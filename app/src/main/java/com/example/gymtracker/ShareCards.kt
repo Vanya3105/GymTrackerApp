@@ -198,7 +198,7 @@ private const val R = W - 96f
  * Colours and type for one background. Instagram covers roughly the top 250 px (profile) and the
  * bottom 250 px (reply bar), so the cards keep their content between those.
  */
-private class Ink(context: Context, val bg: ShareBackground) {
+private class Ink(private val context: Context, val bg: ShareBackground) {
     private val palette = if (bg == ShareBackground.LIGHT) LightPalette else DarkPalette
     val clear = bg == ShareBackground.CLEAR
     val text = if (clear) Color.WHITE else palette.textPrimary.toArgb()
@@ -216,17 +216,34 @@ private class Ink(context: Context, val bg: ShareBackground) {
     val line = if (clear) Color.argb(90, 255, 255, 255) else palette.borderSubtle.toArgb()
     val background = palette.bgPrimary.toArgb()
     val good = if (clear) Color.WHITE else palette.successText.toArgb()
-    private val inter: Typeface = runCatching { ResourcesCompat.getFont(context, com.example.gymtracker.R.font.inter) }.getOrNull() ?: Typeface.DEFAULT
+    private val faces = HashMap<Int, Typeface>()
+    private fun face(res: Int): Typeface = faces.getOrPut(res) {
+        runCatching { ResourcesCompat.getFont(context, res) }.getOrNull() ?: Typeface.DEFAULT
+    }
 
-    /** Inter at a weight; display sizes use its display optical size and tighter spacing. */
+    /** The app's Inter files: the display cut for big type, the nearest weight to [weight]. */
+    private fun interFor(weight: Int, display: Boolean): Typeface = face(
+        if (display) when {
+            weight <= 500 -> com.example.gymtracker.R.font.inter_display_regular
+            weight <= 650 -> com.example.gymtracker.R.font.inter_display_semibold
+            weight <= 750 -> com.example.gymtracker.R.font.inter_display_bold
+            else -> com.example.gymtracker.R.font.inter_display_extrabold
+        } else when {
+            weight <= 450 -> com.example.gymtracker.R.font.inter_regular
+            weight <= 550 -> com.example.gymtracker.R.font.inter_medium
+            weight <= 650 -> com.example.gymtracker.R.font.inter_semibold
+            else -> com.example.gymtracker.R.font.inter_bold
+        }
+    )
+
+    /** Inter at a weight; display sizes use its display cut and tighter spacing. */
     fun type(color: Int, size: Float, weight: Int = 500, align: Paint.Align = Paint.Align.LEFT): Paint =
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            typeface = inter
+            val display = size >= 64f
+            typeface = interFor(weight, display)
             textSize = size
             this.color = color
             textAlign = align
-            val display = size >= 64f
-            fontVariationSettings = "'wght' $weight, 'opsz' ${if (display) 32 else 14}"
             fontFeatureSettings = "tnum"
             if (display) letterSpacing = -0.02f
             // Over someone's photo the text has to stand on its own.

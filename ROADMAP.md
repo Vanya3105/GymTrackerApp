@@ -12,7 +12,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 **Everyday fixes** is tested and merged into `master` (2026-10-29). Three branches are stacked, each on the one before, so the checked-out `declutter` build has all of them; the owner's phone test is next:
 - Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
 - Share sheet (`share-design`): Share on the finish sheet or History's ⋮ menu.
-- Declutter (`declutter`): see its section below.
+- Declutter (`declutter`): see its section below. The smoothness pass is on the same branch.
+- For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
 
 Next: the owner has widget changes to describe; then Phase 7 step 2, merge duplicate exercises.
 
@@ -158,6 +159,13 @@ One place for each thing; the owner found buttons and rows that did the same as 
 - [x] Today: no body-weight pill in the header (Progress has the weight and the Log button) and no share button on the week card (History's ⋮ and the finish sheet share)
 - [x] Profile: the "You" group is gone (Age wasn't used anywhere; body weight is logged on Progress), "Redo first-time setup" too (units, split and weight all have their place), and "Save backup" hides while automatic backup is on ("Back up now" does it)
 
+## Smoothness pass (branch `declutter`, after Declutter)
+Measured with Perfetto system traces and frame stats on the emulator (release build, profile compiled), not by feel.
+- [x] Debug vs release, same scroll on the workout screen: the app's own work per frame p90 19.5 → 4.7 ms, worst 114 → 25 ms; drawing p90 16.1 → 3.6 ms. The debug build (what Run installs) is most of the "clunky" feel; the owner is advised to run the release variant
+- [x] Fixed Inter weights instead of the variable font (`res/font/inter_*.ttf`, made with fontTools; see `licenses/Inter-files.txt`): measuring a text 0.79 → 0.58 ms, a screen's recomposition 1.6 → 1.0 ms, drawing a frame 10.3 → 6.7 ms on tab switches. The share images use the same files
+- [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
+- The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
+
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
 - [x] Auto-backup (`AutoBackup.kt`): Profile → Your data → "Choose a folder" (system folder picker, so Google Drive, OneDrive and local folders all work; access kept across restarts). Writes the same file as "Save backup" (`gymtracker-backup-YYYY-MM-DD-HHmm.json`) after a workout is saved, edited or deleted (also when finished from the watch with the app closed) and when the app goes to the background, but not while a workout runs, and only if anything changed (SHA-256 of the backup). Keeps the newest file of each of the last 7 days that have one, then one per week for 4 weeks; other files in the folder are never touched. Profile shows the folder, the last backup, or what went wrong ("Can't reach the folder any more. Choose it again."), with Back up now, Change folder, and Turn off (asks first). The folder is kept in its own SharedPreferences, not the JSON store, so it isn't inside backups. Tests: `AutoBackupTest` (same bytes as Save backup, skip when unchanged, errors shown and cleared, rotation); checked on the emulator with a real folder (choose, write, same-day replace, restart, finish a workout)
@@ -182,6 +190,7 @@ Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an im
 ---
 
 ## Decisions log
+- 2026-10-29: Inter ships as eight fixed instances (~1.3 MB) instead of one variable file (~0.86 MB): text layout with the variable font cost ~40% more per text, and every new screen lays out dozens of texts in its first frame. Tabs are kept alive rather than recreated, trading a little memory for instant switches.
 - 2026-10-29: Auto-backup uses the system folder picker (Storage Access Framework) rather than Google Drive's API: no account sign-in, no Google Play services dependency on the phone side, and it works with any folder a cloud app exposes (Google Drive, OneDrive). No WorkManager either: backups only need to happen when data changed, and every change goes through a save or the app leaving the screen, which is where it hooks in.
 - 2026-10-29: A forgotten workout is saved as ending at its last change, not when someone notices: "last change" is any edit (set ticked, number typed, exercise added), because some people fill sets in without ticking them. An hour without one is the cut-off; rests are never that long. The question is in the app only (no notification yet), which is enough to keep History and Health Connect right, since both are written at save time.
 - 2026-10-29: Watch v2 keeps the phone as the only copy of the workout: starting, finishing and undo are commands the phone carries out, like the set buttons, so there is still nothing to sync or merge. Finishing on the watch skips the photo and the finish sheet's celebration; the watch shows its own summary instead.
