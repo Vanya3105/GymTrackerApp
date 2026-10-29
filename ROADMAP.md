@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). Branch `everyday-fixes`: steps 1–4 tested on the phone and pushed. The Previous column (step 5) is done, waiting for the owner's phone test (where to look: start a day you've done before; the Previous column sits between the set number and the weight, and tapping a value copies it). After that, merge `everyday-fixes` into `master` once the owner OKs it, then **Phase 7** in its new order: auto-backup first (branch `phase-7-data`).
+Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). **Everyday fixes** is tested on the phone and merged into `master` (2026-10-29). Next: **Phase 7, step 1: auto-backup** to a folder the owner picks (branch `phase-7-data`), then merging duplicate exercises, then CSV export/import.
 
 ---
 
@@ -127,7 +127,7 @@ From a design review: the app was clean but everything spoke at the same volume.
 - [x] Profile: Age and Body weight are rows that open an editor; Training split has its own section (no card in a card); Smooth scrolling moved to Advanced
 - [x] Own tab icons (`AppIcons.kt`: dumbbell, calendar, chart, person on one grid and stroke, part-filled when selected) and a drawn empty-state scene
 
-## Everyday fixes (branch `everyday-fixes`, after Design polish 2)
+## Everyday fixes ✅ (branch `everyday-fixes`, after Design polish 2)
 From using the app as a new user would, on the emulator:
 - [x] Forgotten workouts: a running workout that hasn't changed for an hour asks "Still training?" (on opening the app, or after a minute while it's open): Finish at the last change (saved like the watch's Finish, timed start → last change), Keep going (asks again after another hour), or Discard. The session records `lastActivityMillis` on every save that changes it; it also keeps `restStartedMillis` now, which any edit during a rest used to drop. Watch Finish and this share `finishActiveWorkout`
 - [x] Empty workout: last row of Today's "Other workouts". Starts "Quick workout" with the exercise picker open; its exercises are today's only (adding, removing and reordering leave every day's list alone), no "Use last time's numbers". Today's in-progress card shows the live exercise count
