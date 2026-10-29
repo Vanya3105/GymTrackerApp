@@ -131,7 +131,7 @@ fun widgetOptionLabels(kind: String): List<Pair<String, String>> = when (kind) {
         "weekly" to "Weekly progress when not training"
     )
     WIDGET_KIND_RECOVERY -> listOf(
-        "sets" to "Sets this week",
+        "sets" to "Sets in the last 7 days",
         "hours" to "Time since last trained"
     )
     else -> listOf(

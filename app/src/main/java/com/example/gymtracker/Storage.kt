@@ -14,6 +14,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // ============================================================================
@@ -302,9 +303,30 @@ object LocalStorage {
     }
 
     fun deleteWeightLog(context: Context, id: Long): List<WeightLogEntry> {
+        val wasNewest = loadWeightHistory(context).maxByOrNull { it.id }?.id == id
         editData(context, { d -> d.copy(weights = d.weights.filter { it.id != id }) }) { RoomStore.deleteBodyWeight(it, id) }
         HealthSync.weightDeleted(context, id)
+        // The profile weight is the latest weigh-in, so it goes back to the one before.
+        val newest = loadWeightHistory(context).maxByOrNull { it.id }
+        if (wasNewest && newest != null) setProfileWeight(context, newest.weightKg)
         return loadWeightHistory(context)
+    }
+
+    private fun setProfileWeight(context: Context, kg: Float) = edit(context) { root ->
+        val profObj = root.optJSONObject("userProfile") ?: JSONObject().also { root.put("userProfile", it) }
+        profObj.put("currentWeightKg", kg.toDouble())
+    }
+
+    /**
+     * Older builds let Profile change the weight without logging a weigh-in, so the profile and
+     * the weigh-in log could disagree. Once, log the profile weight so both say the same thing.
+     */
+    fun reconcileProfileWeight(context: Context) {
+        if (root(context).optBoolean("profileWeightReconciled", false)) return
+        val profileKg = loadUserProfile(context).currentWeightKg
+        val newest = loadWeightHistory(context).maxByOrNull { it.id }
+        if (profileKg > 0f && newest != null && abs(profileKg - newest.weightKg) >= 0.01f) addWeightLog(context, profileKg)
+        edit(context) { root -> root.put("profileWeightReconciled", true) }
     }
 
     // --- Widget settings (one entry per placed widget) ---
@@ -654,11 +676,17 @@ object LocalStorage {
                 root.remove("activeSession")
             } else {
                 val prevObj = root.optJSONObject("activeSession")
+                val now = System.currentTimeMillis()
+                val serialized = StoreCodec.serializeExercises(exercises)
+                // Saves that change nothing (a reload, a rename elsewhere) aren't activity.
+                val changed = prevObj == null || prevObj.optJSONArray("exercises")?.toString() != serialized.toString()
                 root.put("activeSession", JSONObject().apply {
                     put("splitTitle", splitTitle)
-                    put("startTimeMillis", prevObj?.optLong("startTimeMillis", 0L)?.takeIf { it > 0L } ?: System.currentTimeMillis())
+                    put("startTimeMillis", prevObj?.optLong("startTimeMillis", 0L)?.takeIf { it > 0L } ?: now)
                     put("restEndTimeMillis", prevObj?.optLong("restEndTimeMillis", 0L) ?: 0L)
-                    put("exercises", StoreCodec.serializeExercises(exercises))
+                    prevObj?.optLong("restStartedMillis", 0L)?.takeIf { it > 0L }?.let { put("restStartedMillis", it) }
+                    put("lastActivityMillis", if (changed) now else prevObj?.optLong("lastActivityMillis", 0L) ?: now)
+                    put("exercises", serialized)
                 })
             }
         }
@@ -668,6 +696,20 @@ object LocalStorage {
     fun getActiveSessionStartTime(context: Context): Long =
         root(context).optJSONObject("activeSession")?.optLong("startTimeMillis", 0L)?.takeIf { it > 0L }
             ?: System.currentTimeMillis()
+
+    /**
+     * When the workout last changed (a set ticked, a number typed, an exercise added). Sessions
+     * saved before this was recorded fall back to their start time.
+     */
+    fun getActiveSessionLastActivity(context: Context): Long {
+        val obj = root(context).optJSONObject("activeSession") ?: return 0L
+        return obj.optLong("lastActivityMillis", 0L).takeIf { it > 0L } ?: obj.optLong("startTimeMillis", 0L)
+    }
+
+    /** "Still training": counts as activity, so the forgotten-workout question waits again. */
+    fun touchActiveSession(context: Context) = edit(context) { root ->
+        root.optJSONObject("activeSession")?.put("lastActivityMillis", System.currentTimeMillis())
+    }
 
     fun loadActiveSession(context: Context): Pair<String, List<ExerciseEntry>>? {
         val activeObj = root(context).optJSONObject("activeSession") ?: return null

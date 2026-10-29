@@ -230,6 +230,29 @@ fun loggedExerciseNames(history: List<CompletedWorkout>): List<String> {
  * History split per exercise, keyed by [ignoreCaseKey] (order kept), so per-exercise scans like
  * [computeExerciseRecords] only walk the workouts that contain the exercise.
  */
+/**
+ * The sets logged for [name] last time, for the "Previous" column: from [sameDay] (this day's last
+ * workout) when it has the exercise, as coaching reads it, else from the latest workout that does.
+ * [withExercise] is newest first, as [historyByExercise] gives it. Null if it was never logged.
+ */
+fun lastSessionSets(name: String, type: ExerciseType, sameDay: CompletedWorkout?, withExercise: List<CompletedWorkout>): List<SetEntry>? {
+    fun setsIn(w: CompletedWorkout) = w.exercises
+        .find { !it.isSkipped && it.name.equals(name, ignoreCase = true) }
+        ?.sets?.filter { it.hasNumbers(type) }?.takeIf { it.isNotEmpty() }
+    return sameDay?.let(::setsIn) ?: withExercise.firstNotNullOfOrNull(::setsIn)
+}
+
+/**
+ * The set from last time that lines up with `sets[index]`: same kind (warm-up, drop, rest-pause,
+ * working) and the same place among sets of that kind, so a warm-up is never compared with a work set.
+ */
+fun previousSetFor(sets: List<SetEntry>, index: Int, previous: List<SetEntry>): SetEntry? {
+    fun kind(s: SetEntry) = if (s.isWarmupSet) "WARMUP" else s.intensityType
+    val set = sets.getOrNull(index) ?: return null
+    val position = (0 until index).count { kind(sets[it]) == kind(set) }
+    return previous.filter { kind(it) == kind(set) }.getOrNull(position)
+}
+
 fun historyByExercise(history: List<CompletedWorkout>): Map<String, List<CompletedWorkout>> {
     val out = HashMap<String, ArrayList<CompletedWorkout>>()
     for (w in history) {

@@ -32,6 +32,15 @@ data class AppSettings(
     val restSoundEnabled: Boolean = true
 )
 
+/**
+ * A workout started empty from Today, outside the program. Its exercises are today's only: adding,
+ * removing or reordering them doesn't change any day's exercise list.
+ */
+const val QUICK_WORKOUT_TITLE = "Quick workout"
+
+/** Nothing changed in a running workout for this long: it was probably forgotten. */
+const val FORGOTTEN_WORKOUT_MS = 60L * 60 * 1000
+
 const val THEME_SYSTEM = "SYSTEM"
 const val THEME_LIGHT = "LIGHT"
 const val THEME_DARK = "DARK"

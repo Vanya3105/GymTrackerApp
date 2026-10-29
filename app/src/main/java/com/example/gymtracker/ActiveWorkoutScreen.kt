@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -120,7 +121,8 @@ fun ActiveWorkoutScreen(
     val latestExercises by rememberUpdatedState(exercises)
     val startTimeMillis = remember { LocalStorage.getActiveSessionStartTime(context) }
 
-    var showPicker by remember { mutableStateOf(false) }
+    // An empty workout has nothing to show until something is picked.
+    var showPicker by remember { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
     var showFinish by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
@@ -183,8 +185,14 @@ fun ActiveWorkoutScreen(
     val skipped = exercises.withIndex().filter { it.value.isSkipped }
     val totalSets = active.sumOf { it.value.sets.size }
     val doneSets = active.sumOf { ex -> ex.value.sets.count { it.isCompleted } }
+    // Quick workouts differ every time, so the last one is no template.
     val previousSplitWorkout = remember(split.title, history) {
-        history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
+        if (split.title == QUICK_WORKOUT_TITLE) null
+        else history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
+    }
+    // Copying only helps if last time had at least one of today's exercises.
+    val canCopyLast = previousSplitWorkout != null && exercises.any { cur ->
+        previousSplitWorkout.exercises.any { !it.isSkipped && it.name.equals(cur.name, ignoreCase = true) }
     }
 
     fun supersetRange(pos: Int): IntRange {
@@ -285,7 +293,7 @@ fun ActiveWorkoutScreen(
                 startTimeMillis = startTimeMillis,
                 doneSets = doneSets,
                 totalSets = totalSets,
-                canCopyLast = !isEditingPastWorkout && previousSplitWorkout != null,
+                canCopyLast = !isEditingPastWorkout && canCopyLast,
                 onClose = {
                     if (isEditingPastWorkout && hasUnsavedEdits) confirmDiscard = true
                     else if (isEditingPastWorkout) onDiscardWorkout()
@@ -306,7 +314,7 @@ fun ActiveWorkoutScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!isEditingPastWorkout && previousSplitWorkout != null && doneSets == 0 && !reordering) {
+                if (!isEditingPastWorkout && canCopyLast && previousSplitWorkout != null && doneSets == 0 && !reordering) {
                     item(key = "copy_last") {
                         AppCard(
                             Modifier.fillMaxWidth().animateItem(),
@@ -345,11 +353,8 @@ fun ActiveWorkoutScreen(
                     val suggestion = remember(exercise, history, settings.weightStep, unit) {
                         suggestNextWeight(split.title, exercise, history, settings.weightStep)
                     }
-                    val lastTime = remember(exercise.name, previousSplitWorkout, unit) {
-                        previousSplitWorkout?.exercises
-                            ?.find { it.name.equals(exercise.name, ignoreCase = true) && !it.isSkipped }
-                            ?.let { ex -> ex.workSets.joinToString("  ·  ") { formatSetShort(it, ex.type) } }
-                            ?.takeIf { it.isNotEmpty() }
+                    val previousSets = remember(exercise.name, exercise.type, previousSplitWorkout, byExercise) {
+                        lastSessionSets(exercise.name, exercise.type, previousSplitWorkout, byExercise[ignoreCaseKey(exercise.name)].orEmpty())
                     }
                     val note = remember(exercise.name, noteVersion) { LocalStorage.getExerciseNote(context, exercise.name) }
 
@@ -361,7 +366,7 @@ fun ActiveWorkoutScreen(
                             canLinkNext = pos < active.lastIndex || exercise.isSuperset,
                             records = records,
                             suggestion = suggestion,
-                            lastTime = lastTime,
+                            previousSets = previousSets,
                             note = note,
                             isDragging = isDragging,
                             collapsed = reordering,
@@ -599,6 +604,7 @@ fun ActiveWorkoutScreen(
             text = {
                 Text(
                     if (isEditingPastWorkout) "It will be removed from this logged workout."
+                    else if (split.title == QUICK_WORKOUT_TITLE) "It will be removed from this workout."
                     else "It won't show up in future ${split.title} workouts. You can add it back any time.",
                     style = AppType.body,
                     color = P.textSecondary
@@ -764,7 +770,8 @@ private fun ExerciseCard(
     canLinkNext: Boolean,
     records: ExerciseRecords,
     suggestion: Suggestion?,
-    lastTime: String?,
+    /** Last session's sets of this exercise, for the Previous column; null hides the column. */
+    previousSets: List<SetEntry>?,
     note: String,
     isDragging: Boolean,
     /** A card is being dragged: show only the header so cards are easy to move past each other. */
@@ -920,9 +927,6 @@ private fun ExerciseCard(
             exercise.planNote?.let {
                 Text(it, style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(top = 2.dp))
             }
-            if (lastTime != null) {
-                Text("Last time  $lastTime", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.padding(top = 2.dp))
-            }
             if (note.isNotBlank()) {
                 Row(
                     Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(P.bgControl).pressable(onClick = onOpenDetails).padding(horizontal = 10.dp, vertical = 6.dp),
@@ -948,6 +952,9 @@ private fun ExerciseCard(
 
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Set", style = AppType.caption, color = P.textTertiary, modifier = Modifier.width(40.dp))
+                if (previousSets != null) {
+                    Text("Previous", style = AppType.caption, color = P.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(PREVIOUS_WIDTH))
+                }
                 val unit = Units.current
                 val (first, second) = when (exercise.type) {
                     ExerciseType.WEIGHT_REPS -> unit.label to "Reps"
@@ -973,6 +980,8 @@ private fun ExerciseCard(
                     refFor = { field -> FieldRef(exIdx, setIdx, field) },
                     isNext = setIdx == nextSetIdx,
                     workNumber = workNumber,
+                    previous = previousSets?.let { previousSetFor(exercise.sets, setIdx, it) },
+                    showPrevious = previousSets != null,
                     isPr = isSetPersonalRecord(set, records, exercise.type),
                     type = exercise.type,
                     canDelete = exercise.sets.size > 1,
@@ -1091,6 +1100,9 @@ private fun SetRow(
     refFor: (SetField) -> FieldRef,
     isNext: Boolean,
     workNumber: Int,
+    /** The matching set last time, if there was one. */
+    previous: SetEntry?,
+    showPrevious: Boolean,
     isPr: Boolean,
     canDelete: Boolean,
     badgeModifier: Modifier,
@@ -1171,6 +1183,11 @@ private fun SetRow(
             }
         }
 
+        if (showPrevious) PreviousCell(previous, type) { p ->
+            haptics.tick()
+            onChange { it.copy(weight = p.weight, reps = p.reps, seconds = p.seconds, distanceM = p.distanceM) }
+        }
+
         // Same widths as the column labels above: the first box is wider (weights have decimals).
         val fields = fieldsFor(type)
         fields.forEachIndexed { i, field ->
@@ -1187,6 +1204,32 @@ private fun SetRow(
             step = step,
             onChange = { w -> onChange { it.copy(weight = w) } },
             onDismiss = { platesOpen = false }
+        )
+    }
+}
+
+private val PREVIOUS_WIDTH = 68.dp
+
+/** Last time's numbers for this set, quiet; a tap copies them into the set. "—" if there was none. */
+@Composable
+private fun PreviousCell(previous: SetEntry?, type: ExerciseType, onCopy: (SetEntry) -> Unit) {
+    val P = LocalPalette.current
+    val text = previous?.let { formatSetShort(it, type) } ?: "—"
+    Box(
+        Modifier
+            .width(PREVIOUS_WIDTH)
+            .height(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (previous != null) Modifier.pressable(pressedScale = 0.92f) { onCopy(previous) } else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text,
+            style = AppType.caption.copy(fontFeatureSettings = "tnum"),
+            color = P.textTertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }

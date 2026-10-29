@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -68,6 +69,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
@@ -187,6 +189,33 @@ internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<Exerc
     return base.copy(exercises = performed, totalVolumeKg = stats.volumeKg, prsHit = stats.prCount)
 }
 
+/**
+ * Saves the running workout like Finish → Save (no photo), as if it ended at [endMillis]: the
+ * watch finishes now, a forgotten workout at its last change.
+ */
+internal fun finishActiveWorkout(context: Context, endMillis: Long, fromWidget: Boolean): CompletedWorkout? {
+    val (splitTitle, exercises) = LocalStorage.loadActiveSession(context) ?: return null
+    val end = Date(endMillis)
+    val start = LocalStorage.getActiveSessionStartTime(context)
+    val completed = buildCompletedWorkout(
+        CompletedWorkout(
+            id = end.time,
+            splitTitle = splitTitle,
+            dateKey = DateUtils.formatDayKey(end),
+            displayDate = DateUtils.formatDisplayDate(end),
+            durationSeconds = ((end.time - start) / 1000L).coerceAtLeast(0L),
+            bodyWeightKg = LocalStorage.loadUserProfile(context).currentWeightKg,
+            photoPath = null,
+            skippedExercises = exercises.filter { it.isSkipped }.map { it.name },
+            exercises = emptyList()
+        ),
+        exercises,
+        LocalStorage.loadHistory(context)
+    )
+    LocalStorage.saveCompletedWorkout(context, completed, fromWidget = fromWidget)
+    return completed
+}
+
 @Composable
 fun GymTrackerApp(
     activity: Activity,
@@ -198,6 +227,7 @@ fun GymTrackerApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val P = LocalPalette.current
 
+    remember { LocalStorage.reconcileProfileWeight(context) }
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
@@ -249,11 +279,28 @@ fun GymTrackerApp(
         }
     }
 
+    // A running workout nobody touched for an hour: when it last changed, while asking about it.
+    var forgottenSince by remember { mutableLongStateOf(0L) }
+    val checkForgotten = rememberUpdatedState {
+        if (activeSplit != null && editingPastWorkout == null && forgottenSince == 0L) {
+            val last = LocalStorage.getActiveSessionLastActivity(context)
+            if (last > 0L && System.currentTimeMillis() - last >= FORGOTTEN_WORKOUT_MS) forgottenSince = last
+        }
+    }
+    LaunchedEffect(activeSplit) {
+        while (activeSplit != null) {
+            checkForgotten.value()
+            delay(60_000L)
+        }
+        forgottenSince = 0L
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 reloadFromDisk.value()
                 pullFromHealth.value()
+                checkForgotten.value()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -309,6 +356,39 @@ fun GymTrackerApp(
         LocalStorage.saveActiveSession(context, split.title, entries)
     }
 
+    /** Starts with no exercises; the workout screen opens the exercise picker. */
+    fun startQuickWorkout() {
+        haptics.confirm()
+        if (activeSplit != null) {
+            workoutExpanded = true
+            return
+        }
+        activeSplit = WorkoutSplit(QUICK_WORKOUT_TITLE, "", "")
+        currentExercises = emptyList()
+        workoutExpanded = true
+        LocalStorage.saveActiveSession(context, QUICK_WORKOUT_TITLE, emptyList())
+    }
+
+    fun discardActiveWorkout() {
+        LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+        LocalStorage.saveActiveSession(context, null, emptyList())
+        workoutExpanded = false
+        activeSplit = null
+        currentExercises = emptyList()
+    }
+
+    fun finishForgottenWorkout(endMillis: Long) {
+        haptics.confirm()
+        val saved = finishActiveWorkout(context, endMillis, fromWidget = false)
+        history = LocalStorage.loadHistory(context)
+        workoutExpanded = false
+        activeSplit = null
+        currentExercises = emptyList()
+        if (saved != null) {
+            Toast.makeText(context, "${saved.splitTitle} saved: ${formatDuration(saved.durationSeconds)}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun openPastWorkout(workout: CompletedWorkout) {
         haptics.tick()
         currentExercises = workout.exercises
@@ -347,7 +427,9 @@ fun GymTrackerApp(
                         userProfile = userProfile,
                         programName = activeProgram.name,
                         activeSplitTitle = activeSplit?.title,
+                        activeExerciseCount = currentExercises.count { !it.isSkipped },
                         onStartWorkout = { startWorkout(it) },
+                        onStartQuickWorkout = { startQuickWorkout() },
                         onOpenProgress = { selectedTab = AppTab.PROGRESS },
                         onOpenHistory = { selectedTab = AppTab.HISTORY }
                     )
@@ -374,8 +456,11 @@ fun GymTrackerApp(
                         userProfile = userProfile,
                         onUpdateSettings = onUpdateSettings,
                         onUpdateProfile = { updated ->
+                            val weightChanged = updated.currentWeightKg != userProfile.currentWeightKg
                             userProfile = updated
                             LocalStorage.saveUserProfile(context, updated)
+                            // One body weight everywhere: a new weight here is a weigh-in too.
+                            if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, updated.currentWeightKg)
                         },
                         onOpenOnboarding = { showOnboarding = true },
                         onReplayTips = { selectedTab = AppTab.TODAY },
@@ -486,11 +571,15 @@ fun GymTrackerApp(
                                 val reordered = currentExercises.moved(from, to)
                                 currentExercises = reordered
                                 LocalStorage.saveActiveSession(context, split.title, reordered)
-                                LocalStorage.saveTemplateForSplit(context, split.title, reordered.map { it.name to it.targetMuscle })
+                                if (split.title != QUICK_WORKOUT_TITLE) {
+                                    LocalStorage.saveTemplateForSplit(context, split.title, reordered.map { it.name to it.targetMuscle })
+                                }
                             },
-                            onAddExercise = { name, muscle -> LocalStorage.addExerciseToSplitTemplate(context, split.title, name, muscle) },
+                            onAddExercise = { name, muscle ->
+                                if (split.title != QUICK_WORKOUT_TITLE) LocalStorage.addExerciseToSplitTemplate(context, split.title, name, muscle)
+                            },
                             onRemoveExercisePermanently = { exName ->
-                                LocalStorage.removeExerciseFromSplitTemplate(context, split.title, exName)
+                                if (split.title != QUICK_WORKOUT_TITLE) LocalStorage.removeExerciseFromSplitTemplate(context, split.title, exName)
                                 val updated = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
                                 currentExercises = updated
                                 LocalStorage.saveActiveSession(context, split.title, updated)
@@ -498,11 +587,7 @@ fun GymTrackerApp(
                             onMinimize = { workoutExpanded = false },
                             onDiscardWorkout = {
                                 haptics.tick()
-                                LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-                                LocalStorage.saveActiveSession(context, null, emptyList())
-                                workoutExpanded = false
-                                activeSplit = null
-                                currentExercises = emptyList()
+                                discardActiveWorkout()
                             },
                             onFinishWorkout = { durationSecs, photoPath, skipped ->
                                 haptics.confirm()
@@ -641,6 +726,84 @@ fun GymTrackerApp(
                     onClose = { buildingSplit = null }
                 )
             }
+        }
+
+        val forgotten = activeSplit
+        if (forgottenSince > 0L && forgotten != null) {
+            val keepGoing = {
+                LocalStorage.touchActiveSession(context)
+                forgottenSince = 0L
+            }
+            ForgottenWorkoutSheet(
+                splitTitle = forgotten.title,
+                startMillis = LocalStorage.getActiveSessionStartTime(context),
+                lastChangeMillis = forgottenSince,
+                doneSets = currentExercises.filter { !it.isSkipped }.sumOf { ex -> ex.sets.count { it.isCompleted } },
+                onFinish = {
+                    val end = forgottenSince
+                    forgottenSince = 0L
+                    finishForgottenWorkout(end)
+                },
+                onKeepGoing = { haptics.tick(); keepGoing() },
+                onDiscard = {
+                    haptics.tick()
+                    forgottenSince = 0L
+                    discardActiveWorkout()
+                },
+                onDismiss = keepGoing
+            )
+        }
+    }
+}
+
+/**
+ * Asked when a running workout hasn't changed for [FORGOTTEN_WORKOUT_MS]: saving it as ending at
+ * its last change keeps a forgotten Finish from logging a six-hour session.
+ */
+@Composable
+private fun ForgottenWorkoutSheet(
+    splitTitle: String,
+    startMillis: Long,
+    lastChangeMillis: Long,
+    doneSets: Int,
+    onFinish: () -> Unit,
+    onKeepGoing: () -> Unit,
+    onDiscard: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val P = LocalPalette.current
+    val now = System.currentTimeMillis()
+    // Time of day if it was today, else the date.
+    fun whenText(millis: Long) = android.text.format.DateUtils.formatSameDayTime(millis, now, DateFormat.MEDIUM, DateFormat.SHORT).toString()
+    val lastText = whenText(lastChangeMillis)
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
+            Text("Still training?", style = AppType.title, color = P.textPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                (if (lastChangeMillis - startMillis < 60_000L) "$splitTitle started at ${whenText(startMillis)} and nothing has changed since."
+                else "$splitTitle started at ${whenText(startMillis)} and nothing has changed since $lastText.") +
+                    if (doneSets == 0) " No sets are ticked yet." else "",
+                style = AppType.body,
+                color = P.textSecondary
+            )
+            Spacer(Modifier.height(20.dp))
+            if (doneSets > 0) {
+                PrimaryButton("Finish at $lastText", onFinish, Modifier.fillMaxWidth())
+                Text(
+                    "Saves ${if (doneSets == 1) "1 set" else "$doneSets sets"}, ${formatDuration(((lastChangeMillis - startMillis) / 1000L).coerceAtLeast(0L))}.",
+                    style = AppType.caption,
+                    color = P.textTertiary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                SecondaryButton("Keep going", onKeepGoing, Modifier.fillMaxWidth())
+            } else {
+                PrimaryButton("Keep going", onKeepGoing, Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton("Discard workout", onDiscard, Modifier.fillMaxWidth(), contentColor = P.dangerText)
         }
     }
 }

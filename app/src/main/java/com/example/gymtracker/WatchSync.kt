@@ -8,7 +8,6 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.PutDataRequest
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
-import java.util.Date
 
 // ============================================================================
 // WATCH (Wear OS remote)
@@ -93,25 +92,7 @@ object WatchSync {
 
     /** Saves the workout like Finish → Save on the phone (no photo), timed from its start to now. */
     internal fun finishWorkout(context: Context) {
-        val (splitTitle, exercises) = LocalStorage.loadActiveSession(context) ?: return
-        val now = Date()
-        val start = LocalStorage.getActiveSessionStartTime(context)
-        val completed = buildCompletedWorkout(
-            CompletedWorkout(
-                id = now.time,
-                splitTitle = splitTitle,
-                dateKey = DateUtils.formatDayKey(now),
-                displayDate = DateUtils.formatDisplayDate(now),
-                durationSeconds = ((now.time - start) / 1000L).coerceAtLeast(0L),
-                bodyWeightKg = LocalStorage.loadUserProfile(context).currentWeightKg,
-                photoPath = null,
-                skippedExercises = exercises.filter { it.isSkipped }.map { it.name },
-                exercises = emptyList()
-            ),
-            exercises,
-            LocalStorage.loadHistory(context)
-        )
-        LocalStorage.saveCompletedWorkout(context, completed, fromWidget = true)
+        finishActiveWorkout(context, System.currentTimeMillis(), fromWidget = true)
     }
 }
 

@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **Design polish 2** is merged into `master` (2026-10-29, at the owner's request, before a phone test): performance pass 2, Watch v2 and Design polish 2. Still to try on the phone and Galaxy Watch (reinstall both apps, the watch protocol changed): the set keypad (Next, −/+, Done, back closes it), "Use …" and "Go lighter for the rest", swipe-left on a weigh-in, the body-weight chart, Profile's editors, light mode; on the watch: start from the list and the tile, the bezel, undo, the overview, finish. Fixes from that test go on a new branch. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). Branch `everyday-fixes`: steps 1–4 tested on the phone and pushed. The Previous column (step 5) is done, waiting for the owner's phone test (where to look: start a day you've done before; the Previous column sits between the set number and the weight, and tapping a value copies it). After that, merge `everyday-fixes` into `master` once the owner OKs it, then **Phase 7** in its new order: auto-backup first (branch `phase-7-data`).
 
 ---
 
@@ -127,10 +127,22 @@ From a design review: the app was clean but everything spoke at the same volume.
 - [x] Profile: Age and Body weight are rows that open an editor; Training split has its own section (no card in a card); Smooth scrolling moved to Advanced
 - [x] Own tab icons (`AppIcons.kt`: dumbbell, calendar, chart, person on one grid and stroke, part-filled when selected) and a drawn empty-state scene
 
+## Everyday fixes (branch `everyday-fixes`, after Design polish 2)
+From using the app as a new user would, on the emulator:
+- [x] Forgotten workouts: a running workout that hasn't changed for an hour asks "Still training?" (on opening the app, or after a minute while it's open): Finish at the last change (saved like the watch's Finish, timed start → last change), Keep going (asks again after another hour), or Discard. The session records `lastActivityMillis` on every save that changes it; it also keeps `restStartedMillis` now, which any edit during a rest used to drop. Watch Finish and this share `finishActiveWorkout`
+- [x] Empty workout: last row of Today's "Other workouts". Starts "Quick workout" with the exercise picker open; its exercises are today's only (adding, removing and reordering leave every day's list alone), no "Use last time's numbers". Today's in-progress card shows the live exercise count
+- [x] One body weight: changing it in Profile logs a weigh-in; deleting the newest weigh-in puts the profile back to the one before; once, a profile weight that differs from the newest weigh-in is logged as today's. Progress compares with the first weigh-in on the chart ("+0.2 lb since Jun 16"), so the arrow and the line agree
+- [x] Recovery counts the last 7 days, and now says so ("8 sets in 7 days"; widget option "Sets in the last 7 days"), instead of "this week" next to Today's calendar week. Tests: `EverydayFixesTest`
+- [x] Previous column (like Strong's): each set row shows the matching set from last time, quiet ("95×8"); a tap copies it into the set. Sets line up by kind and place (warm-up with warm-up, first work set with first work set, drop with drop); "—" when last time had fewer. Last time = this day's last workout if it had the exercise, else the latest workout that did (so quick workouts get it too); no column for an exercise never logged. Replaces the one-line "Last time" under the name. Tests: `PreviousSetsTest`
+- [x] Never-logged exercises: "First time: find a weight you can lift 6–10 times with good form…" instead of "Aim for 6–10 reps at 95 lb" (a placeholder weight presented as advice), and no "Use" button
+- [x] "Use last time's numbers" only shows when last time had at least one of today's exercises (it did nothing otherwise)
+
 ## Phase 7 — Data in/out
+Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
+- [ ] Auto-backup to a user-chosen folder (SAF), with rotation
+- [ ] Merge duplicate exercises ("Back Squat" into "Barbell Back Squat": history, records, notes)
 - [ ] CSV export
 - [ ] Import from Strong and Hevy CSV (map exercise names to the library)
-- [ ] Auto-backup to a user-chosen folder (SAF), with rotation
 
 ## Phase 8 — Gym tools 2
 - [ ] Warm-up set generator
@@ -149,6 +161,7 @@ From a design review: the app was clean but everything spoke at the same volume.
 ---
 
 ## Decisions log
+- 2026-10-29: A forgotten workout is saved as ending at its last change, not when someone notices: "last change" is any edit (set ticked, number typed, exercise added), because some people fill sets in without ticking them. An hour without one is the cut-off; rests are never that long. The question is in the app only (no notification yet), which is enough to keep History and Health Connect right, since both are written at save time.
 - 2026-10-29: Watch v2 keeps the phone as the only copy of the workout: starting, finishing and undo are commands the phone carries out, like the set buttons, so there is still nothing to sync or merge. Finishing on the watch skips the photo and the finish sheet's celebration; the watch shows its own summary instead.
 - 2026-10-29: Performance pass 2 (release build, Pixel 7 emulator, profile compiled with `cmd package compile -m speed-profile` before every run, builds alternated). The UI thread was already cheap (≈2–4 ms a frame) and scrolling/month swipes are bound by the emulator's GPU (full-screen fades), so the fixes target the main thread: `pressable` and `enterAnimation` are Modifier.Nodes now (press scale drawn by the click's indication, no per-item state or graphics layer at composition), the widget/lock-screen/watch refresh runs on its own background thread (it took 13–60 ms on the main thread after every edit), tutorial spotlight positions are only tracked while the tips show (they were state writes on every scroll frame), History/finish/workout records use the per-exercise index, calendar keys skip `String.format`, and History photos decode off the main thread. Ticking sets: UI p50 3.0–4.4 → ~2.2 ms, worst frame up to 50 → ≤ 11 ms, worst late frame start 42 → ≤ 7.5 ms. Cold start unchanged (~1 s, including the 550 ms splash hold).
 - 2026-10-24: Recovery model: helper muscles count half a set (the fractional counting that fit best in Pelland et al.'s volume meta-regression). Recovery windows follow practitioner summaries of Morán-Navarro 2017 / Brigatto 2019 (bigger muscles and long eccentrics recover slower). The app doesn't know how close to failure sets were, so it assumes hard sets; RPE/RIR (Phase 8) could shorten or lengthen the windows later.
