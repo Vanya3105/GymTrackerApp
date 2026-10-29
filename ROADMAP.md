@@ -17,6 +17,10 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 Next: the owner has widget changes to describe; then Phase 7 step 2, merge duplicate exercises.
 
+**Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
+
+**App name (undecided):** the owner asked for a name that isn't taken and is easy for search engines and AI assistants to find. Recommended **Kilonaut** (no results anywhere online on 2026-10-29; kilonaut.app looked unregistered, kilonaut.com is registered by someone). Owner to check Play Store / trademarks and decide; renaming keeps the `applicationId`.
+
 ---
 
 ## Phase 0 — Setup ✅ (branch `phase-0-setup`)
@@ -165,6 +169,12 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Fixed Inter weights instead of the variable font (`res/font/inter_*.ttf`, made with fontTools; see `licenses/Inter-files.txt`): measuring a text 0.79 → 0.58 ms, a screen's recomposition 1.6 → 1.0 ms, drawing a frame 10.3 → 6.7 ms on tab switches. The share images use the same files
 - [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
 - The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
+
+## Planned: Training types (owner's request, 2026-10-29)
+The app should also serve runners and people who train with bodyweight (calisthenics, outdoors, at home), not only gym lifters.
+- [ ] First screen on startup (onboarding): "What kind of training do you do?" Pick one: e.g. Gym, Running, Bodyweight / calisthenics, Outdoors (exact list to agree with the owner)
+- [ ] The next screen depends on the choice: each type gets its own setup (gym: split and units, as now; running: running-specific setup; bodyweight: its own programs/exercises), and the app afterwards fits that type
+- Open questions for the owner before building: can someone pick more than one type, or switch later in Profile? What does Today look like for a runner (runs, distance, pace, weekly mileage)? Which bodyweight programs/progressions (skills like pull-ups, push-up progressions)? GPS for runs, or log distance/time by hand (the app already has "Distance & time" and "Bodyweight" exercise types)?
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
