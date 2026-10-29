@@ -25,6 +25,8 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
+import com.example.gymtracker.watchlink.WatchExercise
+import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
 import android.widget.Toast
 import androidx.compose.ui.graphics.toArgb
@@ -119,6 +121,8 @@ private class NextSetInfo(
 
 private class LiveSession(
     val splitName: String,
+    /** The workout's exercises without the skipped ones. */
+    val exercises: List<ExerciseEntry>,
     val currentExercise: ExerciseEntry?,
     val totalSetsLeft: Int,
     val restRemainingMillis: Long
@@ -160,7 +164,7 @@ private class LiveSession(
 
 /** The live workout for the watch, formatted the same way as the widget. */
 fun watchStateOf(context: Context): WatchState {
-    val live = readLiveSession(context) ?: return WatchState(active = false)
+    val live = readLiveSession(context) ?: return idleWatchState(context)
     val next = live.nextSet
     val type = live.currentExercise?.type
     val restEnd = LocalStorage.getRestEndTimeMillis(context).takeIf { live.isResting } ?: 0L
@@ -184,7 +188,39 @@ fun watchStateOf(context: Context): WatchState {
         summary = next?.summary.orEmpty(),
         setsLeft = live.totalSetsLeft,
         restEndsAtMillis = restEnd,
-        restTotalMillis = if (restEnd > 0L && restStart in 1 until restEnd) restEnd - restStart else 0L
+        restTotalMillis = if (restEnd > 0L && restStart in 1 until restEnd) restEnd - restStart else 0L,
+        startedAtMillis = LocalStorage.getActiveSessionStartTime(context),
+        exercises = live.exercises.map { ex -> WatchExercise(ex.name, ex.sets.count { it.isCompleted }, ex.sets.size) },
+        currentExercise = live.exercises.indexOf(live.currentExercise),
+        setNumber = next?.setNumber ?: 0,
+        setCount = next?.setCount ?: 0,
+        canUndo = live.exercises.any { ex -> ex.sets.any { it.isCompleted } }
+    )
+}
+
+/** Shown on the watch for this long after a workout is saved. */
+private const val WATCH_SAVED_WINDOW_MS = 60 * 60_000L
+
+/** No workout: the days the watch can start (up next first) and the workout saved last, if recent. */
+private fun idleWatchState(context: Context): WatchState {
+    val programId = LocalStorage.loadUserProfile(context).splitProgram
+    val history = LocalStorage.loadHistory(context)
+    val titles = programFor(programId).splits.map { it.title }
+    val upNext = computeWeekSummary(history, 0, programId).recommendedSplit
+    val last = history.firstOrNull()?.takeIf { System.currentTimeMillis() - it.id in 0 until WATCH_SAVED_WINDOW_MS }
+    return WatchState(
+        active = false,
+        days = titles.filter { it == upNext } + titles.filter { it != upNext },
+        lastWorkout = last?.let { w ->
+            WatchFinished(
+                workoutName = w.splitTitle,
+                finishedAtMillis = w.id,
+                durationSeconds = w.durationSeconds,
+                sets = computeWorkoutStats(w.exercises, emptyList()).workSets,
+                volume = w.totalVolumeKg.takeIf { it > 0 }?.let(::formatVolume),
+                newBests = w.prsHit
+            )
+        }
     )
 }
 
@@ -193,6 +229,7 @@ private fun readLiveSession(context: Context): LiveSession? {
     val active = exercises.filter { !it.isSkipped }
     return LiveSession(
         splitName = splitName,
+        exercises = active,
         currentExercise = active.firstOrNull { ex -> ex.sets.any { !it.isCompleted } },
         totalSetsLeft = active.sumOf { ex -> ex.sets.count { !it.isCompleted } },
         restRemainingMillis = LocalStorage.getRestEndTimeMillis(context) - System.currentTimeMillis()

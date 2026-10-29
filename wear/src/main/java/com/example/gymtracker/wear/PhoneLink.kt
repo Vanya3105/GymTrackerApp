@@ -73,17 +73,23 @@ class PhoneLink(context: Context) {
         sendPath(WatchLink.actionPath(action))
     }
 
+    /** Starts the program day [title] on the phone. */
+    fun startWorkout(title: String) {
+        if (waitingSince == 0L) waitingSince = SystemClock.uptimeMillis()
+        sendPath(WatchLink.START_WORKOUT, title.toByteArray(Charsets.UTF_8))
+    }
+
     /** Opens GymTracker on the phone, e.g. to start or save a workout. */
     fun openOnPhone() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(WatchLink.OPEN_PHONE_APP_URI)).addCategory(Intent.CATEGORY_BROWSABLE)
         RemoteActivityHelper(appCtx, ContextCompat.getMainExecutor(appCtx)).startRemoteActivity(intent)
     }
 
-    private fun sendPath(path: String) {
+    private fun sendPath(path: String, data: ByteArray? = null) {
         nodeClient.connectedNodes
             .addOnSuccessListener { nodes ->
                 phoneConnected = nodes.isNotEmpty()
-                nodes.forEach { messageClient.sendMessage(it.id, path, null) }
+                nodes.forEach { messageClient.sendMessage(it.id, path, data) }
             }
             .addOnFailureListener { phoneConnected = false }
     }

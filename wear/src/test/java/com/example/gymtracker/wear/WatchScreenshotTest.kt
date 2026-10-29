@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
+import com.example.gymtracker.watchlink.WatchExercise
+import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
 import org.junit.Rule
 import org.junit.Test
@@ -27,13 +29,31 @@ class WatchScreenshotTest {
     private val set = WatchState(
         active = true, workoutName = "Push", exerciseName = "Incline Dumbbell Bench Press", setLabel = "Set 2",
         primary = "102.5 kg", primaryLabel = "weight", secondary = "10", secondaryLabel = "reps",
-        summary = "102.5 kg × 10", setsLeft = 11
+        summary = "102.5 kg × 10", setsLeft = 11, startedAtMillis = now - 1_712_000,
+        exercises = listOf(
+            WatchExercise("Barbell Bench Press", 4, 4), WatchExercise("Incline Dumbbell Bench Press", 1, 3),
+            WatchExercise("Cable Fly", 0, 3), WatchExercise("Overhead Press", 0, 3), WatchExercise("Triceps Pushdown", 0, 3)
+        ),
+        currentExercise = 1, setNumber = 2, setCount = 3, canUndo = true
     )
     private val resting = set.copy(restEndsAtMillis = now + 75_000, restTotalMillis = 120_000)
 
-    private fun shot(name: String, state: WatchState?, large: Boolean = false, connected: Boolean = true, waiting: Boolean = false) {
+    private val idle = WatchState(active = false, days = listOf("Push", "Pull", "Legs", "Upper", "Lower"))
+    private val saved = idle.copy(lastWorkout = WatchFinished("Push", now - 60_000, 3_130, 18, "4,250 kg", 2))
+
+    private fun shot(
+        name: String,
+        state: WatchState?,
+        large: Boolean = false,
+        connected: Boolean = true,
+        waiting: Boolean = false,
+        overview: Boolean = false,
+        confirm: Boolean = false
+    ) {
         RuntimeEnvironment.setQualifiers(if (large) "w227dp-h227dp-round-xhdpi" else "w192dp-h192dp-round-xhdpi")
-        compose.setContent { WatchScreen(state, now, connected, waiting, onAction = {}, onOpenOnPhone = {}) }
+        compose.setContent {
+            WatchScreen(state, now, connected, waiting, onAction = {}, onStart = {}, onOpenOnPhone = {}, initialOverview = overview, initialConfirmFinish = confirm)
+        }
         compose.waitForIdle()
         // Drawn directly: captureToImage waits for a window frame Robolectric never reports.
         val bitmap = compose.activity.window.decorView.drawToBitmap()
@@ -48,6 +68,15 @@ class WatchScreenshotTest {
     @Test fun rest() = shot("rest-small", resting)
     @Test fun restLarge() = shot("rest-large", resting, large = true)
     @Test fun noWorkout() = shot("no-workout-small", WatchState(active = false))
-    @Test fun allDone() = shot("all-done-small", set.copy(exerciseName = null))
+    @Test fun allDone() = shot("all-done-small", set.copy(exerciseName = null, currentExercise = -1))
     @Test fun noPhone() = shot("no-phone-small", null, connected = false)
+    @Test fun warmUp() = shot("warm-up-small", set.copy(setLabel = "Warm-up", setNumber = 1))
+    @Test fun start() = shot("start-small", idle)
+    @Test fun startLarge() = shot("start-large", idle, large = true)
+    @Test fun overview() = shot("overview-small", set, overview = true)
+    @Test fun overviewLarge() = shot("overview-large", set, large = true, overview = true)
+    @Test fun confirmFinish() = shot("confirm-finish-small", set, confirm = true)
+    @Test fun saved() = shot("saved-small", saved)
+    @Test fun savedLarge() = shot("saved-large", saved, large = true)
+    @Test fun restLastSet() = shot("rest-last-set-small", resting.copy(exerciseName = null))
 }

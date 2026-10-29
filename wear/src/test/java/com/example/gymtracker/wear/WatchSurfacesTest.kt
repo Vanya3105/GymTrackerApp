@@ -32,7 +32,8 @@ class WatchSurfacesTest {
     @Test
     fun tileBuildsForEveryState() {
         val resting = set.copy(restEndsAtMillis = now + 60_000, restTotalMillis = 90_000)
-        for (state in listOf(null, WatchState(active = false), set, resting, set.copy(exerciseName = null))) {
+        val idle = WatchState(active = false, days = listOf("Pull", "Push"))
+        for (state in listOf(null, WatchState(active = false), idle, set, resting, set.copy(exerciseName = null))) {
             assertNotNull(workoutTile(app, state, device, now).tileTimeline)
         }
         // A rest's end changes the tile, so it asks to be refreshed then.

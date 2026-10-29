@@ -1,19 +1,22 @@
 package com.example.gymtracker.watchlink
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * Phone → watch: the live workout as one Data Layer item at [STATE_PATH], already formatted by
  * the phone (units, exercise types), so the watch only displays it.
- * Watch → phone: one message per button press at [ACTION_PREFIX] + [WatchAction.name], and a
- * [REQUEST_STATE] message when the watch app opens. The phone answers every action with [ACK],
- * so the watch can tell a slow phone from a tap that simply changed nothing.
+ * Watch → phone: one message per button press at [ACTION_PREFIX] + [WatchAction.name], a
+ * [START_WORKOUT] message with the day's title as its data, and a [REQUEST_STATE] message when
+ * the watch app opens. The phone answers every action and start with [ACK], so the watch can tell
+ * a slow phone from a tap that simply changed nothing.
  */
 object WatchLink {
     const val STATE_PATH = "/gymtracker/session"
     const val ACTION_PREFIX = "/gymtracker/action/"
     const val REQUEST_STATE = "/gymtracker/request-state"
     const val ACK = "/gymtracker/ack"
+    const val START_WORKOUT = "/gymtracker/start"
 
     /** Opens the phone app (its MainActivity handles this link), e.g. from the watch's "Open on phone". */
     const val OPEN_PHONE_APP_URI = "gymtracker://open"
@@ -25,7 +28,28 @@ object WatchLink {
 }
 
 /** The watch's buttons. "Primary" is the first box (weight, reps, time or distance), "secondary" the second. */
-enum class WatchAction { PRIMARY_MINUS, PRIMARY_PLUS, SECONDARY_MINUS, SECONDARY_PLUS, COMPLETE_SET, ADD_REST, SKIP_REST }
+enum class WatchAction {
+    PRIMARY_MINUS, PRIMARY_PLUS, SECONDARY_MINUS, SECONDARY_PLUS, COMPLETE_SET, ADD_REST, SKIP_REST,
+    /** Takes 15 s off the rest (the bezel turned back). */
+    REMOVE_REST,
+    /** Un-ticks the last finished set, e.g. after "Set done" by mistake. */
+    UNDO_SET,
+    /** Saves the workout to history, like Finish → Save on the phone. */
+    FINISH_WORKOUT
+}
+
+/** One row of the watch's workout overview: [done] of [total] sets ticked. */
+data class WatchExercise(val name: String, val done: Int, val total: Int)
+
+/** The workout just saved, for the watch's "Saved" screen. [volume] is formatted; null for no volume. */
+data class WatchFinished(
+    val workoutName: String,
+    val finishedAtMillis: Long,
+    val durationSeconds: Long,
+    val sets: Int,
+    val volume: String?,
+    val newBests: Int
+)
 
 data class WatchState(
     /** False when no workout is running on the phone. */
@@ -45,10 +69,25 @@ data class WatchState(
     /** Wall-clock time the rest ends (watch and phone clocks are synced); 0 when not resting. */
     val restEndsAtMillis: Long = 0L,
     /** Rest length when it started, for the progress ring. */
-    val restTotalMillis: Long = 0L
+    val restTotalMillis: Long = 0L,
+    /** When the workout started (wall clock), for the elapsed time. */
+    val startedAtMillis: Long = 0L,
+    /** The workout's exercises (skipped ones left out), in order. */
+    val exercises: List<WatchExercise> = emptyList(),
+    /** Index in [exercises] of the exercise [exerciseName] belongs to; -1 once every set is done. */
+    val currentExercise: Int = -1,
+    /** "Set 2 of 4" within the current exercise; 0 when unknown. */
+    val setNumber: Int = 0,
+    val setCount: Int = 0,
+    /** True when a finished set can be un-ticked. */
+    val canUndo: Boolean = false,
+    /** No workout: the active program's days, the one that's up next first. */
+    val days: List<String> = emptyList(),
+    /** No workout: the last workout, when it was saved recently. */
+    val lastWorkout: WatchFinished? = null
 ) {
     fun toJson(): String = JSONObject().apply {
-        put("v", 1)
+        put("v", 2)
         put("active", active)
         put("workout", workoutName)
         exerciseName?.let { put("exercise", it) }
@@ -61,6 +100,25 @@ data class WatchState(
         put("setsLeft", setsLeft)
         put("restEndsAt", restEndsAtMillis)
         put("restTotal", restTotalMillis)
+        put("startedAt", startedAtMillis)
+        put("exercises", JSONArray().apply {
+            exercises.forEach { put(JSONObject().put("name", it.name).put("done", it.done).put("total", it.total)) }
+        })
+        put("currentExercise", currentExercise)
+        put("setNumber", setNumber)
+        put("setCount", setCount)
+        put("canUndo", canUndo)
+        put("days", JSONArray(days))
+        lastWorkout?.let { w ->
+            put("last", JSONObject().apply {
+                put("workout", w.workoutName)
+                put("finishedAt", w.finishedAtMillis)
+                put("duration", w.durationSeconds)
+                put("sets", w.sets)
+                w.volume?.let { put("volume", it) }
+                put("newBests", w.newBests)
+            })
+        }
     }.toString()
 
     companion object {
@@ -79,10 +137,32 @@ data class WatchState(
                 summary = o.optString("summary"),
                 setsLeft = o.optInt("setsLeft"),
                 restEndsAtMillis = o.optLong("restEndsAt"),
-                restTotalMillis = o.optLong("restTotal")
+                restTotalMillis = o.optLong("restTotal"),
+                startedAtMillis = o.optLong("startedAt"),
+                exercises = o.optJSONArray("exercises").objects().map {
+                    WatchExercise(it.optString("name"), it.optInt("done"), it.optInt("total"))
+                },
+                currentExercise = o.optInt("currentExercise", -1),
+                setNumber = o.optInt("setNumber"),
+                setCount = o.optInt("setCount"),
+                canUndo = o.optBoolean("canUndo"),
+                days = o.optJSONArray("days")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+                lastWorkout = o.optJSONObject("last")?.let { w ->
+                    WatchFinished(
+                        workoutName = w.optString("workout"),
+                        finishedAtMillis = w.optLong("finishedAt"),
+                        durationSeconds = w.optLong("duration"),
+                        sets = w.optInt("sets"),
+                        volume = if (w.has("volume")) w.getString("volume") else null,
+                        newBests = w.optInt("newBests")
+                    )
+                }
             )
         } catch (e: Exception) {
             null
         }
+
+        private fun JSONArray?.objects(): List<JSONObject> =
+            if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
     }
 }

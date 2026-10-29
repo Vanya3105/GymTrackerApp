@@ -681,11 +681,11 @@ object LocalStorage {
     // --- Workout history ---
 
     /** Saves the workout and ends the active session; the workout reaches disk first. */
-    fun saveCompletedWorkout(context: Context, workout: CompletedWorkout) {
+    fun saveCompletedWorkout(context: Context, workout: CompletedWorkout, fromWidget: Boolean = false) {
         editData(context, { d ->
             d.copy(history = (listOf(workout) + d.history.filter { it.id != workout.id }).sortedByDescending { it.id })
         }) { RoomStore.insertWorkout(it, workout) }
-        edit(context) { root -> root.remove("activeSession") }
+        edit(context, notifyInApp = fromWidget) { root -> root.remove("activeSession") }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
         HealthSync.workoutSaved(context, workout)
     }

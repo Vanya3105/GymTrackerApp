@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through design polish is merged into `master` (2026-10-29, at the owner's request). **Performance pass 2** (branch `perf-pass-2`) is done and waits for a phone test. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`). Known issue: `./gradlew assembleRelease` fails in `:wear` lint (InvalidFragmentVersionForActivityResult, wants androidx.fragment ≥ 1.3); `:app:assembleRelease` is fine.
+Everything through design polish is merged into `master` (2026-10-29). Two branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), then **Watch v2** (`watch-v2`, built on it; needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed). Check on the watch: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview (tap the exercise name, swipe right to go back), finish from the watch, and that the phone's open workout closes itself when the watch finishes it. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -106,6 +106,17 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Progress: Recovery as a two-column grid (percent, bar, weekly sets, last trained) with "How it works" behind a tap; "1 set" not "1 sets"; the body-weight header compares what it shows (profile weight vs the latest weigh-in, "−3.3 lb since Oct 2") instead of the last two weigh-ins
 - [x] Workout: coaching advice on a quiet surface with a thin tone-coloured edge; "Use …" hidden when the sets are already at that weight. Today: day rows show their number in the program and a round play button. Profile: white switch thumbs, option chips wrap instead of hiding past the card edge, chevrons on rows that open something. Checked in dark and light
 
+## Watch v2 (branch `watch-v2`, after performance pass 2)
+The watch was only a remote for the current set. Now it can run a whole workout:
+- [x] Start from the watch: with no workout it lists the program's days, the one that's up next first (`computeWeekSummary`, same pick as Today). The tile shows the up-next day and its chip starts it in one tap. The phone ignores a start while a workout runs or for a day not in the program
+- [x] Bezel / crown: turns the outlined value on the set screen (tap the other value to move the outline), and adds or takes off 15 s during a rest. One step per bezel click; crown movement adds up
+- [x] Set screen: "Set 2 of 4" for the exercise, a thin arc of the whole workout's progress along the edge
+- [x] Overview (tap the exercise name or "Next: …"): elapsed time, sets done, each exercise with its progress (current outlined, done ones ticked), Finish, Undo, Open on phone. Swipe right to go back
+- [x] Undo the last ticked set (rest screen and overview): un-ticks the last finished set before the next one, in the previous exercise if needed, and ends its rest
+- [x] Finish from the watch, with a confirmation that says how many sets aren't ticked. Saved like Finish → Save on the phone (no photo); the phone's open workout closes itself instead of offering to save it twice. Afterwards a "Workout saved" screen (time, sets, volume, new bests) for 30 minutes, also after finishing on the phone
+- [x] `./gradlew assembleRelease` builds both apps again: the watch asks for the notification permission from Compose (as the phone does) instead of `registerForActivityResult`, which lint flagged because Play services pulls in Fragment 1.1
+- [x] Protocol stays compatible both ways (new fields are optional; v2 in the JSON). Tests: `WatchSyncTest` (start, finish, undo, shorter rest, progress), `WatchLinkTest`, screenshots of every new screen at 40 and 44+ mm
+
 ## Phase 7 — Data in/out
 - [ ] CSV export
 - [ ] Import from Strong and Hevy CSV (map exercise names to the library)
@@ -128,6 +139,7 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 ---
 
 ## Decisions log
+- 2026-10-29: Watch v2 keeps the phone as the only copy of the workout: starting, finishing and undo are commands the phone carries out, like the set buttons, so there is still nothing to sync or merge. Finishing on the watch skips the photo and the finish sheet's celebration; the watch shows its own summary instead.
 - 2026-10-29: Performance pass 2 (release build, Pixel 7 emulator, profile compiled with `cmd package compile -m speed-profile` before every run, builds alternated). The UI thread was already cheap (≈2–4 ms a frame) and scrolling/month swipes are bound by the emulator's GPU (full-screen fades), so the fixes target the main thread: `pressable` and `enterAnimation` are Modifier.Nodes now (press scale drawn by the click's indication, no per-item state or graphics layer at composition), the widget/lock-screen/watch refresh runs on its own background thread (it took 13–60 ms on the main thread after every edit), tutorial spotlight positions are only tracked while the tips show (they were state writes on every scroll frame), History/finish/workout records use the per-exercise index, calendar keys skip `String.format`, and History photos decode off the main thread. Ticking sets: UI p50 3.0–4.4 → ~2.2 ms, worst frame up to 50 → ≤ 11 ms, worst late frame start 42 → ≤ 7.5 ms. Cold start unchanged (~1 s, including the 550 ms splash hold).
 - 2026-10-24: Recovery model: helper muscles count half a set (the fractional counting that fit best in Pelland et al.'s volume meta-regression). Recovery windows follow practitioner summaries of Morán-Navarro 2017 / Brigatto 2019 (bigger muscles and long eccentrics recover slower). The app doesn't know how close to failure sets were, so it assumes hard sets; RPE/RIR (Phase 8) could shorten or lengthen the windows later.
 - 2026-10-24: Coaching v2 rules come from: double progression (hold until every set hits the top of the range); ACSM 2009 progression stand (raise load 2–10% once the target is beaten by 1–2 reps); Plotkin et al. 2022 (adding reps and adding load grow muscle about equally, so "add a rep" is real progress); the fatigue meta-analysis summarised by Stronger by Science (to failure, set 2 is ~70% of set 1's reps, set 3 ~55%, so reps falling a little is normal); detraining reviews (little strength lost in 2–3 weeks off, more after ~4); and the common 10% reset after repeated failed sessions (linear-progression programs, Helms' novice rule). Epley for e1RM, as the rest of the app uses. All the cut-offs are rules of thumb, not study results.

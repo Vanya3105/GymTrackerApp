@@ -189,7 +189,7 @@ private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
     toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
 
 /** Builds the logbook entry; PRs are judged only against workouts logged before this one. */
-private fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): CompletedWorkout {
+internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): CompletedWorkout {
     val performed = exercises.filter { !it.isSkipped }
     val stats = computeWorkoutStats(performed, history.filter { it.id < base.id })
     return base.copy(exercises = performed, totalVolumeKg = stats.volumeKg, prsHit = stats.prCount)
@@ -236,6 +236,12 @@ fun GymTrackerApp(
         if (latest != null && editingPastWorkout == null) {
             activeSplit = splits.find { it.title == latest.first } ?: WorkoutSplit(latest.first, "", "01")
             currentExercises = latest.second
+        } else if (latest == null && activeSplit != null) {
+            // Finished from the watch: this screen would otherwise offer to save it a second time.
+            activeSplit = null
+            workoutExpanded = false
+            history = LocalStorage.loadHistory(context)
+            if (editingPastWorkout == null) currentExercises = emptyList()
         }
     }
 
