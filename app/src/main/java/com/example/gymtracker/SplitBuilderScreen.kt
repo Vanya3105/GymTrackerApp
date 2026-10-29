@@ -2,6 +2,9 @@ package com.example.gymtracker
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -253,13 +256,9 @@ private fun ColumnScope.DaysStep(dayCount: Int, haptics: Haptics, onChange: (Int
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         CircleIconButton(Icons.Rounded.Remove, "Fewer days", { haptics.tick(); onChange(dayCount - 1) }, enabled = dayCount > 1, size = 56.dp)
-        Text(
-            "$dayCount",
-            style = AppType.bigNumber.copy(fontSize = 72.sp, lineHeight = 80.sp),
-            color = P.textPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(120.dp)
-        )
+        Box(Modifier.width(120.dp), contentAlignment = Alignment.Center) {
+            RollingText("$dayCount", style = AppType.bigNumber.copy(fontSize = 72.sp, lineHeight = 80.sp), color = P.textPrimary)
+        }
         CircleIconButton(Icons.Rounded.Add, "More days", { haptics.tick(); onChange(dayCount + 1) }, enabled = dayCount < 7, size = 56.dp)
     }
     Text(
@@ -315,7 +314,16 @@ private fun MusclesStep(
                     Text("${i + 1}", style = AppType.label, color = P.accentPrimary)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(titles[i], style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
+                // The name follows the muscles: slide the new one in.
+                AnimatedContent(
+                    targetState = titles[i],
+                    transitionSpec = {
+                        (slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)) { it / 2 } + fadeIn(tween(160)))
+                            .togetherWith(slideOutVertically(tween(140)) { -it / 2 } + fadeOut(tween(100)))
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "day_title"
+                ) { t -> Text(t, style = AppType.headline, color = P.textPrimary) }
                 CircleIconButton(Icons.Rounded.Edit, "Rename ${titles[i]}", { onRename(i) }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
             }
             Spacer(Modifier.height(10.dp))
@@ -374,11 +382,12 @@ private fun ReviewStep(
     Spacer(Modifier.height(6.dp))
     Text("Name it and check each day's exercises. Sets and reps are set during workouts.", style = AppType.body, color = P.textSecondary)
     Spacer(Modifier.height(20.dp))
+    Text("Name", style = AppType.label, color = P.textSecondary)
+    Spacer(Modifier.height(6.dp))
     OutlinedTextField(
         value = name,
         onValueChange = onName,
-        label = { Text("Name") },
-        placeholder = { Text(placeholder) },
+        placeholder = { Text(placeholder, color = P.textTertiary) },
         singleLine = true,
         shape = RoundedCornerShape(14.dp),
         colors = fieldColors(),
@@ -387,10 +396,13 @@ private fun ReviewStep(
     Spacer(Modifier.height(20.dp))
 
     titles.forEachIndexed { i, title ->
-        AppCard(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)) {
+        AppCard(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+            contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)
+        ) {
             Text(title, style = AppType.headline, color = P.textPrimary)
             val muscles = BUILDER_MUSCLES.filter { it in days[i] }.joinToString(", ")
-            val note = if (shared[i]) "Same exercises as your other $title days" else null
+            val note = if (shared[i]) "You already have a $title day: it keeps its exercises and history, and changes here apply to it everywhere" else null
             listOfNotNull(muscles.ifBlank { null }, note).forEach {
                 Text(it, style = AppType.caption, color = P.textSecondary)
             }

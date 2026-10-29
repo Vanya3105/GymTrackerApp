@@ -127,7 +127,7 @@ private class LiveSession(
 
     val nextSet: NextSetInfo? get() {
         val ex = currentExercise ?: return null
-        val idx = ex.sets.indexOfFirst { !it.isCompleted }
+        val idx = ex.nextSetIndex()
         if (idx == -1) return null
         val set = ex.sets[idx]
         val workNum = ex.sets.take(idx + 1).count { !it.isWarmupSet }
@@ -429,7 +429,7 @@ class GymWidgetProvider : AppWidgetProvider() {
             val exIdx = exercises.indexOfFirst { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
             if (exIdx == -1) return
             val currentEx = exercises[exIdx]
-            val setIdx = currentEx.sets.indexOfFirst { !it.isCompleted }
+            val setIdx = currentEx.nextSetIndex()
             val target = currentEx.sets[setIdx]
             val settings = LocalStorage.loadSettings(context)
             val curReps = parseRepsClean(target.reps, 8)

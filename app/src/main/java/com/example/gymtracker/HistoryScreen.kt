@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.IosShare
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.Calendar
 import java.util.Date
@@ -128,28 +130,36 @@ private fun WeekView(
     val week = remember(history, weekOffset, program) { computeWeekSummary(history, weekOffset, userProfile.splitProgram) }
     val stats = remember(week) { week.workouts.map { computeWorkoutStats(it.exercises, emptyList()) } }
 
-    LazyColumn(
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous week", { weekOffset-- })
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().swipeToPage({ weekOffset-- }, { weekOffset++ }, canGoNext = weekOffset < 0)) {
+        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous week", { weekOffset-- })
+            AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_title") { _ ->
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(week.titleLabel, style = AppType.bodyStrong, color = P.textPrimary)
                     Text(week.dateRangeLabel, style = AppType.caption, color = P.textSecondary)
                 }
-                CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next week", { weekOffset++ }, enabled = weekOffset < 0)
+            }
+            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next week", { weekOffset++ }, enabled = weekOffset < 0)
+        }
+        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile("${week.workouts.size}", "Workouts", Modifier.weight(1f))
+            StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
+            StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
+        }
+        AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_list") { offset ->
+            val workouts = remember(history, offset, program) { computeWeekSummary(history, offset, userProfile.splitProgram).workouts }
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                workoutList(
+                    workouts, history, onOpen, onDelete, onViewPhoto,
+                    emptyTitle = if (offset == 0) "No workouts yet this week" else "A rest week",
+                    emptyText = if (offset == 0) "Finished workouts show up here." else "Nothing was logged that week."
+                )
             }
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile("${week.workouts.size}", "Workouts", Modifier.weight(1f))
-                StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
-                StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
-            }
-        }
-        workoutList(week.workouts, history, onOpen, onDelete, onViewPhoto, emptyText = "Nothing logged this week yet.")
     }
 }
 
@@ -173,24 +183,29 @@ private fun MonthView(
         Triple(cal.get(Calendar.DAY_OF_WEEK) - 1, cal.getActualMaximum(Calendar.DAY_OF_MONTH), DateUtils.formatMonthTitle(cal.time))
     }
     val workoutsThisMonth = byDate.keys.count { it.startsWith(String.format(Locale.US, "%04d-%02d", year, month + 1)) }
+    fun previousMonth() { if (month == 0) { month = 11; year-- } else month-- }
+    fun nextMonth() { if (month == 11) { month = 0; year++ } else month++ }
 
+    AnimatedContent(
+        year * 12 + month,
+        transitionSpec = { pageTransition() },
+        modifier = Modifier.swipeToPage(::previousMonth, ::nextMonth),
+        label = "month_page"
+    ) { _ ->
     LazyColumn(
+        Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             AppCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", {
-                        if (month == 0) { month = 11; year-- } else month--
-                    }, size = 36.dp)
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", ::previousMonth, size = 36.dp)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(monthTitle, style = AppType.bodyStrong, color = P.textPrimary)
-                        Text("$workoutsThisMonth training days", style = AppType.caption, color = P.textSecondary)
+                        Text(if (workoutsThisMonth == 1) "1 training day" else "$workoutsThisMonth training days", style = AppType.caption, color = P.textSecondary)
                     }
-                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", {
-                        if (month == 11) { month = 0; year++ } else month++
-                    }, size = 36.dp)
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", ::nextMonth, size = 36.dp)
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth()) {
@@ -252,7 +267,8 @@ private fun MonthView(
             val label = if (selectedKey == todayKey) "Today" else selectedKey.toDayLabel()
             SectionHeader(label)
         }
-        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyText = "No workout on this day.")
+        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyTitle = "Rest day", emptyText = "No workout on this day.", emptyIcon = Icons.Rounded.Event)
+    }
     }
 }
 
@@ -267,10 +283,12 @@ private fun LazyListScope.workoutList(
     onOpen: (CompletedWorkout) -> Unit,
     onDelete: (CompletedWorkout) -> Unit,
     onViewPhoto: (String) -> Unit,
-    emptyText: String
+    emptyTitle: String,
+    emptyText: String,
+    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.FitnessCenter
 ) {
     if (workouts.isEmpty()) {
-        item { EmptyState(Icons.Rounded.FitnessCenter, "Nothing here", emptyText) }
+        item(key = "empty") { EmptyState(emptyIcon, emptyTitle, emptyText, Modifier.enterAnimation()) }
     } else {
         itemsIndexed(workouts, key = { _, w -> w.id }) { i, workout ->
             WorkoutHistoryCard(
@@ -338,10 +356,11 @@ fun WorkoutHistoryCard(
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("${workout.exercises.size} exercises", icon = Icons.Rounded.FitnessCenter)
-            Pill("$sets sets")
             Pill(formatDuration(workout.durationSeconds), icon = Icons.Rounded.Schedule)
+            Pill("$sets sets")
+            if (workout.totalVolumeKg > 0) Pill(formatVolume(workout.totalVolumeKg))
         }
+        ExerciseSummary(workout, allHistory)
         // From the watch via Health Connect; keyed on the permissions so it appears once allowed.
         val heart by produceState<HeartRateSummary?>(null, workout.id, HealthSync.granted) {
             value = HealthSync.heartRate(context, workout)
@@ -366,6 +385,42 @@ fun WorkoutHistoryCard(
                     .clip(RoundedCornerShape(14.dp))
                     .pressable(pressedScale = 0.98f) { onViewPhoto(workout.photoPath) }
             )
+        }
+    }
+}
+
+private const val SUMMARY_ROWS = 4
+
+/** Each exercise with its number of work sets and best set; a trophy where it was a new best. */
+@Composable
+private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<CompletedWorkout>) {
+    val P = LocalPalette.current
+    val unit = Units.current
+    val rows = remember(workout, allHistory, unit) {
+        val earlier = allHistory.filter { it.id < workout.id }
+        workout.exercises.filter { !it.isSkipped }.map { ex ->
+            val best = bestSetOf(ex.sets, ex.type)
+            val records = computeExerciseRecords(ex.name, earlier)
+            val isBest = ex.sets.any { isSetPersonalRecord(it, records, ex.type) }
+            Triple(ex, best, isBest)
+        }
+    }
+    if (rows.isEmpty()) return
+    Spacer(Modifier.height(12.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        rows.take(SUMMARY_ROWS).forEach { (ex, best, isBest) ->
+            Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${ex.workSets.size} ×", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.width(28.dp))
+                Text(ex.name, style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (isBest) {
+                    Icon(Icons.Rounded.EmojiEvents, "New best", tint = P.warningText, modifier = Modifier.padding(end = 4.dp).size(14.dp))
+                }
+                if (best != null) Text(formatSet(best, ex.type), style = AppType.label.copy(fontFeatureSettings = "tnum"), color = if (isBest) P.warningText else P.textSecondary)
+            }
+        }
+        if (rows.size > SUMMARY_ROWS) {
+            val more = rows.size - SUMMARY_ROWS
+            Text(if (more == 1) "+1 more exercise" else "+$more more exercises", style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
         }
     }
 }

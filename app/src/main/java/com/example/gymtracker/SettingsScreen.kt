@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -339,8 +340,9 @@ private fun LabeledStepper(label: String, modifier: Modifier = Modifier, content
 @Composable
 fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     val P = LocalPalette.current
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(options) { (value, label) ->
+    // Wraps instead of scrolling, so no option hides past the card's edge.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { (value, label) ->
             val isSel = value == selected
             val bg by animateColorAsState(if (isSel) P.accentPrimary else P.bgControl, label = "chip_bg")
             val fg by animateColorAsState(if (isSel) P.onAccentPrimary else P.textPrimary, label = "chip_fg")
@@ -371,6 +373,7 @@ private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
     ) {
         Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, style = AppType.body, color = P.textPrimary)
+        Text(text, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
     }
 }

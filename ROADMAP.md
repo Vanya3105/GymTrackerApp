@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–6 are merged into `master` (v3.6.0). **Coaching v2** (branch `coaching-v2`) and the **split picker** (branch `split-picker`, built on top of it) are done and wait for the owner to try them on a phone before merging. Next: design polishing of the split picker and builder (the owner will say what to change). After that: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Phases 0–6 are merged into `master` (v3.6.0). Waiting for the owner to try on a phone before merging, stacked in this order: **Coaching v2** (`coaching-v2`), the **split picker** (`split-picker`) and **design polish 1** (`design-polish`). Next: more design polish if the owner wants it, then **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -92,6 +92,19 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Four more built-in splits: Full body 2-day, Bro split, Push / Pull / Legs ×2, PHUL, with starting exercises
 - [x] Split builder (`SplitBuilderScreen.kt`): days a week → each day's muscles (quick layouts PPL / Upper-Lower / Full body / One muscle a day, then tap muscles; days name themselves, rename by hand) → review: name, each day's exercises (remove, add from the library). Nothing is saved until "Create split", which makes it the active split
 - [x] Days are named like the built-in ones where the muscles match ("Push", "Legs", repeated days "Upper A"/"Upper B"), so they reuse those days' exercises and history; new names get starter exercises picked per muscle (`starterExercises`, a B day gets different ones). Tested by `SplitLibraryTest`
+
+## Design polish 1 ✅ (branch `design-polish`, after the split picker)
+- [x] Reordering exercises in a workout: picking one up (grip, or long-press the name) collapses every card to a one-line header with its set count, so cards are easy to move past each other; the held card stays under the finger while the others shrink, and the dropped one stays put while they expand (`DragDropState` scrolls to pin it until the layout stops changing size). "Use last time's numbers", "Skipped" and "Add exercise" step aside while dragging. Haptics: firm on pick-up, tick per swap, soft on drop
+- [x] Program editor: days and each day's exercises reorder by drag (grip or long-press) instead of up/down arrows
+- [x] Workout: the next set to do (across the workout) has an accent outline; an exercise gets a check badge once all its work sets are done
+- [x] Bottom bar: one pill slides to the selected tab with a little overshoot; icons go from outlined to filled with a small bounce. The "workout in progress" bar is hidden on Today, which already has a Resume card
+- [x] Split builder: the day count rolls, day names slide when they change, the name field always shows the default name, clearer note for days that already exist; the "Your split" card crossfades on change
+- [x] Finish sheet: a check badge pops in (a trophy and "New best!" when records fell, with a confetti burst); the stats count up one after another; a "New bests" list with each record set; volume compared with the last session of the same day
+- [x] History: each card lists its exercises (work sets, best set, a trophy on new bests, "+N more"); swipe sideways between weeks and months, which slide in from the matching side; the week header stays put; kinder empty states ("A rest week", "Rest day")
+- [x] One rule for the next set everywhere (`nextSetIndex`): the first unfinished set after the last finished one, so a skipped warm-up no longer holds the workout outline, rest bar, rest alert, widget and watch on it. Tested by `NextSetTest`; best set of a session by `BestSetTest`
+- [x] Professional pass: Inter as the app font (bundled variable font, `res/font/inter.ttf`, OFL in `licenses/`; display optical size for headings, tabular digits), every Material text slot included; a status-bar scrim on the tabs, exercise page and program editor so content no longer scrolls under the clock
+- [x] Progress: Recovery as a two-column grid (percent, bar, weekly sets, last trained) with "How it works" behind a tap; "1 set" not "1 sets"; the body-weight header compares what it shows (profile weight vs the latest weigh-in, "−3.3 lb since Oct 2") instead of the last two weigh-ins
+- [x] Workout: coaching advice on a quiet surface with a thin tone-coloured edge; "Use …" hidden when the sets are already at that weight. Today: day rows show their number in the program and a round play button. Profile: white switch thumbs, option chips wrap instead of hiding past the card edge, chevrons on rows that open something. Checked in dark and light
 
 ## Phase 7 — Data in/out
 - [ ] CSV export

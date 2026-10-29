@@ -1,24 +1,27 @@
 package com.example.gymtracker
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -73,8 +76,24 @@ fun ProgramEditorScreen(
 
     fun save(updated: SplitProgramInfo) = LocalStorage.saveProgram(context, updated)
 
+    val listState = rememberLazyListState()
+    val dragState = rememberDragDropState(
+        listState = listState,
+        canReorder = { key -> key is String && program.splits.any { it.title == key } },
+        onMove = { from, to ->
+            // Read it fresh: several swaps can happen before the next recomposition.
+            val latest = UserPrograms.all.find { it.id == programId } ?: return@rememberDragDropState
+            val i = latest.splits.indexOfFirst { it.title == from }
+            val j = latest.splits.indexOfFirst { it.title == to }
+            if (i >= 0 && j >= 0) save(latest.copy(splits = latest.splits.moved(i, j)))
+        },
+        onSwap = { haptics.tick() },
+        onDrop = { haptics.drop() }
+    )
+
     LazyColumn(
         Modifier.fillMaxSize().background(P.bgPrimary),
+        state = listState,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -129,20 +148,24 @@ fun ProgramEditorScreen(
         }
         itemsIndexed(program.splits, key = { _, s -> s.title }) { i, split ->
             val count = remember(split.title, UserPrograms.all) { LocalStorage.loadTemplateForSplit(context, split.title).size }
-            AppCard(Modifier.fillMaxWidth().animateItem(), onClick = { editingDay = split.title }, contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
-                        val sub = listOf(split.subtitle, if (count == 1) "1 exercise" else "$count exercises").filter { it.isNotBlank() }
-                        Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DraggableItem(dragState, split.title) { isDragging ->
+                AppCard(
+                    Modifier.fillMaxWidth().longPressDragHandle(dragState, split.title, enabled = program.splits.size > 1, onStart = { haptics.pickUp() }),
+                    elevated = isDragging,
+                    onClick = { editingDay = split.title },
+                    contentPadding = PaddingValues(start = 4.dp, end = 8.dp, top = 12.dp, bottom = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DragGrip(isDragging, Modifier.dragHandle(dragState, split.title, enabled = program.splits.size > 1, onStart = { haptics.pickUp() }))
+                        DayNumber(i + 1, isDragging)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
+                            val sub = listOf(split.subtitle, if (count == 1) "1 exercise" else "$count exercises").filter { it.isNotBlank() }
+                            Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        CircleIconButton(Icons.Rounded.Edit, "Rename day", { renaming = split }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
                     }
-                    CircleIconButton(Icons.Rounded.ArrowUpward, "Move up", {
-                        haptics.tick(); save(program.copy(splits = program.splits.moved(i, i - 1)))
-                    }, enabled = i > 0, size = 34.dp, container = Color.Transparent)
-                    CircleIconButton(Icons.Rounded.ArrowDownward, "Move down", {
-                        haptics.tick(); save(program.copy(splits = program.splits.moved(i, i + 1)))
-                    }, enabled = i < program.splits.lastIndex, size = 34.dp, container = Color.Transparent)
-                    CircleIconButton(Icons.Rounded.Edit, "Rename day", { renaming = split }, size = 34.dp, container = Color.Transparent)
                 }
             }
         }
@@ -151,7 +174,7 @@ fun ProgramEditorScreen(
         }
         item {
             Text(
-                "Days with the same name share their exercise list and history, in every program.",
+                "Drag to reorder. Days with the same name share their exercise list and history, in every program.",
                 style = AppType.caption,
                 color = P.textTertiary
             )
@@ -302,26 +325,50 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
         LocalStorage.saveTemplateForSplit(context, dayTitle, list)
     }
 
+    val listState = rememberLazyListState()
+    val dragState = rememberDragDropState(
+        listState = listState,
+        canReorder = { key -> key is String && items.any { it.first == key } },
+        onMove = { from, to ->
+            val i = items.indexOfFirst { it.first == from }
+            val j = items.indexOfFirst { it.first == to }
+            if (i >= 0 && j >= 0) save(items.moved(i, j))
+        },
+        onSwap = { haptics.tick() },
+        onDrop = { haptics.drop() }
+    )
+
     AppBottomSheet(onDismiss = onDismiss) {
-        Column(
-            Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-                .navigationBarsPadding()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(dayTitle, style = AppType.title, color = P.textPrimary)
-            Text("These start every $dayTitle workout. You can still change things during a workout.", style = AppType.caption, color = P.textSecondary)
-            Spacer(Modifier.height(12.dp))
-            if (items.isEmpty()) {
+            item(key = "header") {
+                Column(Modifier.padding(bottom = 8.dp)) {
+                    Text(dayTitle, style = AppType.title, color = P.textPrimary)
+                    Text("These start every $dayTitle workout. Drag to reorder; tap one to set its sets and reps.", style = AppType.caption, color = P.textSecondary)
+                }
+            }
+            if (items.isEmpty()) item(key = "empty") {
                 Text("No exercises yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(vertical = 12.dp))
             }
-            items.forEachIndexed { i, (name, muscle) ->
+            itemsIndexed(items, key = { _, it -> it.first }) { i, (name, muscle) ->
                 val target = remember(name, targetsVersion) { LocalStorage.getTarget(context, dayTitle, name) }
+                DraggableItem(dragState, name) { isDragging ->
+                val bg by animateColorAsState(if (isDragging) P.bgElevated else P.bgElevated.copy(alpha = 0f), label = "row_bg")
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.99f) { targetFor = name }.padding(vertical = 4.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(bg)
+                        .longPressDragHandle(dragState, name, enabled = items.size > 1, onStart = { haptics.pickUp() })
+                        .pressable(pressedScale = 0.99f) { targetFor = name }
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    DragGrip(isDragging, Modifier.dragHandle(dragState, name, enabled = items.size > 1, onStart = { haptics.pickUp() }))
                     Column(Modifier.weight(1f)) {
                         Text(name, style = AppType.bodyStrong, color = P.textPrimary)
                         val type = LocalStorage.exerciseType(context, name)
@@ -333,16 +380,14 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
                             color = if (target != null) P.accentPrimary else P.textTertiary
                         )
                     }
-                    CircleIconButton(Icons.Rounded.ArrowUpward, "Move up", { haptics.tick(); save(items.moved(i, i - 1)) },
-                        enabled = i > 0, size = 34.dp, container = Color.Transparent)
-                    CircleIconButton(Icons.Rounded.ArrowDownward, "Move down", { haptics.tick(); save(items.moved(i, i + 1)) },
-                        enabled = i < items.lastIndex, size = 34.dp, container = Color.Transparent)
                     CircleIconButton(Icons.Rounded.Close, "Remove", { haptics.tick(); save(items.filterIndexed { j, _ -> j != i }) },
-                        size = 34.dp, container = Color.Transparent, tint = P.dangerText)
+                        size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
+                }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            PrimaryButton("Add exercise", { picking = true }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
+            item(key = "add") {
+                PrimaryButton("Add exercise", { picking = true }, Modifier.fillMaxWidth().padding(top = 12.dp).animateItem(), icon = Icons.Rounded.Add)
+            }
         }
     }
 
@@ -448,3 +493,23 @@ internal fun fieldColors() = LocalPalette.current.let { P ->
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> =
     if (to !in indices) this else toMutableList().apply { add(to, removeAt(from)) }
+
+/** The ⋮⋮ grip on a draggable row; it turns accent while held. */
+@Composable
+fun DragGrip(isDragging: Boolean, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    val tint by animateColorAsState(if (isDragging) P.accentPrimary else P.textTertiary, label = "grip")
+    Box(modifier.size(36.dp, 44.dp), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.DragIndicator, "Drag to reorder", tint = tint)
+    }
+}
+
+@Composable
+private fun DayNumber(n: Int, highlighted: Boolean) {
+    val P = LocalPalette.current
+    val bg by animateColorAsState(if (highlighted) P.accentPrimary else P.accentSoft, label = "day_num_bg")
+    val fg by animateColorAsState(if (highlighted) P.onAccentPrimary else P.accentPrimary, label = "day_num_fg")
+    Box(Modifier.size(30.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+        RollingText("$n", style = AppType.label, color = fg)
+    }
+}

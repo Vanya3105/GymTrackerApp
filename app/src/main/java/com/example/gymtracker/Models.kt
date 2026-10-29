@@ -139,6 +139,16 @@ fun SetEntry.hasNumbers(type: ExerciseType): Boolean = when (type) {
 
 val ExerciseEntry.workSets: List<SetEntry> get() = sets.filter { it.isValidWorkSet(type) }
 
+/**
+ * The set to do next: the first unfinished one after the last finished set, so a skipped
+ * warm-up doesn't hold things back; otherwise the first unfinished one. -1 when all are done.
+ * The workout screen, widget, watch and rest alert all use this, so they agree.
+ */
+fun ExerciseEntry.nextSetIndex(): Int {
+    val after = sets.indexOfLast { it.isCompleted } + 1
+    return (after until sets.size).firstOrNull { !sets[it].isCompleted } ?: sets.indexOfFirst { !it.isCompleted }
+}
+
 @Immutable
 data class WorkoutStats(
     val workSets: Int,

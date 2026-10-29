@@ -356,7 +356,8 @@ private fun SplitRow(
                 contentAlignment = Alignment.Center
             ) {
                 if (doneThisWeek) Icon(Icons.Rounded.Check, "Done this week", tint = P.successText, modifier = Modifier.size(22.dp))
-                else Text(split.title.take(1), style = AppType.headline, color = P.textSecondary)
+                // The day's place in the program; letters repeat too often (Push, Pull).
+                else Text(split.code.trimStart('0').ifBlank { split.title.take(1) }, style = AppType.headline.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -367,7 +368,9 @@ private fun SplitRow(
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )
             }
-            Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.accentPrimary, modifier = Modifier.size(22.dp))
+            Box(Modifier.size(36.dp).clip(CircleShape).background(P.accentSoft), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.accentPrimary, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
