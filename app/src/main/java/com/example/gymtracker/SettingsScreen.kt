@@ -2,6 +2,7 @@ package com.example.gymtracker
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.text.format.DateUtils as AndroidDateUtils
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,14 +21,20 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Widgets
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,13 +184,15 @@ fun SettingsScreen(
 
         item {
             SettingsGroup("Your data") {
+                AutoBackupSection()
+                Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SecondaryButton("Save backup", { exportLauncher.launch("gymtracker_backup.json") }, Modifier.weight(1f), icon = Icons.Rounded.FileDownload)
                     SecondaryButton("Restore", { importLauncher.launch(arrayOf("application/json", "*/*")) }, Modifier.weight(1f), icon = Icons.Rounded.FileUpload)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Everything stays on this phone. A backup is a single file you can keep anywhere.",
+                    "A backup is a single file. Restore takes one from anywhere, including the backup folder, and keeps a copy of what it replaces.",
                     style = AppType.caption,
                     color = P.textTertiary
                 )
@@ -374,6 +383,90 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Off: what it does and "Choose a folder". On: the folder, the last backup or what went wrong. */
+@Composable
+private fun AutoBackupSection() {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val status = AutoBackup.status
+    LaunchedEffect(Unit) { AutoBackup.refreshStatus(context) }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            try {
+                AutoBackup.setFolder(context, tree)
+            } catch (_: SecurityException) {
+                Toast.makeText(context, "That folder can't be used for backups. Try another one.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    fun choose() {
+        try {
+            pickFolder.launch(null)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "No file picker on this phone", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    if (!status.isOn) {
+        Text("Automatic backup", style = AppType.bodyStrong, color = P.textPrimary)
+        Text(
+            "Saves a copy to a folder you choose after every workout. Pick a Google Drive or Samsung Cloud folder and a new phone can get everything back.",
+            style = AppType.caption,
+            color = P.textSecondary,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        SecondaryButton("Choose a folder", { choose() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.FolderOpen)
+        return
+    }
+
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            if (status.error != null) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone,
+            null,
+            tint = if (status.error != null) P.dangerText else P.successText,
+            modifier = Modifier.size(20.dp).padding(top = 2.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Automatic backup is on", style = AppType.bodyStrong, color = P.textPrimary)
+            Text("Folder: ${status.folderName}", style = AppType.caption, color = P.textSecondary)
+            Text(
+                when {
+                    status.running -> "Backing up…"
+                    status.error != null -> status.error
+                    status.lastSuccessMillis > 0L -> "Last backup " + AndroidDateUtils.formatDateTime(
+                        context, status.lastSuccessMillis,
+                        AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_ABBREV_MONTH
+                    )
+                    else -> "No backup yet"
+                },
+                style = AppType.caption,
+                color = if (status.error != null && !status.running) P.dangerText else P.textSecondary
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        SecondaryButton("Back up now", { AutoBackup.backUpNow(context) }, Modifier.weight(1f), enabled = !status.running)
+        SecondaryButton("Change folder", { choose() }, Modifier.weight(1f))
+    }
+    var confirmOff by remember { mutableStateOf(false) }
+    LinkRow(Icons.Rounded.CloudOff, "Turn off automatic backup") { confirmOff = true }
+    if (confirmOff) {
+        AlertDialog(
+            onDismissRequest = { confirmOff = false },
+            containerColor = P.bgElevated,
+            title = { Text("Turn off automatic backup?", style = AppType.headline, color = P.textPrimary) },
+            text = { Text("Backups already in the folder stay there, but new workouts won't be copied.", style = AppType.body, color = P.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { confirmOff = false; AutoBackup.turnOff(context) }) { Text("Turn off", color = P.dangerText, style = AppType.label) }
+            },
+            dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Keep it on", color = P.textSecondary, style = AppType.label) } }
+        )
     }
 }
 

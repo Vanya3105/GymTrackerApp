@@ -227,7 +227,11 @@ fun GymTrackerApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val P = LocalPalette.current
 
-    remember { LocalStorage.reconcileProfileWeight(context) }
+    remember {
+        LocalStorage.reconcileProfileWeight(context)
+        // Read before Profile first draws, so it doesn't show "off" for a frame and then jump.
+        AutoBackup.refreshStatus(context)
+    }
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
@@ -301,6 +305,9 @@ fun GymTrackerApp(
                 reloadFromDisk.value()
                 pullFromHealth.value()
                 checkForgotten.value()
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                // Edits outside a workout (weigh-ins, programs, settings) reach the backup here.
+                AutoBackup.request(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

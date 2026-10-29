@@ -730,6 +730,7 @@ object LocalStorage {
         edit(context, notifyInApp = fromWidget) { root -> root.remove("activeSession") }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
         HealthSync.workoutSaved(context, workout)
+        AutoBackup.request(context)
     }
 
     fun updateCompletedWorkout(context: Context, updatedWorkout: CompletedWorkout) {
@@ -737,6 +738,7 @@ object LocalStorage {
             d.copy(history = d.history.map { if (it.id == updatedWorkout.id) updatedWorkout else it })
         }) { RoomStore.insertWorkout(it, updatedWorkout) }
         HealthSync.workoutSaved(context, updatedWorkout)
+        AutoBackup.request(context)
     }
 
     fun deleteWorkoutFromHistory(context: Context, workoutId: Long) {
@@ -744,6 +746,7 @@ object LocalStorage {
             RoomStore.deleteWorkout(it, workoutId)
         }
         HealthSync.workoutDeleted(context, workoutId)
+        AutoBackup.request(context)
     }
 
     /** Newest first. The same list instance is returned until history changes, so callers can use it as a stable key. */
