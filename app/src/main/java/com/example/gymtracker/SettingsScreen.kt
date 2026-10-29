@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -79,6 +80,8 @@ fun SettingsScreen(
         }
     }
 
+    var editing by remember { mutableStateOf<ProfileField?>(null) }
+
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -88,30 +91,16 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup("You") {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LabeledStepper("Age", Modifier.weight(1f)) {
-                        NumberStepper(
-                            value = if (userProfile.age > 0) userProfile.age.toString() else "",
-                            onValueChange = { v -> onUpdateProfile(userProfile.copy(age = v.filter(Char::isDigit).take(3).toIntOrNull() ?: 0)) },
-                            onMinus = { onUpdateProfile(userProfile.copy(age = maxOf(10, userProfile.age - 1))) },
-                            onPlus = { onUpdateProfile(userProfile.copy(age = userProfile.age + 1)) },
-                            keyboardType = KeyboardType.Number
-                        )
-                    }
-                    LabeledStepper("Weight (${settings.weightUnit.label})", Modifier.weight(1f)) {
-                        WeightStepper(
-                            storedKg = if (userProfile.currentWeightKg > 0f) userProfile.currentWeightKg.toString() else "",
-                            onChange = { onUpdateProfile(userProfile.copy(currentWeightKg = it.toFloatOrNull() ?: 0f)) },
-                            step = settings.weightUnit.bodyStep,
-                            minKg = 20f,
-                            fallbackKg = 75f
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Text("Training split", style = AppType.label, color = P.textSecondary)
-                Spacer(Modifier.height(8.dp))
+            // Plain rows that open an editor: steppers made the profile look like a form.
+            SettingsGroup("You", padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                ValueRow("Age", if (userProfile.age > 0) "${userProfile.age}" else "Not set") { editing = ProfileField.AGE }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                ValueRow("Body weight", if (userProfile.currentWeightKg > 0f) formatWeightKg(userProfile.currentWeightKg) else "Not set") { editing = ProfileField.WEIGHT }
+            }
+        }
+
+        item {
+            SettingsGroup("Training split") {
                 val current = programFor(userProfile.splitProgram)
                 SplitPicker(
                     selectedId = current.id,
@@ -119,6 +108,7 @@ fun SettingsScreen(
                     onBuild = onBuildSplit,
                     onEdit = { onEditProgram(it.id) },
                     cardActionLabel = if (current.isBuiltIn) "Customize" else "Edit",
+                    contained = false,
                     onCardAction = {
                         if (current.isBuiltIn) {
                             // Built-in programs stay as they are; edits go to a copy.
@@ -139,13 +129,6 @@ fun SettingsScreen(
                     selected = settings.themeChoice,
                     onSelect = { onUpdateSettings(settings.copy(themeChoice = it)) }
                 )
-                Spacer(Modifier.height(4.dp))
-                ToggleRow(
-                    title = "Smooth scrolling",
-                    subtitle = "Uses your screen's highest refresh rate (120 Hz)",
-                    checked = settings.targetFps >= 120,
-                    onCheckedChange = { onUpdateSettings(settings.copy(targetFps = if (it) 120 else 60)) }
-                )
             }
         }
 
@@ -160,7 +143,7 @@ fun SettingsScreen(
                     onSelect = { if (it != settings.weightUnit) onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) }
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Weight buttons change by", style = AppType.label, color = P.textSecondary)
+                Text("Weight step", style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 ChoiceChips(
                     options = settings.weightUnit.stepPresets.map { it to "${formatKgClean(it)} ${settings.weightUnit.label}" },
@@ -224,6 +207,97 @@ fun SettingsScreen(
                     )
                 }
             }
+        }
+
+        // Technical options last: most people never need them.
+        item {
+            SettingsGroup("Advanced") {
+                ToggleRow(
+                    title = "Smooth scrolling",
+                    subtitle = "Uses your screen's highest refresh rate (120 Hz). Turn off to save battery.",
+                    checked = settings.targetFps >= 120,
+                    onCheckedChange = { onUpdateSettings(settings.copy(targetFps = if (it) 120 else 60)) }
+                )
+            }
+        }
+    }
+
+    when (editing) {
+        ProfileField.AGE -> EditNumberSheet(
+            title = "Age",
+            initial = if (userProfile.age > 0) "${userProfile.age}" else "",
+            unit = null,
+            decimal = false,
+            step = 1f,
+            onDismiss = { editing = null },
+            onSave = { v -> onUpdateProfile(userProfile.copy(age = v.toInt().coerceIn(10, 120))); editing = null }
+        )
+        ProfileField.WEIGHT -> EditNumberSheet(
+            title = "Body weight",
+            initial = if (userProfile.currentWeightKg > 0f) settings.weightUnit.number(userProfile.currentWeightKg) else "",
+            unit = settings.weightUnit.label,
+            decimal = true,
+            step = settings.weightUnit.bodyStep,
+            note = "To track a trend, log weigh-ins on the Progress tab.",
+            onDismiss = { editing = null },
+            onSave = { v -> onUpdateProfile(userProfile.copy(currentWeightKg = settings.weightUnit.toKg(v).coerceAtLeast(20f))); editing = null }
+        )
+        null -> {}
+    }
+}
+
+private enum class ProfileField { AGE, WEIGHT }
+
+@Composable
+private fun ValueRow(label: String, value: String, onClick: () -> Unit) {
+    val P = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().pressable(pressedScale = 0.99f, onClick = onClick).padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+        Text(value, style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+        Spacer(Modifier.width(4.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** One number, typed or nudged, then saved. */
+@Composable
+private fun EditNumberSheet(
+    title: String,
+    initial: String,
+    unit: String?,
+    decimal: Boolean,
+    step: Float,
+    note: String? = null,
+    onDismiss: () -> Unit,
+    onSave: (Float) -> Unit
+) {
+    val P = LocalPalette.current
+    var input by remember { mutableStateOf(initial) }
+    val value = input.toFloatOrNull()
+    fun nudge(delta: Float) {
+        val next = ((value ?: 0f) + delta).coerceAtLeast(0f)
+        input = if (decimal) formatKgClean((next * 10).roundToInt() / 10f) else "${next.roundToInt()}"
+    }
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
+            Text(title, style = AppType.title, color = P.textPrimary)
+            if (note != null) Text(note, style = AppType.caption, color = P.textSecondary)
+            Spacer(Modifier.height(20.dp))
+            NumberStepper(
+                value = input,
+                onValueChange = { v -> if (decimal) sanitizeDecimalInput(v)?.let { input = it } else input = v.filter(Char::isDigit).take(3) },
+                onMinus = { nudge(-step) },
+                onPlus = { nudge(step) },
+                keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
+                modifier = Modifier.fillMaxWidth(),
+                height = 56.dp
+            )
+            if (unit != null) Text(unit, style = AppType.caption, color = P.textTertiary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp))
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton("Save", onClick = { value?.takeIf { it > 0f }?.let(onSave) }, enabled = (value ?: 0f) > 0f, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -310,7 +384,7 @@ private fun SharedRow(label: String, shared: Boolean) {
         Icon(
             if (shared) Icons.Rounded.Check else Icons.Rounded.Close,
             if (shared) "Shared" else "Not shared",
-            tint = if (shared) P.accentPrimary else P.textTertiary,
+            tint = if (shared) P.successText else P.textTertiary,
             modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(12.dp))
@@ -319,21 +393,11 @@ private fun SharedRow(label: String, shared: Boolean) {
 }
 
 @Composable
-private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun SettingsGroup(title: String, padding: PaddingValues = PaddingValues(16.dp), content: @Composable ColumnScope.() -> Unit) {
     val P = LocalPalette.current
     Column {
         Text(title, style = AppType.overline, color = P.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        AppCard(Modifier.fillMaxWidth(), content = content)
-    }
-}
-
-@Composable
-private fun LabeledStepper(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val P = LocalPalette.current
-    Column(modifier) {
-        Text(label, style = AppType.label, color = P.textSecondary)
-        Spacer(Modifier.height(6.dp))
-        content()
+        AppCard(Modifier.fillMaxWidth(), contentPadding = padding, content = content)
     }
 }
 
@@ -344,8 +408,9 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
-            val bg by animateColorAsState(if (isSel) P.accentPrimary else P.bgControl, label = "chip_bg")
-            val fg by animateColorAsState(if (isSel) P.onAccentPrimary else P.textPrimary, label = "chip_fg")
+            // Selected reads as inverted rather than orange: the accent is for actions.
+            val bg by animateColorAsState(if (isSel) P.textPrimary else P.bgControl, label = "chip_bg")
+            val fg by animateColorAsState(if (isSel) P.bgPrimary else P.textPrimary, label = "chip_fg")
             Text(
                 label,
                 style = AppType.label,

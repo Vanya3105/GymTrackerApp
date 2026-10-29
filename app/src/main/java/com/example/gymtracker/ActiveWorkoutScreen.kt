@@ -129,6 +129,7 @@ fun ActiveWorkoutScreen(
     var photoPath by remember { mutableStateOf(initialPhotoPath) }
     var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
     var banner by remember { mutableStateOf<Banner?>(null) }
+    val editor = remember { SetEditor() }
     LaunchedEffect(banner) {
         if (banner != null) {
             delay(2800)
@@ -268,6 +269,14 @@ fun ActiveWorkoutScreen(
     )
     val reordering = dragState.isReordering
 
+    // The keypad's target can vanish (set deleted, exercise removed) or move under a drag.
+    val editing = editor.target
+    LaunchedEffect(editing, exercises, reordering) {
+        if (editing != null && (reordering || exercises.getOrNull(editing.exIdx)?.sets?.getOrNull(editing.setIdx) == null)) editor.close()
+    }
+    BackHandler(enabled = editing != null) { editor.close() }
+
+    CompositionLocalProvider(LocalSetEditor provides editor) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WorkoutTopBar(
@@ -308,8 +317,8 @@ fun ActiveWorkoutScreen(
                             contentPadding = PaddingValues(14.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(38.dp).clip(CircleShape).background(P.accentSecondarySoft), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Rounded.ContentCopy, null, tint = P.accentSecondary, modifier = Modifier.size(18.dp))
+                                Box(Modifier.size(38.dp).clip(CircleShape).background(P.bgControl), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.ContentCopy, null, tint = P.textSecondary, modifier = Modifier.size(18.dp))
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
@@ -347,6 +356,7 @@ fun ActiveWorkoutScreen(
                     DraggableItem(dragState, key) { isDragging ->
                         ExerciseCard(
                             exercise = exercise,
+                            exIdx = exIdx,
                             partners = partners,
                             canLinkNext = pos < active.lastIndex || exercise.isSuperset,
                             records = records,
@@ -435,8 +445,60 @@ fun ActiveWorkoutScreen(
                         { haptics.tick(); showPicker = true },
                         Modifier.fillMaxWidth().animateItem(),
                         icon = Icons.Rounded.Add,
-                        contentColor = P.accentPrimary,
                         height = 52.dp
+                    )
+                }
+            }
+
+            // Kept while it slides away, so it doesn't go blank mid-animation.
+            var shownRef by remember { mutableStateOf<FieldRef?>(null) }
+            if (editing != null) shownRef = editing
+            AnimatedVisibility(
+                visible = editing != null,
+                enter = slideInVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) { it },
+                exit = slideOutVertically(tween(180)) { it }
+            ) {
+                val ref = shownRef
+                val exercise = ref?.let { exercises.getOrNull(it.exIdx) }
+                if (ref != null && exercise != null && ref.setIdx in exercise.sets.indices) {
+                    val set = exercise.sets[ref.setIdx]
+                    val fieldName = when (ref.field) {
+                        SetField.WEIGHT -> Units.current.label
+                        SetField.DISTANCE -> Units.current.distanceLabel
+                        SetField.REPS -> "reps"
+                        SetField.TIME -> "time"
+                    }
+                    val setName = when {
+                        set.isWarmupSet -> "Warm-up"
+                        set.intensityType == "DROP" -> "Drop set"
+                        else -> "Set ${exercise.sets.take(ref.setIdx + 1).count { !it.isWarmupSet && it.intensityType != "DROP" }}"
+                    }
+                    val next = nextField(ref, exercise)
+                    SetKeypad(
+                        title = "${exercise.name} · $setName · $fieldName",
+                        field = ref.field,
+                        stepText = stepLabel(ref.field, exercise.type, settings.weightStep),
+                        hasNext = next != null,
+                        onKey = { key ->
+                            val typed = typeKey(editor.text, key, ref.field, editor.fresh)
+                            if (typed != null) {
+                                haptics.tick()
+                                editor.text = typed
+                                editor.fresh = false
+                                updateAt(ref.exIdx) { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[ref.setIdx] = withFieldText(it[ref.setIdx], ref.field, typed) }) }
+                            }
+                        },
+                        onStep = { up ->
+                            haptics.tick()
+                            val stepped = steppedSet(set, ref.field, exercise.type, up, settings.weightStep)
+                            updateAt(ref.exIdx) { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[ref.setIdx] = stepped }) }
+                            editor.open(ref, stepped, exercise.type)
+                        },
+                        onNext = {
+                            haptics.tick()
+                            next?.let { editor.open(it, exercise.sets[it.setIdx], exercise.type) }
+                        },
+                        onDone = { haptics.tick(); editor.close() }
                     )
                 }
             }
@@ -458,7 +520,7 @@ fun ActiveWorkoutScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(b.icon, null, tint = if (b.isPr) P.warningText else P.accentSecondary, modifier = Modifier.size(22.dp))
+                        Icon(b.icon, null, tint = if (b.isPr) P.warningText else P.textSecondary, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(b.message, style = AppType.bodyStrong, color = P.textPrimary)
                     }
@@ -466,7 +528,8 @@ fun ActiveWorkoutScreen(
             }
         }
 
-        if (!isEditingPastWorkout) {
+        // Hidden while typing: it would sit on the keypad.
+        if (!isEditingPastWorkout && editing == null) {
             RestTimerBar(
                 exercises = exercises,
                 haptics = haptics,
@@ -484,6 +547,7 @@ fun ActiveWorkoutScreen(
                 onSkip = { finishTips() }
             )
         }
+    }
     }
 
     if (showPicker) {
@@ -695,6 +759,7 @@ private fun ElapsedClock(startTimeMillis: Long) {
 @Composable
 private fun ExerciseCard(
     exercise: ExerciseEntry,
+    exIdx: Int,
     partners: List<String>,
     canLinkNext: Boolean,
     records: ExerciseRecords,
@@ -728,7 +793,7 @@ private fun ExerciseCard(
     val borderColor by animateColorAsState(
         when {
             isDragging -> P.accentPrimary
-            inSuperset -> P.accentSecondary.copy(alpha = 0.6f)
+            inSuperset -> P.borderStrong
             else -> Color.Transparent
         }, label = "card_border"
     )
@@ -750,9 +815,9 @@ private fun ExerciseCard(
             exit = fadeOut(tween(120)) + shrinkVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
         ) {
             Row(Modifier.padding(start = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Link, null, tint = P.accentSecondary, modifier = Modifier.size(14.dp))
+                Icon(Icons.Rounded.Link, null, tint = P.textSecondary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Superset with ${partners.joinToString(", ")}", style = AppType.caption, color = P.accentSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Superset with ${partners.joinToString(", ")}", style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -814,6 +879,22 @@ private fun ExerciseCard(
                             onClick = { menuOpen = false; onToggleSuperset() }
                         )
                     }
+                    if (suggestion != null && !suggestion.forNextTime && exercise.type.hasWeightSuggestions) {
+                        DropdownMenuItem(
+                            text = { Text("Go lighter for the rest", style = AppType.body) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.TrendingDown, null) },
+                            onClick = {
+                                menuOpen = false
+                                haptics.tick()
+                                onUpdate { ex ->
+                                    ex.copy(sets = ex.sets.map { s ->
+                                        if (s.isCompleted || s.isWarmupSet) s
+                                        else s.copy(weight = lighterWeight(s.weight, settings.weightStep))
+                                    })
+                                }
+                            }
+                        )
+                    }
                     RestChooser("Rest between sets", exercise.restSeconds) { menuOpen = false; onSetExerciseRest(it) }
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
@@ -837,7 +918,7 @@ private fun ExerciseCard(
         ) {
         Column(Modifier.padding(start = 10.dp).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))) {
             exercise.planNote?.let {
-                Text(it, style = AppType.caption, color = P.accentPrimary, modifier = Modifier.padding(top = 2.dp))
+                Text(it, style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(top = 2.dp))
             }
             if (lastTime != null) {
                 Text("Last time  $lastTime", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.padding(top = 2.dp))
@@ -853,24 +934,15 @@ private fun ExerciseCard(
                 }
             }
 
-            if (suggestion != null) SuggestionBox(
+            if (suggestion != null) SuggestionLine(
                 suggestion = suggestion,
                 alreadyApplied = parseWeightClean(suggestion.suggestedWeight, -1f).let { w ->
                     exercise.sets.filter { !it.isCompleted && !it.isWarmupSet }.let { todo -> todo.isNotEmpty() && todo.all { it.weightKg == w } }
                 },
-                modifier = suggestionModifier.padding(top = 10.dp),
+                modifier = suggestionModifier.padding(top = 8.dp),
                 onUse = {
                     haptics.tick()
                     onUpdate { ex -> ex.copy(sets = ex.sets.map { s -> if (s.isCompleted || s.isWarmupSet) s else s.copy(weight = suggestion.suggestedWeight) }) }
-                },
-                onLighter = {
-                    haptics.tick()
-                    onUpdate { ex ->
-                        ex.copy(sets = ex.sets.map { s ->
-                            if (s.isCompleted || s.isWarmupSet) s
-                            else s.copy(weight = lighterWeight(s.weight, settings.weightStep))
-                        })
-                    }
                 }
             )
 
@@ -898,6 +970,7 @@ private fun ExerciseCard(
                 if (set.intensityType == "NORMAL" && !set.isWarmup) workNumber++
                 SetRow(
                     set = set,
+                    refFor = { field -> FieldRef(exIdx, setIdx, field) },
                     isNext = setIdx == nextSetIdx,
                     workNumber = workNumber,
                     isPr = isSetPersonalRecord(set, records, exercise.type),
@@ -983,48 +1056,31 @@ private fun RestChooser(label: String, current: Int, onPick: (Int) -> Unit) {
 }
 
 /**
- * Coaching advice: a quiet surface with a thin edge in the advice's tone. "Use …" only shows
- * when the sets to do aren't already at that weight.
+ * Coaching advice as one quiet line: a small tone icon, the advice, and "Use …" only when the
+ * sets to do aren't already at that weight. "Go lighter" lives in the exercise menu.
  */
 @Composable
-private fun SuggestionBox(suggestion: Suggestion, alreadyApplied: Boolean, modifier: Modifier, onUse: () -> Unit, onLighter: () -> Unit) {
+private fun SuggestionLine(suggestion: Suggestion, alreadyApplied: Boolean, modifier: Modifier, onUse: () -> Unit) {
     val P = LocalPalette.current
     val (_, fg) = toneColors(suggestion.tone, P)
     val icon = when (suggestion.tone) {
         SuggestionTone.GOOD -> Icons.AutoMirrored.Rounded.TrendingUp
         SuggestionTone.CAUTION -> Icons.AutoMirrored.Rounded.TrendingDown
-        SuggestionTone.NEUTRAL -> Icons.Rounded.Lightbulb
+        SuggestionTone.NEUTRAL -> Icons.AutoMirrored.Rounded.TrendingFlat
     }
-    Row(
-        modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
-            .background(P.bgControl.copy(alpha = if (P.isDark) 0.7f else 1f))
-    ) {
-        Box(Modifier.width(3.dp).fillMaxHeight().background(fg))
-        Column(Modifier.padding(start = 10.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp).padding(top = 1.dp))
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(suggestion.message, style = AppType.caption, color = P.textSecondary, modifier = Modifier.weight(1f))
+        if (!suggestion.forNextTime && suggestion.suggestedWeight.isNotBlank() && !alreadyApplied) {
             Spacer(Modifier.width(8.dp))
-            Text(suggestion.message, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
-        }
-        if (!suggestion.forNextTime) Row(Modifier.padding(top = 8.dp, start = 18.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (suggestion.suggestedWeight.isNotBlank() && !alreadyApplied) {
-                Text(
-                    "Use ${formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))}",
-                    style = AppType.label,
-                    color = fg,
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(fg.copy(alpha = 0.14f)).pressable(onClick = onUse).padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
             Text(
-                "Go lighter",
+                "Use ${formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))}",
                 style = AppType.label,
-                color = P.textSecondary,
-                modifier = Modifier.clip(RoundedCornerShape(50)).pressable(onClick = onLighter).padding(horizontal = 10.dp, vertical = 6.dp)
+                color = P.textPrimary,
+                maxLines = 1,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(P.bgControl).pressable(onClick = onUse).padding(horizontal = 12.dp, vertical = 7.dp)
             )
-        }
         }
     }
 }
@@ -1032,6 +1088,7 @@ private fun SuggestionBox(suggestion: Suggestion, alreadyApplied: Boolean, modif
 @Composable
 private fun SetRow(
     set: SetEntry,
+    refFor: (SetField) -> FieldRef,
     isNext: Boolean,
     workNumber: Int,
     isPr: Boolean,
@@ -1055,7 +1112,7 @@ private fun SetRow(
     val (badgeText, badgeFg, badgeBg) = when {
         set.isWarmupSet -> Triple("W", P.warningText, P.warningSurface)
         set.intensityType == "DROP" -> Triple("D", P.dangerText, P.dangerSurface)
-        set.intensityType == "REST_PAUSE" -> Triple("RP", P.accentSecondary, P.accentSecondarySoft)
+        set.intensityType == "REST_PAUSE" -> Triple("RP", P.textSecondary, P.bgControl)
         else -> Triple("$workNumber", P.textPrimary, P.bgControl)
     }
 
@@ -1114,50 +1171,11 @@ private fun SetRow(
             }
         }
 
-        if (type.usesWeight) {
-            WeightStepper(
-                storedKg = set.weight,
-                onChange = { w -> onChange { it.copy(weight = w) } },
-                step = step,
-                onStep = haptics::tick,
-                fallbackKg = if (type == ExerciseType.WEIGHT_REPS) 20f else 0f,
-                modifier = Modifier.weight(1.25f)
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-        if (type.usesDistance) {
-            DistanceStepper(
-                meters = set.distanceM,
-                onChange = { m -> onChange { it.copy(distanceM = m) } },
-                onStep = haptics::tick,
-                modifier = Modifier.weight(1.25f)
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-        if (type.usesReps) {
-            NumberStepper(
-                value = set.reps,
-                onValueChange = { v -> onChange { it.copy(reps = v.filter(Char::isDigit).take(3)) } },
-                onMinus = {
-                    haptics.tick()
-                    onChange { it.copy(reps = "${maxOf(0, parseRepsClean(set.reps, 8) - 1)}") }
-                },
-                onPlus = {
-                    haptics.tick()
-                    onChange { it.copy(reps = "${parseRepsClean(set.reps, 8) + 1}") }
-                },
-                keyboardType = KeyboardType.Number,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        if (type.usesTime) {
-            DurationStepper(
-                seconds = set.seconds,
-                onChange = { sec -> onChange { it.copy(seconds = sec) } },
-                step = if (type == ExerciseType.DISTANCE_TIME) 60 else 15,
-                onStep = haptics::tick,
-                modifier = Modifier.weight(1f)
-            )
+        // Same widths as the column labels above: the first box is wider (weights have decimals).
+        val fields = fieldsFor(type)
+        fields.forEachIndexed { i, field ->
+            if (i > 0) Spacer(Modifier.width(8.dp))
+            SetValueBox(refFor(field), set, type, Modifier.weight(if (i == 0 && fields.size > 1) 1.25f else 1f))
         }
         Spacer(Modifier.width(8.dp))
         CheckButton(done = set.isCompleted, onClick = onToggle)
@@ -1251,7 +1269,7 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
                     progress = remaining / totalMillis.toFloat(),
                     modifier = Modifier.size(56.dp),
                     strokeWidth = 5.dp,
-                    color = P.accentSecondary
+                    color = P.accentPrimary
                 ) {
                     Text(formatClock((remaining + 999) / 1000), style = AppType.caption.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = P.textPrimary)
                 }
@@ -1284,7 +1302,7 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
                 CircleIconButton(Icons.Rounded.SkipNext, "Skip rest", {
                     haptics.tick()
                     LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-                }, size = 36.dp, container = P.accentSecondarySoft, tint = P.accentSecondary)
+                }, size = 36.dp, container = P.bgControl, tint = P.textPrimary)
             }
         }
     }

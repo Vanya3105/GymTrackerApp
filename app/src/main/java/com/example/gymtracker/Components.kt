@@ -7,6 +7,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Animatable
@@ -336,10 +337,11 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? 
     ) {
         Text(title, style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) {
+            // Quiet on purpose: the accent is kept for the screen's main action.
             Text(
                 action,
                 style = AppType.label,
-                color = P.accentPrimary,
+                color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onAction).padding(horizontal = 6.dp, vertical = 4.dp)
             )
         }
@@ -362,15 +364,26 @@ fun StatTile(value: String, label: String, modifier: Modifier = Modifier, valueC
     }
 }
 
+/** A small drawn scene rather than an icon in a grey circle: soft rings, the icon, a few sparks. */
 @Composable
 fun EmptyState(icon: ImageVector, title: String, body: String, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier.size(56.dp).clip(CircleShape).background(P.bgControl),
-            contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(26.dp)) }
-        Spacer(Modifier.height(12.dp))
+        Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = center
+                drawCircle(P.borderSubtle, size.minDimension / 2 - 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
+                drawCircle(P.bgControl, size.minDimension * 0.34f, c)
+                // Sparks at fixed spots on the outer ring.
+                listOf(-40f to 4.dp, 200f to 3.dp, 110f to 2.5.dp).forEach { (deg, r) ->
+                    val a = Math.toRadians(deg.toDouble())
+                    val ring = size.minDimension / 2 - 1.dp.toPx()
+                    drawCircle(P.accentPrimary.copy(alpha = 0.55f), r.toPx(), Offset(c.x + ring * kotlin.math.cos(a).toFloat(), c.y + ring * kotlin.math.sin(a).toFloat()))
+                }
+            }
+            Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.height(14.dp))
         Text(title, style = AppType.bodyStrong, color = P.textPrimary)
         Spacer(Modifier.height(4.dp))
         Text(body, style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = P.textSecondary, textAlign = TextAlign.Center)
@@ -525,7 +538,7 @@ fun NumberStepper(
         } else {
             Text(value.ifEmpty { "0" }, style = AppType.number, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
-        StepperButton(Icons.Rounded.Add, "Increase", enabled, P.accentPrimary, onPlus)
+        StepperButton(Icons.Rounded.Add, "Increase", enabled, P.textSecondary, onPlus)
     }
 }
 
@@ -719,57 +732,77 @@ fun DistanceStepper(
     )
 }
 
-/** Smooth line chart with a soft fill that draws itself in from left to right. */
+/**
+ * Smooth line chart with a soft fill that draws itself in from left to right. One readout above
+ * it (the latest point, or the one you tap or drag to) instead of a label on every point; the
+ * axis only names the first and last dates.
+ */
 @Composable
 fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier, label: (Float) -> String = ::formatWeightNumber) {
     if (points.size < 2) return
     val P = LocalPalette.current
     val reveal = remember(points) { Animatable(0f) }
     LaunchedEffect(points) { reveal.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+    var selected by remember(points) { mutableIntStateOf(points.lastIndex) }
 
     val maxV = points.maxOf { it.second }
     val minV = points.minOf { it.second }
     val range = (maxV - minV).takeIf { it > 0f } ?: 1f
 
     Column(modifier) {
-        Canvas(Modifier.fillMaxWidth().height(96.dp)) {
-            val padY = 10.dp.toPx()
-            val padX = 6.dp.toPx()
-            val stepX = (size.width - padX * 2) / (points.size - 1)
-            val pts = points.mapIndexed { i, (_, v) ->
-                Offset(padX + i * stepX, size.height - padY - (v - minV) / range * (size.height - padY * 2))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(label(points[selected].second), style = AppType.number, color = P.textPrimary)
+            Spacer(Modifier.width(6.dp))
+            Text(points[selected].first, style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(bottom = 1.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        BoxWithConstraints(Modifier.fillMaxWidth().height(96.dp)) {
+            val widthPx = constraints.maxWidth.toFloat()
+            fun nearest(x: Float): Int {
+                val padX = 6f * (widthPx / maxWidth.value) // 6.dp in px
+                val stepX = (widthPx - padX * 2) / (points.size - 1)
+                return ((x - padX) / stepX).roundToInt().coerceIn(0, points.lastIndex)
             }
-            val line = Path().apply {
-                moveTo(pts[0].x, pts[0].y)
-                for (i in 1 until pts.size) {
-                    val prev = pts[i - 1]
-                    val cur = pts[i]
-                    val midX = (prev.x + cur.x) / 2
-                    cubicTo(midX, prev.y, midX, cur.y, cur.x, cur.y)
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(points) { detectTapGestures { selected = nearest(it.x) } }
+                    .pointerInput(points) { detectHorizontalDragGestures { change, _ -> selected = nearest(change.position.x) } }
+            ) {
+                val padY = 10.dp.toPx()
+                val padX = 6.dp.toPx()
+                val stepX = (size.width - padX * 2) / (points.size - 1)
+                val pts = points.mapIndexed { i, (_, v) ->
+                    Offset(padX + i * stepX, size.height - padY - (v - minV) / range * (size.height - padY * 2))
                 }
-            }
-            val fill = Path().apply {
-                addPath(line)
-                lineTo(pts.last().x, size.height)
-                lineTo(pts.first().x, size.height)
-                close()
-            }
-            clipRect(right = size.width * reveal.value + 6.dp.toPx()) {
-                drawPath(fill, Brush.verticalGradient(listOf(P.accentPrimary.copy(alpha = 0.22f), Color.Transparent)))
-                drawPath(line, P.accentPrimary, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
-                pts.forEach { pt ->
-                    drawCircle(P.bgCard, 5.dp.toPx(), pt)
-                    drawCircle(P.accentPrimary, 3.dp.toPx(), pt)
+                val line = Path().apply {
+                    moveTo(pts[0].x, pts[0].y)
+                    for (i in 1 until pts.size) {
+                        val prev = pts[i - 1]
+                        val cur = pts[i]
+                        val midX = (prev.x + cur.x) / 2
+                        cubicTo(midX, prev.y, midX, cur.y, cur.x, cur.y)
+                    }
+                }
+                val fill = Path().apply {
+                    addPath(line)
+                    lineTo(pts.last().x, size.height)
+                    lineTo(pts.first().x, size.height)
+                    close()
+                }
+                clipRect(right = size.width * reveal.value + 6.dp.toPx()) {
+                    drawPath(fill, Brush.verticalGradient(listOf(P.accentPrimary.copy(alpha = 0.18f), Color.Transparent)))
+                    drawPath(line, P.accentPrimary, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+                    val pt = pts[selected]
+                    drawLine(P.borderStrong, Offset(pt.x, 0f), Offset(pt.x, size.height), strokeWidth = 1.dp.toPx())
+                    drawCircle(P.bgCard, 6.dp.toPx(), pt)
+                    drawCircle(P.accentPrimary, 4.dp.toPx(), pt)
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            points.forEach { (label, v) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label(v), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
-                    Text(label, style = AppType.caption, color = P.textTertiary)
-                }
-            }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            Text(points.first().first, style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1f))
+            Text(points.last().first, style = AppType.caption, color = P.textTertiary)
         }
     }
 }
@@ -886,7 +919,7 @@ fun Color.lighten(amount: Float) = Color(red + (1 - red) * amount, green + (1 - 
 fun toneColors(tone: SuggestionTone, P: GymPalette): Pair<Color, Color> = when (tone) {
     SuggestionTone.GOOD -> P.successSurface to P.successText
     SuggestionTone.CAUTION -> P.warningSurface to P.warningText
-    SuggestionTone.NEUTRAL -> P.accentSecondarySoft to P.accentSecondary
+    SuggestionTone.NEUTRAL -> P.bgControl to P.textSecondary
 }
 
 // ============================================================================

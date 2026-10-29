@@ -1,6 +1,9 @@
 package com.example.gymtracker
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -151,10 +154,13 @@ private fun WeekView(
             }
             CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next week", { weekOffset++ }, enabled = weekOffset < 0)
         }
-        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatTile("${week.workouts.size}", "Workouts", Modifier.weight(1f))
-            StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
-            StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
+        // A row of zeros says nothing: the totals only show for weeks with workouts.
+        AnimatedVisibility(week.workouts.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile("${week.workouts.size}", if (week.workouts.size == 1) "Workout" else "Workouts", Modifier.weight(1f))
+                StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
+                StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
+            }
         }
         AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_list") { offset ->
             val workouts = remember(history, offset, program) { computeWeekSummary(history, offset, userProfile.splitProgram).workouts }
@@ -166,7 +172,8 @@ private fun WeekView(
                 workoutList(
                     workouts, history, onOpen, onDelete, onViewPhoto,
                     emptyTitle = if (offset == 0) "No workouts yet this week" else "A rest week",
-                    emptyText = if (offset == 0) "Finished workouts show up here." else "Nothing was logged that week."
+                    emptyText = if (offset == 0) history.firstOrNull()?.let { "Your last one was ${it.splitTitle}, ${relativeDay(it.id)}." } ?: "Finished workouts show up here."
+                    else "Nothing was logged that week."
                 )
             }
         }
@@ -297,7 +304,7 @@ private fun LazyListScope.workoutList(
     onViewPhoto: (String) -> Unit,
     emptyTitle: String,
     emptyText: String,
-    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.FitnessCenter
+    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector = AppIcons.Today
 ) {
     if (workouts.isEmpty()) {
         item(key = "empty") { EmptyState(emptyIcon, emptyTitle, emptyText, Modifier.enterAnimation()) }
