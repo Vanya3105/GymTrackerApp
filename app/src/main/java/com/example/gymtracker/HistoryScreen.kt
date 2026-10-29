@@ -38,16 +38,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 private enum class HistoryMode { WEEK, MONTH }
+
+/** Workouts per exercise ([historyByExercise]) for the cards' summaries; null outside History. */
+private val LocalHistoryIndex = staticCompositionLocalOf<Map<String, List<CompletedWorkout>>?> { null }
 
 @Composable
 fun HistoryScreen(
@@ -61,6 +67,8 @@ fun HistoryScreen(
     var pendingDelete by remember { mutableStateOf<CompletedWorkout?>(null) }
     var photoToView by remember { mutableStateOf<String?>(null) }
 
+    val byExercise = remember(history) { historyByExercise(history) }
+    CompositionLocalProvider(LocalHistoryIndex provides byExercise) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 12.dp)) {
             Text("History", style = AppType.display, color = P.textPrimary)
@@ -83,6 +91,7 @@ fun HistoryScreen(
             }
         }
     }
+    }
 
     pendingDelete?.let { workout ->
         AlertDialog(
@@ -102,8 +111,9 @@ fun HistoryScreen(
     }
 
     photoToView?.let { path ->
-        val bmp = remember(path) { PhotoStorage.loadImageBitmap(path) }
-        if (bmp == null) photoToView = null
+        val photo = rememberPhoto(path)
+        val bmp = photo.bitmap
+        if (bmp == null) { if (!photo.loading) photoToView = null }
         else AppBottomSheet(onDismiss = { photoToView = null }) {
             Image(
                 bitmap = bmp,
@@ -182,7 +192,9 @@ private fun MonthView(
         val cal = Calendar.getInstance().apply { set(year, month, 1) }
         Triple(cal.get(Calendar.DAY_OF_WEEK) - 1, cal.getActualMaximum(Calendar.DAY_OF_MONTH), DateUtils.formatMonthTitle(cal.time))
     }
-    val workoutsThisMonth = byDate.keys.count { it.startsWith(String.format(Locale.US, "%04d-%02d", year, month + 1)) }
+    // "yyyy-MM-" for this month; day keys are built from it.
+    val monthPrefix = remember(year, month) { String.format(Locale.US, "%04d-%02d-", year, month + 1) }
+    val workoutsThisMonth = byDate.keys.count { it.startsWith(monthPrefix) }
     fun previousMonth() { if (month == 0) { month = 11; year-- } else month-- }
     fun nextMonth() { if (month == 11) { month = 0; year++ } else month++ }
 
@@ -223,7 +235,7 @@ private fun MonthView(
                                 Spacer(Modifier.weight(1f).height(42.dp))
                                 continue
                             }
-                            val key = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, day)
+                            val key = monthPrefix + if (day < 10) "0$day" else "$day"
                             val trained = byDate.containsKey(key)
                             val selected = key == selectedKey
                             val isToday = key == todayKey
@@ -314,7 +326,7 @@ fun WorkoutHistoryCard(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val photo = remember(workout.photoPath) { PhotoStorage.loadImageBitmap(workout.photoPath) }
+    val photo = rememberPhoto(workout.photoPath)
     val sets = remember(workout.exercises) { workout.exercises.sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } } }
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -373,10 +385,11 @@ fun WorkoutHistoryCard(
             Spacer(Modifier.height(8.dp))
             Text("Skipped: ${workout.skippedExercises.joinToString(", ")}", style = AppType.caption, color = P.warningText)
         }
-        if (photo != null && workout.photoPath != null) {
+        val bitmap = photo.bitmap
+        if (bitmap != null && workout.photoPath != null) {
             Spacer(Modifier.height(12.dp))
             Image(
-                bitmap = photo,
+                bitmap = bitmap,
                 contentDescription = "Workout photo",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -385,6 +398,10 @@ fun WorkoutHistoryCard(
                     .clip(RoundedCornerShape(14.dp))
                     .pressable(pressedScale = 0.98f) { onViewPhoto(workout.photoPath) }
             )
+        } else if (photo.loading) {
+            // Same size as the photo, so the card doesn't jump when it arrives.
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp)).background(LocalPalette.current.bgControl))
         }
     }
 }
@@ -396,10 +413,12 @@ private const val SUMMARY_ROWS = 4
 private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<CompletedWorkout>) {
     val P = LocalPalette.current
     val unit = Units.current
-    val rows = remember(workout, allHistory, unit) {
-        val earlier = allHistory.filter { it.id < workout.id }
+    val byExercise = LocalHistoryIndex.current
+    val rows = remember(workout, allHistory, byExercise, unit) {
         workout.exercises.filter { !it.isSkipped }.map { ex ->
             val best = bestSetOf(ex.sets, ex.type)
+            // Only earlier workouts that have this exercise: same records, without scanning everything.
+            val earlier = (byExercise?.get(ignoreCaseKey(ex.name)) ?: allHistory).filter { it.id < workout.id }
             val records = computeExerciseRecords(ex.name, earlier)
             val isBest = ex.sets.any { isSetPersonalRecord(it, records, ex.type) }
             Triple(ex, best, isBest)
@@ -423,4 +442,22 @@ private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<Complete
             Text(if (more == 1) "+1 more exercise" else "+$more more exercises", style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
         }
     }
+}
+
+/** A workout photo, or that it's still loading. */
+private class PhotoState(val bitmap: ImageBitmap?, val loading: Boolean)
+
+/**
+ * A photo from [PhotoStorage]: at once when it's already decoded, otherwise decoded off the main
+ * thread (a 1400 px JPEG takes tens of milliseconds, a dropped frame or two mid-scroll).
+ */
+@Composable
+private fun rememberPhoto(path: String?): PhotoState {
+    if (path.isNullOrBlank()) return PhotoState(null, loading = false)
+    val cached = remember(path) { PhotoStorage.cached(path) }
+    if (cached != null) return PhotoState(cached, loading = false)
+    val state by produceState(PhotoState(null, loading = true), path) {
+        value = PhotoState(withContext(Dispatchers.IO) { PhotoStorage.loadImageBitmap(path) }, loading = false)
+    }
+    return state
 }

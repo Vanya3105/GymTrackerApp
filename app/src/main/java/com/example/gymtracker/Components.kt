@@ -25,6 +25,21 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.node.DelegatableNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.DrawModifierNode
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -84,23 +99,73 @@ import kotlinx.coroutines.delay
 // PRESS FEEDBACK
 // ============================================================================
 
-/** Clickable with ripple plus a small springy scale-down while pressed. */
+/**
+ * Clickable with ripple plus a small springy scale-down while pressed.
+ *
+ * The scale is part of the click's indication (a Modifier.Node), not a `composed` modifier with
+ * its own state and graphics layer: nothing is allocated at composition, and the interaction
+ * source is only created on the first touch. That matters because almost every tappable thing
+ * in the app (cards, chips, calendar days, buttons) uses this.
+ */
 fun Modifier.pressable(
     enabled: Boolean = true,
     pressedScale: Float = 0.97f,
     role: Role = Role.Button,
     onClick: () -> Unit
-): Modifier = composed {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed && enabled) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = 700f),
-        label = "press_scale"
-    )
-    this
-        .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = role, onClick = onClick)
+): Modifier = clickable(
+    interactionSource = null,
+    indication = PressScaleIndication.of(pressedScale),
+    enabled = enabled,
+    role = role,
+    onClick = onClick
+)
+
+/** Ripple, with the content scaled down while held. */
+private class PressScaleIndication private constructor(private val pressedScale: Float) : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode =
+        PressScaleNode(interactionSource, pressedScale, RIPPLE.create(interactionSource))
+
+    override fun equals(other: Any?) = other is PressScaleIndication && other.pressedScale == pressedScale
+    override fun hashCode() = pressedScale.hashCode()
+
+    companion object {
+        private val RIPPLE = ripple()
+        private val cache = HashMap<Float, PressScaleIndication>()
+        fun of(pressedScale: Float) = cache.getOrPut(pressedScale) { PressScaleIndication(pressedScale) }
+    }
+}
+
+private class PressScaleNode(
+    private val source: InteractionSource,
+    private val pressedScale: Float,
+    ripple: DelegatableNode
+) : DelegatingNode(), DrawModifierNode {
+    private val scale = Animatable(1f)
+
+    init {
+        delegate(ripple)
+    }
+
+    override fun onAttach() {
+        coroutineScope.launch {
+            val held = ArrayList<PressInteraction.Press>(1)
+            source.interactions.collect { interaction ->
+                when (interaction) {
+                    is PressInteraction.Press -> held += interaction
+                    is PressInteraction.Release -> held -= interaction.press
+                    is PressInteraction.Cancel -> held -= interaction.press
+                    else -> return@collect
+                }
+                val target = if (held.isEmpty()) 1f else pressedScale
+                launch { scale.animateTo(target, spring(dampingRatio = 0.55f, stiffness = 700f)) }
+            }
+        }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val s = scale.value
+        if (s == 1f) drawContent() else scale(s) { this@draw.drawContent() }
+    }
 }
 
 // ============================================================================
@@ -745,16 +810,37 @@ fun <S : Comparable<S>> AnimatedContentTransitionScope<S>.pageTransition(): Cont
         .togetherWith(slideOutHorizontally(spec) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(150)))
 }
 
-/** Fades and lifts content in on first appearance, staggered by [index]. */
-fun Modifier.enterAnimation(index: Int = 0): Modifier = composed {
-    val progress = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(40L * index.coerceAtMost(8))
-        progress.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessLow))
+/**
+ * Fades and lifts content in on first appearance, staggered by [index]. A Modifier.Node: the
+ * animation only updates the layer, so it costs no recomposition or relayout per frame.
+ */
+fun Modifier.enterAnimation(index: Int = 0): Modifier = this then EnterAnimationElement(index)
+
+private data class EnterAnimationElement(val index: Int) : ModifierNodeElement<EnterAnimationNode>() {
+    override fun create() = EnterAnimationNode(index)
+    // Like a remember without keys: a new index doesn't replay it.
+    override fun update(node: EnterAnimationNode) {}
+}
+
+private class EnterAnimationNode(private val index: Int) : Modifier.Node(), LayoutModifierNode {
+    private val progress = Animatable(0f)
+
+    override fun onAttach() {
+        coroutineScope.launch {
+            delay(40L * index.coerceAtMost(8))
+            progress.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessLow))
+        }
     }
-    graphicsLayer {
-        alpha = progress.value
-        translationY = (1f - progress.value) * 24.dp.toPx()
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) {
+            placeable.placeWithLayer(0, 0) {
+                val p = progress.value
+                alpha = p
+                translationY = (1f - p) * 24.dp.toPx()
+            }
+        }
     }
 }
 

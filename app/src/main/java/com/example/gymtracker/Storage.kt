@@ -52,8 +52,16 @@ object LocalStorage {
     private val pendingSnapshot = AtomicReference<String?>(null)
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var refreshContext: Context? = null
-    private val refreshRunnable = Runnable { refreshContext?.let(::refreshSurfacesNow) }
+    @Volatile private var refreshContext: Context? = null
+    // Redrawing widgets, the lock screen notification and the watch state took 13–60 ms per edit
+    // on the main thread, right when the check-button and rest-timer animations run. All of it
+    // (AppWidgetManager, NotificationManager, the Wear data client) is fine off the main thread.
+    private val surfaceLock = Any()
+    private val surfaceExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "gym-surfaces").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 }
+    }
+    // The debounce stays on the main handler (just a timer); the work goes to the surface thread.
+    private val refreshRunnable = Runnable { refreshContext?.let { ctx -> surfaceExecutor.execute { refreshSurfacesNow(ctx) } } }
 
     private fun storeFile(context: Context) = File(context.applicationContext.filesDir, FILE_NAME)
     private fun previousFile(file: File) = File(file.parentFile, "${file.name}.bak")
@@ -193,7 +201,8 @@ object LocalStorage {
         }
     }
 
-    private fun refreshSurfacesNow(appCtx: Context) {
+    /** Serialized: runs on [surfaceExecutor], or on the caller's thread from [flush]. */
+    private fun refreshSurfacesNow(appCtx: Context) = synchronized(surfaceLock) {
         GymWidgetProvider.refreshAllWidgets(appCtx)
         MuscleFatigueWidgetProvider.refreshAll(appCtx)
         SquarePulseWidgetProvider.refreshAll(appCtx)
