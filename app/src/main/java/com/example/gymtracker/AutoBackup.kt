@@ -183,7 +183,7 @@ object AutoBackup {
     }
 }
 
-/** A folder picked with ACTION_OPEN_DOCUMENT_TREE (Drive, Samsung Cloud, Downloads, ...). */
+/** A folder picked with ACTION_OPEN_DOCUMENT_TREE (Google Drive, OneDrive, a local folder, ...). */
 private class SafFolder(context: Context, private val tree: Uri) : BackupFolder {
     private val resolver = context.contentResolver
     private val rootId = DocumentsContract.getTreeDocumentId(tree)

@@ -413,7 +413,7 @@ private fun AutoBackupSection() {
     if (!status.isOn) {
         Text("Automatic backup", style = AppType.bodyStrong, color = P.textPrimary)
         Text(
-            "Saves a copy to a folder you choose after every workout. Pick a Google Drive or Samsung Cloud folder and a new phone can get everything back.",
+            "Saves a copy to a folder you choose after every workout. Pick a Google Drive or OneDrive folder and a new phone can get everything back.",
             style = AppType.caption,
             color = P.textSecondary,
             modifier = Modifier.padding(top = 2.dp)
