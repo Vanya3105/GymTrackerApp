@@ -53,7 +53,9 @@ fun SplitPicker(
     onEdit: ((SplitProgramInfo) -> Unit)? = null,
     /** "Customize" / "Edit" on the current split's card. */
     cardActionLabel: String? = null,
-    onCardAction: (() -> Unit)? = null
+    onCardAction: (() -> Unit)? = null,
+    /** False when already inside a card, so it isn't a card in a card. */
+    contained: Boolean = true
 ) {
     val P = LocalPalette.current
     var searching by remember { mutableStateOf(false) }
@@ -66,14 +68,16 @@ fun SplitPicker(
         contentKey = { it.id },
         transitionSpec = { fadeIn(tween(220, delayMillis = 60)).togetherWith(fadeOut(tween(120))) },
         label = "current_split"
-    ) { CurrentSplitCard(it, cardActionLabel, onCardAction) }
+    ) { CurrentSplitCard(it, cardActionLabel, onCardAction, contained) }
     Spacer(Modifier.height(4.dp))
-    Text(
-        "Don't see yours? Build your own",
-        style = AppType.label,
-        color = P.accentPrimary,
-        modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onBuild("") }.padding(vertical = 10.dp, horizontal = 4.dp)
-    )
+    Row(
+        Modifier.clip(RoundedCornerShape(8.dp)).pressable { onBuild("") }.padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Rounded.Add, null, tint = P.textSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Build your own split", style = AppType.label, color = P.textPrimary)
+    }
 
     if (searching) {
         SplitPickerSheet(
@@ -107,9 +111,9 @@ private fun SearchBarButton(hint: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, onAction: (() -> Unit)?) {
+private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, onAction: (() -> Unit)?, contained: Boolean) {
     val P = LocalPalette.current
-    AppCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
+    val content: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Your split", style = AppType.caption, color = P.textSecondary)
@@ -119,8 +123,8 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
                 Text(
                     actionLabel,
                     style = AppType.label,
-                    color = P.accentPrimary,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onAction).padding(horizontal = 8.dp, vertical = 6.dp)
+                    color = P.textPrimary,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(P.bgControl).pressable(onClick = onAction).padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
@@ -138,6 +142,8 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
             }
         }
     }
+    if (contained) AppCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp), content = content)
+    else Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), content = content)
 }
 
 fun daysLabel(days: Int) = if (days == 1) "1 day a week" else "$days days a week"
@@ -173,7 +179,7 @@ fun SplitPickerSheet(
                 Text(
                     "Done",
                     style = AppType.label,
-                    color = P.accentPrimary,
+                    color = P.textPrimary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onDismiss).padding(8.dp)
                 )
             }
