@@ -12,7 +12,9 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -83,10 +85,18 @@ fun ProgressScreen(
                     contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
                     shown.forEachIndexed { idx, entry ->
-                        if (idx > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                        WeighInRow(entry, weightHistory.getOrNull(idx + 1), onDelete = { haptics.tick(); onDeleteWeight(entry.id) })
+                        key(entry.id) {
+                            if (idx > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                            WeighInRow(entry, weightHistory.getOrNull(idx + 1), onDelete = { haptics.confirm(); onDeleteWeight(entry.id) })
+                        }
                     }
                 }
+                Text(
+                    "Swipe a weigh-in to the left to delete it.",
+                    style = AppType.caption,
+                    color = P.textTertiary,
+                    modifier = Modifier.padding(start = 4.dp, top = 6.dp)
+                )
             }
         }
 
@@ -230,11 +240,23 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
     }
 }
 
+/** Swipe left to delete: no delete button on every row, and no accidental taps. */
 @Composable
 private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: () -> Unit) {
     val P = LocalPalette.current
     val diff = prev?.let { roundedChange(entry.weightKg - it.weightKg) }
-    Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    val dismiss = rememberSwipeToDismissBoxState()
+    SwipeToDismissBox(
+        state = dismiss,
+        enableDismissFromStartToEnd = false,
+        onDismiss = { onDelete() },
+        backgroundContent = {
+            Box(Modifier.fillMaxSize().background(P.dangerSurface).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
+                Icon(Icons.Rounded.DeleteOutline, "Delete", tint = P.dangerText)
+            }
+        }
+    ) {
+    Row(Modifier.background(P.bgCard).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(formatWeightKg(entry.weightKg), style = AppType.number, color = P.textPrimary)
             Text(entry.displayDate.substringBefore(" •"), style = AppType.caption, color = P.textSecondary)
@@ -246,28 +268,32 @@ private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: (
                 color = P.textSecondary
             )
         }
-        CircleIconButton(Icons.Rounded.Close, "Delete weigh-in", onDelete, size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
+    }
     }
 }
 
-/** Every muscle as a compact tile, two per row; how it's worked out is one tap away. */
+/**
+ * Every muscle as a plain row, least rested first: no boxes inside the card. When nothing needs
+ * rest the header says so in one sentence and the rows only carry this week's sets.
+ */
 @Composable
 private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     var explain by rememberSaveable { mutableStateOf(false) }
-    AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)), contentPadding = PaddingValues(12.dp)) {
-        Row(Modifier.padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            val ready = items.count { it.status == RecoveryStatus.READY }
+    val sorted = remember(items) { items.sortedBy { it.recoveryPercent } }
+    val ready = items.count { it.status == RecoveryStatus.READY }
+    AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)), contentPadding = PaddingValues(vertical = 6.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (ready == items.size) "Everything's rested" else "$ready of ${items.size} muscles rested",
-                style = AppType.label,
-                color = P.textSecondary,
+                if (ready == items.size) "Everything's recovered" else "${items.size - ready} of ${items.size} still recovering",
+                style = AppType.bodyStrong,
+                color = P.textPrimary,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 if (explain) "Hide" else "How it works",
                 style = AppType.label,
-                color = P.accentPrimary,
+                color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
             )
         }
@@ -280,43 +306,42 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
                     "the set count turns green inside that range.",
                 style = AppType.caption,
                 color = P.textSecondary,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp)
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
             )
         }
-        items.chunked(2).forEachIndexed { row, pair ->
-            if (row > 0) Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { RecoveryTile(it, Modifier.weight(1f)) }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
+        sorted.forEachIndexed { i, item ->
+            if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
+            RecoveryRow(item)
         }
     }
 }
 
 @Composable
-private fun RecoveryTile(item: MuscleRecoveryItem, modifier: Modifier = Modifier) {
+private fun RecoveryRow(item: MuscleRecoveryItem) {
     val P = LocalPalette.current
     val color = recoveryColor(item.status, P)
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(item.muscleGroup, style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)
+    val rested = item.status == RecoveryStatus.READY
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
+            val sets = if (item.weeklyWorkingSets == 1) "1 set this week" else "${item.weeklyWorkingSets} sets this week"
+            val last = item.hoursSinceTrained?.let { h -> when { h < 1 -> "just now"; h < 48 -> "${h}h ago"; else -> "${h / 24} days ago" } } ?: "not trained yet"
+            Text(
+                "$sets · $last",
+                style = AppType.caption.copy(fontFeatureSettings = "tnum"),
+                color = if (item.weeklyWorkingSets in WEEKLY_SET_TARGET) P.successText else P.textSecondary,
+                maxLines = 1
+            )
         }
-        Spacer(Modifier.height(8.dp))
-        AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 4.dp)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (item.weeklyWorkingSets == 1) "1 set this week" else "${item.weeklyWorkingSets} sets this week",
-            style = AppType.caption.copy(fontFeatureSettings = "tnum"),
-            color = if (item.weeklyWorkingSets in WEEKLY_SET_TARGET) P.successText else P.textSecondary,
-            maxLines = 1
-        )
-        Text(
-            item.hoursSinceTrained?.let { h -> when { h < 1 -> "Trained just now"; h < 48 -> "Trained ${h}h ago"; else -> "${h / 24} days ago" } } ?: "Not trained yet",
-            style = AppType.caption,
-            color = P.textTertiary,
-            maxLines = 1
-        )
+        if (rested) {
+            Text("Ready", style = AppType.caption, color = P.textTertiary)
+        } else {
+            Column(Modifier.width(72.dp), horizontalAlignment = Alignment.End) {
+                Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)
+                Spacer(Modifier.height(4.dp))
+                AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 4.dp)
+            }
+        }
     }
 }
 

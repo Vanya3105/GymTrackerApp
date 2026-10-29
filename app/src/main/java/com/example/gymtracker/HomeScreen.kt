@@ -24,6 +24,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -129,14 +130,19 @@ fun HomeScreen(
             val others = splits.filter { it.title != upNext.title }
             if (others.isNotEmpty()) {
                 item { SectionHeader("Other workouts", Modifier.enterAnimation(4)) }
-                itemsIndexed(others, key = { _, s -> s.title }) { i, split ->
-                    SplitRow(
-                        split = split,
-                        doneThisWeek = split.title in week.completedCoreSplits,
-                        lastDone = history.firstOrNull { it.splitTitle == split.title },
-                        onClick = { onStartWorkout(split) },
-                        modifier = Modifier.enterAnimation(5 + i)
-                    )
+                // One grouped list rather than a card per day.
+                item {
+                    AppCard(Modifier.fillMaxWidth().enterAnimation(5), contentPadding = PaddingValues(vertical = 4.dp)) {
+                        others.forEachIndexed { i, split ->
+                            if (i > 0) Box(Modifier.padding(start = 74.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                            SplitRow(
+                                split = split,
+                                doneThisWeek = split.title in week.completedCoreSplits,
+                                lastDone = history.firstOrNull { it.splitTitle == split.title },
+                                onClick = { onStartWorkout(split) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -243,24 +249,27 @@ private fun WeekCard(
 
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpenHistory) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ProgressRing(progress = done / goal.toFloat(), modifier = Modifier.size(72.dp), strokeWidth = 8.dp) {
-                Text("$done/$goal", style = AppType.number.copy(fontSize = AppType.headline.fontSize), color = P.textPrimary)
-            }
-            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text("This week", style = AppType.headline, color = P.textPrimary)
                 Text(
                     when {
-                        done >= goal -> "All $goal workouts done. Nice."
-                        done == 0 -> "$goal workouts planned"
+                        done >= goal -> "All $goal done. Nice work."
+                        done == 0 -> "$goal workouts planned · $programName"
                         else -> "${goal - done} to go · $programName"
                     },
-                    style = AppType.label.copy(fontWeight = FontWeight.Normal),
+                    style = AppType.caption,
                     color = P.textSecondary,
-                    maxLines = 2
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+            // A count reads at a glance; an empty ring at the start of the week looked unfinished.
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("$done", style = AppType.bigNumber, color = if (done > 0) P.textPrimary else P.textTertiary)
+                Text("/$goal", style = AppType.number, color = P.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
+            }
             if (week.workouts.isNotEmpty()) {
+                Spacer(Modifier.width(10.dp))
                 CircleIconButton(
                     icon = Icons.Rounded.IosShare,
                     contentDescription = "Share last workout",
@@ -270,28 +279,33 @@ private fun WeekCard(
                             context, latest.splitTitle, latest.durationSeconds, latest.exercises,
                             history.filter { it.id < latest.id }, bodyWeightKg, latest.photoPath
                         )
-                    }
+                    },
+                    size = 36.dp
                 )
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             listOf("S", "M", "T", "W", "T", "F", "S").forEachIndexed { i, letter ->
                 val day = i + 1 // Calendar.SUNDAY == 1
                 val trained = day in trainedDays
                 val isToday = day == today
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(letter, style = AppType.caption, color = if (isToday) P.textPrimary else P.textTertiary)
+                Column(Modifier.width(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        letter,
+                        style = AppType.caption.copy(fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal),
+                        color = if (isToday) P.textPrimary else P.textTertiary
+                    )
                     Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(if (trained) P.accentPrimary else P.bgControl)
-                            .then(if (isToday && !trained) Modifier.border(1.5.dp, P.accentPrimary, CircleShape) else Modifier),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (trained) Icon(Icons.Rounded.Check, null, tint = P.onAccentPrimary, modifier = Modifier.size(16.dp))
+                    // Trained days are filled; the rest are small marks, so a fresh week isn't a row of empty buttons.
+                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        when {
+                            trained -> Box(Modifier.fillMaxSize().clip(CircleShape).background(P.accentPrimary), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Check, null, tint = P.onAccentPrimary, modifier = Modifier.size(14.dp))
+                            }
+                            isToday -> Box(Modifier.size(8.dp).clip(CircleShape).background(P.accentPrimary))
+                            else -> Box(Modifier.size(6.dp).clip(CircleShape).background(P.borderStrong))
+                        }
                     }
                 }
             }
@@ -302,33 +316,44 @@ private fun WeekCard(
 @Composable
 fun RecoveryStrip(items: List<MuscleRecoveryItem>, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
-    val readyCount = items.count { it.status == RecoveryStatus.READY }
+    val notReady = items.filter { it.status != RecoveryStatus.READY }.sortedBy { it.recoveryPercent }
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Recovery", style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
-            Text(
-                if (readyCount == items.size) "All rested" else "$readyCount of ${items.size} rested",
-                style = AppType.label,
-                color = P.textSecondary
-            )
-            Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = P.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = P.textTertiary, modifier = Modifier.size(16.dp))
         }
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            // Eleven rings don't fit a phone's width: show the least rested; the rest are a tap away.
-            items.sortedBy { it.recoveryPercent }.take(5).forEach { item ->
-                val color = recoveryColor(item.status, P)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    ProgressRing(
-                        progress = item.recoveryPercent / 100f,
-                        modifier = Modifier.size(46.dp),
-                        strokeWidth = 5.dp,
-                        color = color
-                    ) {
-                        Text("${item.recoveryPercent}", style = AppType.caption.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = P.textPrimary)
+        if (notReady.isEmpty()) {
+            // Five green 100s say less than one sentence.
+            Text(
+                "Everything's recovered. Train whatever you like today.",
+                style = AppType.caption,
+                color = P.textSecondary,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        } else {
+            Text(
+                "${notReady.size} of ${items.size} muscles still recovering",
+                style = AppType.caption,
+                color = P.textSecondary,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Spacer(Modifier.height(14.dp))
+            // Only the ones that aren't ready; eleven rings don't fit and rested ones say nothing.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                notReady.take(5).forEach { item ->
+                    val color = recoveryColor(item.status, P)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        ProgressRing(
+                            progress = item.recoveryPercent / 100f,
+                            modifier = Modifier.size(46.dp),
+                            strokeWidth = 5.dp,
+                            color = color
+                        ) {
+                            Text("${item.recoveryPercent}", style = AppType.caption.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"), color = P.textPrimary)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(recoveryLabel(item.muscleGroup), style = AppType.caption, color = P.textSecondary, maxLines = 1)
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text(recoveryLabel(item.muscleGroup), style = AppType.caption, color = P.textSecondary, maxLines = 1)
                 }
             }
         }
@@ -350,8 +375,10 @@ private fun SplitRow(
     modifier: Modifier = Modifier
 ) {
     val P = LocalPalette.current
-    AppCard(modifier = modifier.fillMaxWidth(), onClick = onClick, contentPadding = PaddingValues(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier.fillMaxWidth().pressable(pressedScale = 0.99f, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
             Box(
                 Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(if (doneThisWeek) P.successSurface else P.bgControl),
                 contentAlignment = Alignment.Center
@@ -369,9 +396,6 @@ private fun SplitRow(
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )
             }
-            Box(Modifier.size(36.dp).clip(CircleShape).background(P.accentSoft), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.accentPrimary, modifier = Modifier.size(20.dp))
-            }
-        }
+            Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.textTertiary, modifier = Modifier.size(22.dp))
     }
 }
