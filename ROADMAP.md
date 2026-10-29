@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). Now on branch `everyday-fixes`: steps 1–4 below are done, waiting for the owner's phone test (where to look: leave a workout alone for an hour → "Still training?"; Today → Other workouts → Empty workout; Progress → body weight; Progress → Recovery rows). Next: **step 5, last time's numbers on each set row** (a faint "95 × 10" beside every set, like Strong's "Previous" column). Then Phase 7 in a new order: auto-backup, merging duplicate exercises, CSV export/import.
+Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). Branch `everyday-fixes`: steps 1–4 tested on the phone and pushed. The Previous column (step 5) is done, waiting for the owner's phone test (where to look: start a day you've done before; the Previous column sits between the set number and the weight, and tapping a value copies it). After that, merge `everyday-fixes` into `master` once the owner OKs it, then **Phase 7** in its new order: auto-backup first (branch `phase-7-data`).
 
 ---
 
@@ -133,7 +133,9 @@ From using the app as a new user would, on the emulator:
 - [x] Empty workout: last row of Today's "Other workouts". Starts "Quick workout" with the exercise picker open; its exercises are today's only (adding, removing and reordering leave every day's list alone), no "Use last time's numbers". Today's in-progress card shows the live exercise count
 - [x] One body weight: changing it in Profile logs a weigh-in; deleting the newest weigh-in puts the profile back to the one before; once, a profile weight that differs from the newest weigh-in is logged as today's. Progress compares with the first weigh-in on the chart ("+0.2 lb since Jun 16"), so the arrow and the line agree
 - [x] Recovery counts the last 7 days, and now says so ("8 sets in 7 days"; widget option "Sets in the last 7 days"), instead of "this week" next to Today's calendar week. Tests: `EverydayFixesTest`
-- [ ] Last time's numbers on each set row
+- [x] Previous column (like Strong's): each set row shows the matching set from last time, quiet ("95×8"); a tap copies it into the set. Sets line up by kind and place (warm-up with warm-up, first work set with first work set, drop with drop); "—" when last time had fewer. Last time = this day's last workout if it had the exercise, else the latest workout that did (so quick workouts get it too); no column for an exercise never logged. Replaces the one-line "Last time" under the name. Tests: `PreviousSetsTest`
+- [x] Never-logged exercises: "First time: find a weight you can lift 6–10 times with good form…" instead of "Aim for 6–10 reps at 95 lb" (a placeholder weight presented as advice), and no "Use" button
+- [x] "Use last time's numbers" only shows when last time had at least one of today's exercises (it did nothing otherwise)
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.

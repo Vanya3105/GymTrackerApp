@@ -304,10 +304,10 @@ fun suggestNextWeight(
     if (done.isNotEmpty()) inSession(done, goal, step, unit, bodyLoad)?.let { return it }
     if (past.isNotEmpty()) return plan(past, goal, step, unit, bodyLoad, now, nextTime = false)
 
-    val planned = unit.fromKg(workSets.maxOfOrNull { parseWeightClean(it.weight, 0f) }?.takeIf { it > 0f } ?: unit.toKg(unit.defaultWorkWeight))
+    // Never logged: the weight in the sets is only a placeholder, so don't present it as advice.
     return Suggestion(
-        "Aim for ${goal.text} reps at ${formatKgClean(planned)} ${unit.label}. Hit ${goal.max} on every set, then add ${formatKgClean(step)} ${unit.label}.",
-        SuggestionTone.NEUTRAL, unit.stored(planned)
+        "First time: find a weight you can lift ${goal.text} times with good form. Hit ${goal.max} on every set, then add ${formatKgClean(step)} ${unit.label}.",
+        SuggestionTone.NEUTRAL, ""
     )
 }
 

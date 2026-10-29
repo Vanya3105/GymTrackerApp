@@ -191,10 +191,10 @@ class CoachingTest {
     // --- During the workout ---
 
     @Test
-    fun noHistory_givesTheRangeForThePlannedWeight() {
+    fun noHistory_givesTheRange_butNoMadeUpWeight() {
         val advice = suggestNextWeight("Push", bench(set("60", "", done = false), target = ExerciseTarget(3, 8, 12)), emptyList(), 2.5f, now)!!
-        assertTrue(advice.message, advice.message.contains("8–12"))
-        assertEquals("60", advice.suggestedWeight)
+        assertTrue(advice.message, advice.message.startsWith("First time") && advice.message.contains("8–12"))
+        assertEquals("", advice.suggestedWeight)
     }
 
     @Test
