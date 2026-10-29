@@ -7,11 +7,16 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
@@ -168,6 +173,9 @@ fun ActiveWorkoutScreen(
     }
 
     val active = exercises.withIndex().filter { !it.value.isSkipped }
+    // The set to do next, across the workout: first unfinished set of the first unfinished exercise.
+    val nextUp = active.firstOrNull { iv -> iv.value.sets.any { !it.isCompleted } }
+        ?.let { iv -> iv.value.name to iv.value.sets.indexOfFirst { !it.isCompleted } }
     val skipped = exercises.withIndex().filter { it.value.isSkipped }
     val totalSets = active.sumOf { it.value.sets.size }
     val doneSets = active.sumOf { ex -> ex.value.sets.count { it.isCompleted } }
@@ -249,8 +257,11 @@ fun ActiveWorkoutScreen(
             val to = latestExercises.indexOfFirst { EXERCISE_KEY_PREFIX + it.name == toKey }
             if (from >= 0 && to >= 0) onReorderExercises(from, to)
         },
-        onSwap = { haptics.tick() }
+        onSwap = { haptics.tick() },
+        onDrop = { haptics.drop() },
+        collapsesOnDrag = true
     )
+    val reordering = dragState.isReordering
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -281,7 +292,7 @@ fun ActiveWorkoutScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!isEditingPastWorkout && previousSplitWorkout != null && doneSets == 0) {
+                if (!isEditingPastWorkout && previousSplitWorkout != null && doneSets == 0 && !reordering) {
                     item(key = "copy_last") {
                         AppCard(
                             Modifier.fillMaxWidth().animateItem(),
@@ -336,10 +347,13 @@ fun ActiveWorkoutScreen(
                             lastTime = lastTime,
                             note = note,
                             isDragging = isDragging,
+                            collapsed = reordering,
+                            nextSetIdx = if (!isEditingPastWorkout && nextUp?.first == exercise.name) nextUp.second else -1,
                             splitTitle = split.title,
                             settings = settings,
+                            headerModifier = Modifier.longPressDragHandle(dragState, key, onStart = { haptics.pickUp() }),
                             handleModifier = Modifier
-                                .dragHandle(dragState, key, onStart = { haptics.confirm() })
+                                .dragHandle(dragState, key, onStart = { haptics.pickUp() })
                                 .then(if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["HANDLE"] = it.boundsInRoot() } else Modifier),
                             suggestionModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SUGGESTION"] = it.boundsInRoot() } else Modifier,
                             firstBadgeModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SET_BADGE"] = it.boundsInRoot() } else Modifier,
@@ -391,7 +405,7 @@ fun ActiveWorkoutScreen(
                     }
                 }
 
-                if (skipped.isNotEmpty()) {
+                if (skipped.isNotEmpty() && !reordering) {
                     item(key = "skipped") {
                         AppCard(Modifier.fillMaxWidth().animateItem()) {
                             Text("Skipped today", style = AppType.headline, color = P.textPrimary)
@@ -408,7 +422,7 @@ fun ActiveWorkoutScreen(
                     }
                 }
 
-                item(key = "add") {
+                if (!reordering) item(key = "add") {
                     SecondaryButton(
                         "Add exercise",
                         { haptics.tick(); showPicker = true },
@@ -681,8 +695,13 @@ private fun ExerciseCard(
     lastTime: String?,
     note: String,
     isDragging: Boolean,
+    /** A card is being dragged: show only the header so cards are easy to move past each other. */
+    collapsed: Boolean,
+    /** This card holds the workout's next set; -1 if not. */
+    nextSetIdx: Int,
     splitTitle: String,
     settings: AppSettings,
+    headerModifier: Modifier,
     handleModifier: Modifier,
     suggestionModifier: Modifier,
     firstBadgeModifier: Modifier,
@@ -707,15 +726,22 @@ private fun ExerciseCard(
         }, label = "card_border"
     )
 
+    val workSets = exercise.sets.filter { !it.isWarmupSet }
+    val allDone = workSets.isNotEmpty() && workSets.all { it.isCompleted }
+    val bottomPad by animateDpAsState(if (collapsed) 6.dp else 12.dp, spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow), label = "card_pad")
+
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, borderColor, CardShape)
-            .animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+            .border(1.5.dp, borderColor, CardShape),
         elevated = isDragging,
-        contentPadding = PaddingValues(start = 6.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)
+        contentPadding = PaddingValues(start = 6.dp, end = 10.dp, top = 6.dp, bottom = bottomPad)
     ) {
-        if (inSuperset) {
+        AnimatedVisibility(
+            visible = inSuperset && !collapsed,
+            enter = fadeIn() + expandVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(120)) + shrinkVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+        ) {
             Row(Modifier.padding(start = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Link, null, tint = P.accentSecondary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
@@ -723,8 +749,8 @@ private fun ExerciseCard(
             }
         }
 
-        // Header: handle · name · menu
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Header: handle · name · menu. Long-pressing it drags too, like the handle.
+        Row(headerModifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 handleModifier.size(36.dp, 44.dp),
                 contentAlignment = Alignment.Center
@@ -738,13 +764,30 @@ private fun ExerciseCard(
                     .pressable(pressedScale = 0.99f, onClick = onOpenDetails)
                     .padding(vertical = 2.dp, horizontal = 2.dp)
             ) {
-                Text(exercise.name, style = AppType.headline, color = P.textPrimary, maxLines = 2)
-                val sub = buildList {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        exercise.name,
+                        style = AppType.headline,
+                        color = P.textPrimary,
+                        maxLines = if (collapsed) 1 else 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    AnimatedVisibility(allDone, enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(), exit = scaleOut() + fadeOut()) {
+                        Box(Modifier.padding(start = 6.dp).size(18.dp).clip(CircleShape).background(P.successSurface), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Check, "All sets done", tint = P.successText, modifier = Modifier.size(12.dp))
+                        }
+                    }
+                }
+                val sub = if (collapsed) {
+                    val done = exercise.sets.count { it.isCompleted }
+                    listOfNotNull(exercise.targetMuscle.ifBlank { null }, "$done of ${exercise.sets.size} sets").joinToString(" · ")
+                } else buildList {
                     if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
                     exercise.target?.let { add("Plan ${it.label}") }
                     records.bestSet?.let { add("Best ${formatSet(it, exercise.type)}") }
                 }.joinToString(" · ")
-                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary)
+                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable {
                 onSetExerciseRest(cycleRestPreset(exercise.restSeconds))
@@ -780,7 +823,12 @@ private fun ExerciseCard(
             }
         }
 
-        Column(Modifier.padding(start = 10.dp)) {
+        AnimatedVisibility(
+            visible = !collapsed,
+            enter = fadeIn(tween(220, delayMillis = 80)) + expandVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(100)) + shrinkVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))
+        ) {
+        Column(Modifier.padding(start = 10.dp).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))) {
             exercise.planNote?.let {
                 Text(it, style = AppType.caption, color = P.accentPrimary, modifier = Modifier.padding(top = 2.dp))
             }
@@ -840,6 +888,7 @@ private fun ExerciseCard(
                 if (set.intensityType == "NORMAL" && !set.isWarmup) workNumber++
                 SetRow(
                     set = set,
+                    isNext = setIdx == nextSetIdx,
                     workNumber = workNumber,
                     isPr = isSetPersonalRecord(set, records, exercise.type),
                     type = exercise.type,
@@ -894,6 +943,7 @@ private fun ExerciseCard(
                     }
                 }, Modifier.weight(1f), icon = Icons.Rounded.LocalFireDepartment, height = 40.dp)
             }
+        }
         }
     }
 }
@@ -959,6 +1009,7 @@ private fun SuggestionBox(suggestion: Suggestion, modifier: Modifier, onUse: () 
 @Composable
 private fun SetRow(
     set: SetEntry,
+    isNext: Boolean,
     workNumber: Int,
     isPr: Boolean,
     canDelete: Boolean,
@@ -975,6 +1026,7 @@ private fun SetRow(
 ) {
     val P = LocalPalette.current
     val rowBg by animateColorAsState(if (set.isCompleted) P.successSurface else Color.Transparent, tween(250), label = "set_row")
+    val rowBorder by animateColorAsState(if (isNext && !set.isCompleted) P.accentPrimary.copy(alpha = 0.55f) else Color.Transparent, tween(300), label = "set_next")
     var menuOpen by remember { mutableStateOf(false) }
     var platesOpen by remember { mutableStateOf(false) }
     val (badgeText, badgeFg, badgeBg) = when {
@@ -990,6 +1042,7 @@ private fun SetRow(
             .padding(vertical = 3.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(rowBg)
+            .border(1.5.dp, rowBorder, RoundedCornerShape(12.dp))
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -21,6 +21,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -41,6 +44,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth as CalendarMonthOutlined
+import androidx.compose.material.icons.outlined.Home as HomeOutlined
+import androidx.compose.material.icons.outlined.Insights as InsightsOutlined
+import androidx.compose.material.icons.outlined.Person as PersonOutlined
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Insights
@@ -52,6 +59,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -154,13 +162,26 @@ class Haptics(private val enabled: Boolean, private val view: android.view.View)
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
         view.performHapticFeedback(type)
     }
+
+    /** Picking something up to drag it. */
+    fun pickUp() {
+        if (enabled) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    /** Letting go of a dragged item. */
+    fun drop() {
+        if (!enabled) return
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.GESTURE_END else HapticFeedbackConstants.CLOCK_TICK
+        view.performHapticFeedback(type)
+    }
 }
 
-enum class AppTab(val label: String, val icon: ImageVector) {
-    TODAY("Today", Icons.Rounded.Home),
-    HISTORY("History", Icons.Rounded.CalendarMonth),
-    PROGRESS("Progress", Icons.Rounded.Insights),
-    PROFILE("Profile", Icons.Rounded.Person)
+/** [icon] is shown when selected, [idleIcon] (outlined) otherwise. */
+enum class AppTab(val label: String, val icon: ImageVector, val idleIcon: ImageVector) {
+    TODAY("Today", Icons.Rounded.Home, Icons.Outlined.HomeOutlined),
+    HISTORY("History", Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonthOutlined),
+    PROGRESS("Progress", Icons.Rounded.Insights, Icons.Outlined.InsightsOutlined),
+    PROFILE("Profile", Icons.Rounded.Person, Icons.Outlined.PersonOutlined)
 }
 
 private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
@@ -372,7 +393,7 @@ fun GymTrackerApp(
             }
 
             AnimatedVisibility(
-                visible = activeSplit != null && !workoutExpanded && editingPastWorkout == null,
+                visible = activeSplit != null && !workoutExpanded && editingPastWorkout == null && selectedTab != AppTab.TODAY,
                 enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
                 exit = shrinkVertically(tween(200)) + fadeOut(tween(150))
             ) {
@@ -731,6 +752,10 @@ private fun slideInHorizontallyBy(fraction: Float) =
         (it * fraction).toInt()
     }
 
+/**
+ * One pill slides (with a little overshoot) to the selected tab; the selected icon fills in
+ * and gives a small bounce.
+ */
 @Composable
 private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
     val P = LocalPalette.current
@@ -741,35 +766,60 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
             .background(P.bgCard)
     ) {
         if (P.isDark) Box(Modifier.fillMaxWidth().height(1.dp).background(P.borderSubtle))
-        Row(
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround
+                .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            AppTab.entries.forEach { tab ->
-                val isSelected = tab == selected
-                val iconColor by animateColorAsState(if (isSelected) P.accentPrimary else P.textSecondary, label = "nav_icon")
-                val pillColor by animateColorAsState(if (isSelected) P.accentSoft else P.bgCard.copy(alpha = 0f), label = "nav_pill")
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .pressable(pressedScale = 0.92f, role = Role.Tab) { onSelect(tab) }
-                        .padding(vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(pillColor)
-                            .padding(horizontal = 18.dp, vertical = 5.dp)
-                    ) {
-                        Icon(tab.icon, contentDescription = tab.label, tint = iconColor, modifier = Modifier.size(24.dp))
+            val tabWidth = maxWidth / AppTab.entries.size
+            val pillWidth = 64.dp
+            val pillX by animateDpAsState(
+                tabWidth * selected.ordinal + (tabWidth - pillWidth) / 2,
+                spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
+                label = "nav_pill_x"
+            )
+            Box(
+                Modifier
+                    .padding(top = 4.dp)
+                    .offset(x = pillX)
+                    .size(pillWidth, 34.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(P.accentSoft)
+            )
+            Row(Modifier.fillMaxWidth()) {
+                AppTab.entries.forEach { tab ->
+                    val isSelected = tab == selected
+                    val iconColor by animateColorAsState(if (isSelected) P.accentPrimary else P.textSecondary, label = "nav_icon")
+                    val labelColor by animateColorAsState(if (isSelected) P.textPrimary else P.textSecondary, label = "nav_label")
+                    val bounce = remember { Animatable(1f) }
+                    LaunchedEffect(isSelected) {
+                        if (isSelected) {
+                            bounce.snapTo(0.82f)
+                            bounce.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMedium))
+                        }
                     }
-                    Spacer(Modifier.height(3.dp))
-                    Text(tab.label, style = AppType.caption, color = if (isSelected) P.textPrimary else P.textSecondary)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .pressable(pressedScale = 0.92f, role = Role.Tab) { onSelect(tab) }
+                            .padding(vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(Modifier.height(34.dp), contentAlignment = Alignment.Center) {
+                            Crossfade(isSelected, animationSpec = tween(180), label = "nav_icon_fill") { sel ->
+                                Icon(
+                                    if (sel) tab.icon else tab.idleIcon,
+                                    contentDescription = tab.label,
+                                    tint = iconColor,
+                                    modifier = Modifier.size(24.dp).graphicsLayer { scaleX = bounce.value; scaleY = bounce.value }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(1.dp))
+                        Text(tab.label, style = AppType.caption, color = labelColor)
+                    }
                 }
             }
         }

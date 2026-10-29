@@ -1,6 +1,11 @@
 package com.example.gymtracker
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -56,7 +61,12 @@ fun SplitPicker(
 
     SearchBarButton("Search splits") { searching = true }
     Spacer(Modifier.height(12.dp))
-    CurrentSplitCard(selected, cardActionLabel, onCardAction)
+    AnimatedContent(
+        targetState = selected,
+        contentKey = { it.id },
+        transitionSpec = { fadeIn(tween(220, delayMillis = 60)).togetherWith(fadeOut(tween(120))) },
+        label = "current_split"
+    ) { CurrentSplitCard(it, cardActionLabel, onCardAction) }
     Spacer(Modifier.height(4.dp))
     Text(
         "Don't see yours? Build your own",

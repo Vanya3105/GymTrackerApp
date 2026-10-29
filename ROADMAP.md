@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–6 are merged into `master` (v3.6.0). **Coaching v2** (branch `coaching-v2`) and the **split picker** (branch `split-picker`, built on top of it) are done and wait for the owner to try them on a phone before merging. Next: design polishing of the split picker and builder (the owner will say what to change). After that: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Phases 0–6 are merged into `master` (v3.6.0). Waiting for the owner to try on a phone before merging, stacked in this order: **Coaching v2** (`coaching-v2`), the **split picker** (`split-picker`) and **design polish 1** (`design-polish`). Next: more design polish if the owner wants it, then **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -92,6 +92,13 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Four more built-in splits: Full body 2-day, Bro split, Push / Pull / Legs ×2, PHUL, with starting exercises
 - [x] Split builder (`SplitBuilderScreen.kt`): days a week → each day's muscles (quick layouts PPL / Upper-Lower / Full body / One muscle a day, then tap muscles; days name themselves, rename by hand) → review: name, each day's exercises (remove, add from the library). Nothing is saved until "Create split", which makes it the active split
 - [x] Days are named like the built-in ones where the muscles match ("Push", "Legs", repeated days "Upper A"/"Upper B"), so they reuse those days' exercises and history; new names get starter exercises picked per muscle (`starterExercises`, a B day gets different ones). Tested by `SplitLibraryTest`
+
+## Design polish 1 ✅ (branch `design-polish`, after the split picker)
+- [x] Reordering exercises in a workout: picking one up (grip, or long-press the name) collapses every card to a one-line header with its set count, so cards are easy to move past each other; the held card stays under the finger while the others shrink, and the dropped one stays put while they expand (`DragDropState` scrolls to pin it until the layout stops changing size). "Use last time's numbers", "Skipped" and "Add exercise" step aside while dragging. Haptics: firm on pick-up, tick per swap, soft on drop
+- [x] Program editor: days and each day's exercises reorder by drag (grip or long-press) instead of up/down arrows
+- [x] Workout: the next set to do (across the workout) has an accent outline; an exercise gets a check badge once all its work sets are done
+- [x] Bottom bar: one pill slides to the selected tab with a little overshoot; icons go from outlined to filled with a small bounce. The "workout in progress" bar is hidden on Today, which already has a Resume card
+- [x] Split builder: the day count rolls, day names slide when they change, the name field always shows the default name, clearer note for days that already exist; the "Your split" card crossfades on change
 
 ## Phase 7 — Data in/out
 - [ ] CSV export
