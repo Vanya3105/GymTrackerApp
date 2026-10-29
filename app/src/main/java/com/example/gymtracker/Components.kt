@@ -364,15 +364,26 @@ fun StatTile(value: String, label: String, modifier: Modifier = Modifier, valueC
     }
 }
 
+/** A small drawn scene rather than an icon in a grey circle: soft rings, the icon, a few sparks. */
 @Composable
 fun EmptyState(icon: ImageVector, title: String, body: String, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier.size(56.dp).clip(CircleShape).background(P.bgControl),
-            contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(26.dp)) }
-        Spacer(Modifier.height(12.dp))
+        Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val c = center
+                drawCircle(P.borderSubtle, size.minDimension / 2 - 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
+                drawCircle(P.bgControl, size.minDimension * 0.34f, c)
+                // Sparks at fixed spots on the outer ring.
+                listOf(-40f to 4.dp, 200f to 3.dp, 110f to 2.5.dp).forEach { (deg, r) ->
+                    val a = Math.toRadians(deg.toDouble())
+                    val ring = size.minDimension / 2 - 1.dp.toPx()
+                    drawCircle(P.accentPrimary.copy(alpha = 0.55f), r.toPx(), Offset(c.x + ring * kotlin.math.cos(a).toFloat(), c.y + ring * kotlin.math.sin(a).toFloat()))
+                }
+            }
+            Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.height(14.dp))
         Text(title, style = AppType.bodyStrong, color = P.textPrimary)
         Spacer(Modifier.height(4.dp))
         Text(body, style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = P.textSecondary, textAlign = TextAlign.Center)

@@ -44,14 +44,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth as CalendarMonthOutlined
-import androidx.compose.material.icons.outlined.Home as HomeOutlined
-import androidx.compose.material.icons.outlined.Insights as InsightsOutlined
-import androidx.compose.material.icons.outlined.Person as PersonOutlined
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Insights
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -179,10 +171,10 @@ class Haptics(private val enabled: Boolean, private val view: android.view.View)
 
 /** [icon] is shown when selected, [idleIcon] (outlined) otherwise. */
 enum class AppTab(val label: String, val icon: ImageVector, val idleIcon: ImageVector) {
-    TODAY("Today", Icons.Rounded.Home, Icons.Outlined.HomeOutlined),
-    HISTORY("History", Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonthOutlined),
-    PROGRESS("Progress", Icons.Rounded.Insights, Icons.Outlined.InsightsOutlined),
-    PROFILE("Profile", Icons.Rounded.Person, Icons.Outlined.PersonOutlined)
+    TODAY("Today", AppIcons.TodayFilled, AppIcons.Today),
+    HISTORY("History", AppIcons.HistoryFilled, AppIcons.History),
+    PROGRESS("Progress", AppIcons.ProgressFilled, AppIcons.Progress),
+    PROFILE("Profile", AppIcons.ProfileFilled, AppIcons.Profile)
 }
 
 private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =

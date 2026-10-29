@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through design polish is merged into `master` (2026-10-29). Two branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), then **Watch v2** (`watch-v2`, built on it; needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed). Check on the watch: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview (tap the exercise name, swipe right to go back), finish from the watch, and that the phone's open workout closes itself when the watch finishes it. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Everything through design polish is merged into `master` (2026-10-29). Three branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), **Watch v2** (`watch-v2`, needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed), then **Design polish 2** (`design-polish-2`). Check on the phone: typing set values with the keypad (Next, −/+, Done, back closes it), the one-line coaching and "Use …", "Go lighter for the rest" in an exercise's ⋮ menu, swipe-left to delete a weigh-in, tapping/dragging the body-weight chart, Profile's Age/Body weight editors, light mode. Watch checklist: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview, finish from the watch. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -116,6 +116,16 @@ The watch was only a remote for the current set. Now it can run a whole workout:
 - [x] Finish from the watch, with a confirmation that says how many sets aren't ticked. Saved like Finish → Save on the phone (no photo); the phone's open workout closes itself instead of offering to save it twice. Afterwards a "Workout saved" screen (time, sets, volume, new bests) for 30 minutes, also after finishing on the phone
 - [x] `./gradlew assembleRelease` builds both apps again: the watch asks for the notification permission from Compose (as the phone does) instead of `registerForActivityResult`, which lint flagged because Play services pulls in Fragment 1.1
 - [x] Protocol stays compatible both ways (new fields are optional; v2 in the JSON). Tests: `WatchSyncTest` (start, finish, undo, shorter rest, progress), `WatchLinkTest`, screenshots of every new screen at 40 and 44+ mm
+
+## Design polish 2 (branch `design-polish-2`, after Watch v2)
+From a design review: the app was clean but everything spoke at the same volume.
+- [x] Workout: set values are plain numbers; tapping one opens a keypad (`SetKeypad.kt`: digits, −/+ by the step, Next moves weight → reps → next set), like Strong and Hevy. Four round buttons gone from every set row. Typing rules tested by `SetKeypadTest`
+- [x] Coaching is one quiet line with "Use …" when it applies; "Go lighter for the rest" moved to the exercise menu
+- [x] Accent restraint: orange only for the main action and "now" (Start/Finish/Next, the next set, the rest timer, the selected tab). −/+ buttons, "See all"-style links and hints are neutral; the blue second accent is gone from app screens; selected chips are inverted
+- [x] Fewer zeros and boxes: Today's week shows a count and quiet day marks; recovery is one sentence when nothing needs rest; other days are one grouped list; History hides an empty week's zero totals and points to the last workout; Progress recovery is a plain list, not tiles in a card
+- [x] Body-weight chart: one readout (tap or drag to inspect), first/last dates only. Weigh-ins delete by swiping left instead of an × on each row
+- [x] Profile: Age and Body weight are rows that open an editor; Training split has its own section (no card in a card); Smooth scrolling moved to Advanced
+- [x] Own tab icons (`AppIcons.kt`: dumbbell, calendar, chart, person on one grid and stroke, part-filled when selected) and a drawn empty-state scene
 
 ## Phase 7 — Data in/out
 - [ ] CSV export

@@ -304,7 +304,7 @@ private fun LazyListScope.workoutList(
     onViewPhoto: (String) -> Unit,
     emptyTitle: String,
     emptyText: String,
-    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.FitnessCenter
+    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector = AppIcons.Today
 ) {
     if (workouts.isEmpty()) {
         item(key = "empty") { EmptyState(emptyIcon, emptyTitle, emptyText, Modifier.enterAnimation()) }
