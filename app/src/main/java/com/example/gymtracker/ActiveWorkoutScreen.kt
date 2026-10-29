@@ -851,6 +851,9 @@ private fun ExerciseCard(
 
             if (suggestion != null) SuggestionBox(
                 suggestion = suggestion,
+                alreadyApplied = parseWeightClean(suggestion.suggestedWeight, -1f).let { w ->
+                    exercise.sets.filter { !it.isCompleted && !it.isWarmupSet }.let { todo -> todo.isNotEmpty() && todo.all { it.weightKg == w } }
+                },
                 modifier = suggestionModifier.padding(top = 10.dp),
                 onUse = {
                     haptics.tick()
@@ -975,28 +978,40 @@ private fun RestChooser(label: String, current: Int, onPick: (Int) -> Unit) {
     }
 }
 
+/**
+ * Coaching advice: a quiet surface with a thin edge in the advice's tone. "Use …" only shows
+ * when the sets to do aren't already at that weight.
+ */
 @Composable
-private fun SuggestionBox(suggestion: Suggestion, modifier: Modifier, onUse: () -> Unit, onLighter: () -> Unit) {
+private fun SuggestionBox(suggestion: Suggestion, alreadyApplied: Boolean, modifier: Modifier, onUse: () -> Unit, onLighter: () -> Unit) {
     val P = LocalPalette.current
-    val (bg, fg) = toneColors(suggestion.tone, P)
+    val (_, fg) = toneColors(suggestion.tone, P)
     val icon = when (suggestion.tone) {
         SuggestionTone.GOOD -> Icons.AutoMirrored.Rounded.TrendingUp
         SuggestionTone.CAUTION -> Icons.AutoMirrored.Rounded.TrendingDown
         SuggestionTone.NEUTRAL -> Icons.Rounded.Lightbulb
     }
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(bg).padding(12.dp)) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(12.dp))
+            .background(P.bgControl.copy(alpha = if (P.isDark) 0.7f else 1f))
+    ) {
+        Box(Modifier.width(3.dp).fillMaxHeight().background(fg))
+        Column(Modifier.padding(start = 10.dp, end = 12.dp, top = 10.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp).padding(top = 1.dp))
+            Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp).padding(top = 1.dp))
             Spacer(Modifier.width(8.dp))
             Text(suggestion.message, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
         }
-        if (!suggestion.forNextTime) Row(Modifier.padding(top = 10.dp, start = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (suggestion.suggestedWeight.isNotBlank()) {
+        if (!suggestion.forNextTime) Row(Modifier.padding(top = 8.dp, start = 18.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (suggestion.suggestedWeight.isNotBlank() && !alreadyApplied) {
                 Text(
                     "Use ${formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))}",
                     style = AppType.label,
                     color = fg,
-                    modifier = Modifier.clip(RoundedCornerShape(50)).background(P.bgCard.copy(alpha = if (P.isDark) 0.35f else 0.8f)).pressable(onClick = onUse).padding(horizontal = 12.dp, vertical = 6.dp)
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(fg.copy(alpha = 0.14f)).pressable(onClick = onUse).padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
             Text(
@@ -1005,6 +1020,7 @@ private fun SuggestionBox(suggestion: Suggestion, modifier: Modifier, onUse: () 
                 color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(50)).pressable(onClick = onLighter).padding(horizontal = 10.dp, vertical = 6.dp)
             )
+        }
         }
     }
 }

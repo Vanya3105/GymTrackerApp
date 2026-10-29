@@ -391,11 +391,13 @@ fun ToggleRow(title: String, subtitle: String? = null, checked: Boolean, onCheck
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = P.onAccentPrimary,
+                // A white thumb on the accent track, like the system switches.
+                checkedThumbColor = Color.White,
                 checkedTrackColor = P.accentPrimary,
-                uncheckedThumbColor = P.textSecondary,
+                checkedBorderColor = Color.Transparent,
+                uncheckedThumbColor = P.textTertiary,
                 uncheckedTrackColor = P.bgControl,
-                uncheckedBorderColor = P.borderStrong
+                uncheckedBorderColor = Color.Transparent
             )
         )
     }

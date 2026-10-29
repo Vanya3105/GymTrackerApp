@@ -30,7 +30,7 @@ When the user says "continue", that is what they mean.
 - `Engine.kt`: records/1RM, suggestions, rest alarms, notifications, dates.
 - `Models.kt`: data classes. `ExerciseDatabase.kt`: built-in exercise library.
 - Screens: `HomeScreen`, `ActiveWorkoutScreen`, `HistoryScreen`, `ProgressScreen`, `SettingsScreen`, `OnboardingScreen`.
-- Design system: `Theme.kt` (`P` palette, `AppType`), `Components.kt`.
+- Design system: `Theme.kt` (`P` palette, `AppType`; Inter from `res/font/inter.ttf`, `InterDisplay` for headings), `Components.kt`, `Celebration.kt` (confetti, count-up tiles). Full-screen pages over the tabs need `StatusBarScrim()` on top.
 - Widgets + lock screen + share image: `WidgetsAndStoryShare.kt`, `WidgetConfigActivity.kt`.
 - Health Connect: `HealthSync.kt` (writes are called from `LocalStorage`), `HealthPrivacyActivity.kt`.
 - Watch: `WatchSync.kt` (phone side: publishes `watchStateOf`, `WatchListenerService` applies button presses); `:wear` module (the Wear OS app); `:watchlink` module (the protocol both share). Build the watch app with `./gradlew :wear:assembleDebug`. `./gradlew :wear:testDebugUnitTest` renders every watch screen to `wear/build/screenshots/*.png` (no emulator needed).

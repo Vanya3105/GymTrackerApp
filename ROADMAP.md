@@ -102,6 +102,9 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Finish sheet: a check badge pops in (a trophy and "New best!" when records fell, with a confetti burst); the stats count up one after another; a "New bests" list with each record set; volume compared with the last session of the same day
 - [x] History: each card lists its exercises (work sets, best set, a trophy on new bests, "+N more"); swipe sideways between weeks and months, which slide in from the matching side; the week header stays put; kinder empty states ("A rest week", "Rest day")
 - [x] One rule for the next set everywhere (`nextSetIndex`): the first unfinished set after the last finished one, so a skipped warm-up no longer holds the workout outline, rest bar, rest alert, widget and watch on it. Tested by `NextSetTest`; best set of a session by `BestSetTest`
+- [x] Professional pass: Inter as the app font (bundled variable font, `res/font/inter.ttf`, OFL in `licenses/`; display optical size for headings, tabular digits), every Material text slot included; a status-bar scrim on the tabs, exercise page and program editor so content no longer scrolls under the clock
+- [x] Progress: Recovery as a two-column grid (percent, bar, weekly sets, last trained) with "How it works" behind a tap; "1 set" not "1 sets"; the body-weight header compares what it shows (profile weight vs the latest weigh-in, "−3.3 lb since Oct 2") instead of the last two weigh-ins
+- [x] Workout: coaching advice on a quiet surface with a thin tone-coloured edge; "Use …" hidden when the sets are already at that weight. Today: day rows show their number in the program and a round play button. Profile: white switch thumbs, option chips wrap instead of hiding past the card edge, chevrons on rows that open something. Checked in dark and light
 
 ## Phase 7 — Data in/out
 - [ ] CSV export

@@ -11,7 +11,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -111,20 +115,38 @@ fun paletteFor(context: Context, themeChoice: String): GymPalette = paletteFor(t
 val LocalPalette = staticCompositionLocalOf { DarkPalette }
 
 // ============================================================================
-// TYPE — sentence case, few weights, tabular numbers for anything that counts.
+// TYPE — Inter (bundled, OFL; see licenses/Inter-OFL.txt), sentence case, few weights,
+// tabular numbers for anything that counts.
 // ============================================================================
 
+/** One variable font file; each weight (and optical size) is a variation of it. */
+@OptIn(ExperimentalTextApi::class)
+private fun interFamily(opticalSize: Float) = FontFamily(
+    listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map { w ->
+        Font(
+            R.font.inter,
+            weight = w,
+            variationSettings = FontVariation.Settings(FontVariation.weight(w.weight), FontVariation.Setting("opsz", opticalSize))
+        )
+    }
+)
+
+/** Text and UI sizes. */
+val Inter = interFamily(opticalSize = 14f)
+/** Headings and big numbers: Inter's display cut, tighter and crisper when large. */
+val InterDisplay = interFamily(opticalSize = 28f)
+
 object AppType {
-    val display = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp)
-    val title = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
-    val headline = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp)
-    val body = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal)
-    val bodyStrong = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold)
-    val label = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
-    val caption = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
-    val overline = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp)
-    val number = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
-    val bigNumber = TextStyle(fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp, fontFeatureSettings = "tnum")
+    val display = TextStyle(fontFamily = InterDisplay, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+    val title = TextStyle(fontFamily = InterDisplay, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+    val headline = TextStyle(fontFamily = Inter, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp)
+    val body = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal, letterSpacing = (-0.1).sp)
+    val bodyStrong = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.1).sp)
+    val label = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+    val caption = TextStyle(fontFamily = Inter, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
+    val overline = TextStyle(fontFamily = Inter, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp)
+    val number = TextStyle(fontFamily = Inter, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
+    val bigNumber = TextStyle(fontFamily = InterDisplay, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp, fontFeatureSettings = "tnum")
 }
 
 @Composable
@@ -164,13 +186,24 @@ fun GymTheme(palette: GymPalette, content: @Composable () -> Unit) {
             error = palette.dangerText
         )
     }
+    // Every Material slot in Inter, so text fields, menus and dialogs match the rest.
+    val base = Typography()
     val typography = Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = InterDisplay),
+        displayMedium = base.displayMedium.copy(fontFamily = InterDisplay),
+        displaySmall = base.displaySmall.copy(fontFamily = InterDisplay),
+        headlineLarge = base.headlineLarge.copy(fontFamily = InterDisplay),
+        headlineMedium = base.headlineMedium.copy(fontFamily = InterDisplay),
         headlineSmall = AppType.title,
         titleLarge = AppType.title,
         titleMedium = AppType.headline,
+        titleSmall = base.titleSmall.copy(fontFamily = Inter),
         bodyLarge = AppType.body,
         bodyMedium = AppType.body,
-        labelLarge = AppType.label
+        bodySmall = base.bodySmall.copy(fontFamily = Inter),
+        labelLarge = AppType.label,
+        labelMedium = base.labelMedium.copy(fontFamily = Inter),
+        labelSmall = base.labelSmall.copy(fontFamily = Inter)
     )
     CompositionLocalProvider(LocalPalette provides palette) {
         MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)

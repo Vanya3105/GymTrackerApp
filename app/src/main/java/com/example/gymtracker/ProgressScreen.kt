@@ -20,7 +20,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
@@ -182,7 +185,15 @@ private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> {
 private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, onLog: () -> Unit, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     val points = weightHistory.take(8).reversed().map { it.displayDate.substringBefore(",") to it.weightKg }
-    val change = if (weightHistory.size >= 2) weightHistory[0].weightKg - weightHistory[1].weightKg else null
+    // Compare what's shown: the profile weight can be changed without logging a weigh-in, and then
+    // it's compared with the latest weigh-in rather than the latest with the one before.
+    val latest = weightHistory.firstOrNull()
+    val (change, since) = when {
+        latest != null && current > 0f && roundedChange(current - latest.weightKg) != 0f ->
+            (current - latest.weightKg) to "since ${latest.displayDate.substringBefore(",")}"
+        weightHistory.size >= 2 -> (weightHistory[0].weightKg - weightHistory[1].weightKg) to "since last time"
+        else -> null to ""
+    }
 
     AppCard(modifier.fillMaxWidth(), elevated = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -196,8 +207,8 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
                     val rounded = roundedChange(change)
                     val unit = Units.current.label
                     val (icon, text) = when {
-                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit since last time"
-                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit since last time"
+                        rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit $since"
+                        rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit $since"
                         else -> Icons.AutoMirrored.Rounded.TrendingFlat to "Same as last time"
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -239,42 +250,73 @@ private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: (
     }
 }
 
+/** Every muscle as a compact tile, two per row; how it's worked out is one tap away. */
 @Composable
 private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
-    AppCard(modifier.fillMaxWidth()) {
-        Text(
-            "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
-                "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
-                "half a set, like biceps on rows or triceps on bench. Most people do well with " +
-                "${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle each week.",
-            style = AppType.caption,
-            color = P.textSecondary
-        )
-        items.forEach { item ->
-            Spacer(Modifier.height(14.dp))
-            val color = recoveryColor(item.status, P)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.muscleGroup, style = AppType.bodyStrong, color = P.textPrimary, modifier = Modifier.weight(1f))
-                Text(
-                    "${item.weeklyWorkingSets} sets this week",
-                    style = AppType.caption.copy(fontFeatureSettings = "tnum"),
-                    color = if (item.weeklyWorkingSets in WEEKLY_SET_TARGET) P.successText else P.textSecondary
-                )
-                Spacer(Modifier.width(10.dp))
-                Pill(item.status.label, color = color, container = color.copy(alpha = 0.14f))
-            }
-            Spacer(Modifier.height(6.dp))
-            AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 6.dp)
-            item.hoursSinceTrained?.let { h ->
-                Text(
-                    when { h < 1 -> "Trained just now"; h < 48 -> "Trained ${h}h ago"; else -> "Trained ${h / 24} days ago" },
-                    style = AppType.caption.copy(fontWeight = FontWeight.Normal),
-                    color = P.textTertiary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+    var explain by rememberSaveable { mutableStateOf(false) }
+    AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)), contentPadding = PaddingValues(12.dp)) {
+        Row(Modifier.padding(start = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val ready = items.count { it.status == RecoveryStatus.READY }
+            Text(
+                if (ready == items.size) "Everything's rested" else "$ready of ${items.size} muscles rested",
+                style = AppType.label,
+                color = P.textSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                if (explain) "Hide" else "How it works",
+                style = AppType.label,
+                color = P.accentPrimary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
+            )
+        }
+        if (explain) {
+            Text(
+                "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
+                    "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
+                    "half a set, like biceps on rows or triceps on bench. Most people do well with " +
+                    "${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle each week; " +
+                    "the set count turns green inside that range.",
+                style = AppType.caption,
+                color = P.textSecondary,
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp)
+            )
+        }
+        items.chunked(2).forEachIndexed { row, pair ->
+            if (row > 0) Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { RecoveryTile(it, Modifier.weight(1f)) }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+    }
+}
+
+@Composable
+private fun RecoveryTile(item: MuscleRecoveryItem, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    val color = recoveryColor(item.status, P)
+    Column(modifier.clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(item.muscleGroup, style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)
+        }
+        Spacer(Modifier.height(8.dp))
+        AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 4.dp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (item.weeklyWorkingSets == 1) "1 set this week" else "${item.weeklyWorkingSets} sets this week",
+            style = AppType.caption.copy(fontFeatureSettings = "tnum"),
+            color = if (item.weeklyWorkingSets in WEEKLY_SET_TARGET) P.successText else P.textSecondary,
+            maxLines = 1
+        )
+        Text(
+            item.hoursSinceTrained?.let { h -> when { h < 1 -> "Trained just now"; h < 48 -> "Trained ${h}h ago"; else -> "${h / 24} days ago" } } ?: "Not trained yet",
+            style = AppType.caption,
+            color = P.textTertiary,
+            maxLines = 1
+        )
     }
 }
 

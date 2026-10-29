@@ -59,6 +59,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -412,6 +413,8 @@ fun GymTrackerApp(
                 selectedTab = it
             })
         }
+        // The tabs draw edge to edge; this keeps scrolled content from running under the clock.
+        StatusBarScrim()
 
         // Full-screen workout (live or editing a past one) slides up over the tabs.
         AnimatedVisibility(
@@ -561,6 +564,7 @@ fun GymTrackerApp(
                     onBack = { editingProgramId = null }
                 )
             }
+            StatusBarScrim()
         }
 
         // Keep the last name while the screen animates out.
@@ -591,6 +595,7 @@ fun GymTrackerApp(
                     onBack = { openExercise = null }
                 )
             }
+            StatusBarScrim()
         }
 
         AnimatedVisibility(
@@ -824,6 +829,17 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun StatusBarScrim() {
+    val P = LocalPalette.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .windowInsetsTopHeight(WindowInsets.statusBars)
+            .background(Brush.verticalGradient(listOf(P.bgPrimary, P.bgPrimary.copy(alpha = 0.88f))))
+    )
 }
 
 @Composable
