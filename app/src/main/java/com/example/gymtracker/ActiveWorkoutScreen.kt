@@ -251,6 +251,8 @@ fun ActiveWorkoutScreen(
         onUpdateExercises(latestExercises + newExerciseEntry(context, split.title, name, muscle, history, settings))
     }
 
+    // Each card's records only need the workouts that have its exercise.
+    val byExercise = remember(history) { historyByExercise(history) }
     val listState = rememberLazyListState()
     val dragState = rememberDragDropState(
         listState = listState,
@@ -327,7 +329,9 @@ fun ActiveWorkoutScreen(
                     val key = EXERCISE_KEY_PREFIX + exercise.name
                     val range = supersetRange(pos)
                     val partners = if (range.first < range.last) range.filter { it != pos }.map { active[it].value.name } else emptyList()
-                    val records = remember(exercise.name, history) { computeExerciseRecords(exercise.name, history) }
+                    val records = remember(exercise.name, byExercise) { computeExerciseRecords(exercise.name, byExercise[ignoreCaseKey(exercise.name)].orEmpty()) }
+                    // The tips spotlight the first card; only track it while they're showing.
+                    val tracking = showTips && pos == 0
                     val unit = Units.current
                     val suggestion = remember(exercise, history, settings.weightStep, unit) {
                         suggestNextWeight(split.title, exercise, history, settings.weightStep)
@@ -357,9 +361,9 @@ fun ActiveWorkoutScreen(
                             headerModifier = Modifier.longPressDragHandle(dragState, key, onStart = { haptics.pickUp() }),
                             handleModifier = Modifier
                                 .dragHandle(dragState, key, onStart = { haptics.pickUp() })
-                                .then(if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["HANDLE"] = it.boundsInRoot() } else Modifier),
-                            suggestionModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SUGGESTION"] = it.boundsInRoot() } else Modifier,
-                            firstBadgeModifier = if (pos == 0) Modifier.onGloballyPositioned { tutorialBounds["SET_BADGE"] = it.boundsInRoot() } else Modifier,
+                                .then(if (tracking) Modifier.onGloballyPositioned { tutorialBounds["HANDLE"] = it.boundsInRoot() } else Modifier),
+                            suggestionModifier = if (tracking) Modifier.onGloballyPositioned { tutorialBounds["SUGGESTION"] = it.boundsInRoot() } else Modifier,
+                            firstBadgeModifier = if (tracking) Modifier.onGloballyPositioned { tutorialBounds["SET_BADGE"] = it.boundsInRoot() } else Modifier,
                             haptics = haptics,
                             onUpdate = { transform -> updateAt(exIdx, transform) },
                             onToggleSet = { setIdx -> toggleSet(pos, setIdx) },
@@ -1426,9 +1430,10 @@ private fun FinishSheet(
     val context = LocalContext.current
     val stats = remember(exercises, history) { computeWorkoutStats(exercises, history) }
     // Each exercise's best new record, judged like the "New bests" count.
+    val byExercise = remember(history) { historyByExercise(history) }
     val bests = remember(exercises, history) {
         exercises.filter { !it.isSkipped }.mapNotNull { ex ->
-            val records = computeExerciseRecords(ex.name, history)
+            val records = computeExerciseRecords(ex.name, byExercise[ignoreCaseKey(ex.name)].orEmpty())
             bestSetOf(ex.sets.filter { isSetPersonalRecord(it, records, ex.type) }, ex.type)?.let { ex to it }
         }
     }

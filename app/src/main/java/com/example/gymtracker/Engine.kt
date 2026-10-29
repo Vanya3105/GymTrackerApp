@@ -523,6 +523,9 @@ object PhotoStorage {
         } catch (e: Exception) { null }
     }
 
+    /** Only what's already decoded; never touches the disk. */
+    fun cached(path: String?): ImageBitmap? = path?.takeIf { it.isNotBlank() }?.let { memoryCache.get(it) }
+
     fun loadImageBitmap(path: String?): ImageBitmap? {
         if (path.isNullOrBlank()) return null
         memoryCache.get(path)?.let { return it }

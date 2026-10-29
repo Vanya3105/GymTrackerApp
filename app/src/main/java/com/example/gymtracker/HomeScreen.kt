@@ -48,6 +48,7 @@ fun HomeScreen(
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
     val upNext = splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
 
+    // Filled only while the tips are showing: positions change on every scroll frame.
     val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
     var showTips by remember(TutorialPrefs.replayGeneration) { mutableStateOf(!TutorialPrefs.hasSeenHomeTutorial(context)) }
     var tipIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
@@ -98,7 +99,7 @@ fun HomeScreen(
                     onStart = { onStartWorkout(upNext) },
                     modifier = Modifier
                         .enterAnimation(1)
-                        .onGloballyPositioned { tutorialBounds["UP_NEXT"] = it.boundsInRoot() }
+                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["UP_NEXT"] = it.boundsInRoot() } else Modifier)
                 )
             }
 
@@ -111,7 +112,7 @@ fun HomeScreen(
                     onOpenHistory = onOpenHistory,
                     modifier = Modifier
                         .enterAnimation(2)
-                        .onGloballyPositioned { tutorialBounds["WEEK"] = it.boundsInRoot() }
+                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["WEEK"] = it.boundsInRoot() } else Modifier)
                 )
             }
 
@@ -121,7 +122,7 @@ fun HomeScreen(
                     onClick = onOpenProgress,
                     modifier = Modifier
                         .enterAnimation(3)
-                        .onGloballyPositioned { tutorialBounds["RECOVERY"] = it.boundsInRoot() }
+                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["RECOVERY"] = it.boundsInRoot() } else Modifier)
                 )
             }
 
