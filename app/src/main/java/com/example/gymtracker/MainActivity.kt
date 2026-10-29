@@ -890,7 +890,7 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
                 )
             }
             if (restLeft > 0) {
-                Pill(formatClock(restLeft), color = P.accentSecondary, container = P.accentSecondarySoft, icon = Icons.Rounded.Timer)
+                Pill(formatClock(restLeft), color = P.accentPrimary, container = P.accentSoft, icon = Icons.Rounded.Timer)
                 Spacer(Modifier.width(8.dp))
             }
             Text("Resume", style = AppType.label, color = P.accentPrimary)

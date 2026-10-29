@@ -336,10 +336,11 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? 
     ) {
         Text(title, style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
         if (action != null && onAction != null) {
+            // Quiet on purpose: the accent is kept for the screen's main action.
             Text(
                 action,
                 style = AppType.label,
-                color = P.accentPrimary,
+                color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onAction).padding(horizontal = 6.dp, vertical = 4.dp)
             )
         }
@@ -525,7 +526,7 @@ fun NumberStepper(
         } else {
             Text(value.ifEmpty { "0" }, style = AppType.number, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
-        StepperButton(Icons.Rounded.Add, "Increase", enabled, P.accentPrimary, onPlus)
+        StepperButton(Icons.Rounded.Add, "Increase", enabled, P.textSecondary, onPlus)
     }
 }
 
@@ -886,7 +887,7 @@ fun Color.lighten(amount: Float) = Color(red + (1 - red) * amount, green + (1 - 
 fun toneColors(tone: SuggestionTone, P: GymPalette): Pair<Color, Color> = when (tone) {
     SuggestionTone.GOOD -> P.successSurface to P.successText
     SuggestionTone.CAUTION -> P.warningSurface to P.warningText
-    SuggestionTone.NEUTRAL -> P.accentSecondarySoft to P.accentSecondary
+    SuggestionTone.NEUTRAL -> P.bgControl to P.textSecondary
 }
 
 // ============================================================================
