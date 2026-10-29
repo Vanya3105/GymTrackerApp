@@ -194,16 +194,13 @@ private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> {
 @Composable
 private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, onLog: () -> Unit, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
-    val points = weightHistory.take(8).reversed().map { it.displayDate.substringBefore(",") to it.weightKg }
-    // Compare what's shown: the profile weight can be changed without logging a weigh-in, and then
-    // it's compared with the latest weigh-in rather than the latest with the one before.
-    val latest = weightHistory.firstOrNull()
-    val (change, since) = when {
-        latest != null && current > 0f && roundedChange(current - latest.weightKg) != 0f ->
-            (current - latest.weightKg) to "since ${latest.displayDate.substringBefore(",")}"
-        weightHistory.size >= 2 -> (weightHistory[0].weightKg - weightHistory[1].weightKg) to "since last time"
-        else -> null to ""
-    }
+    val shown = weightHistory.take(8).reversed()
+    val points = shown.map { it.displayDate.substringBefore(",") to it.weightKg }
+    // The same span as the chart below, so the arrow and the line agree.
+    val first = shown.firstOrNull()
+    val (change, since) = if (shown.size >= 2 && first != null && current > 0f) {
+        (current - first.weightKg) to "since ${first.displayDate.substringBefore(",")}"
+    } else null to ""
 
     AppCard(modifier.fillMaxWidth(), elevated = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -219,7 +216,7 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
                     val (icon, text) = when {
                         rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit $since"
                         rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit $since"
-                        else -> Icons.AutoMirrored.Rounded.TrendingFlat to "Same as last time"
+                        else -> Icons.AutoMirrored.Rounded.TrendingFlat to "No change $since"
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
@@ -303,7 +300,7 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
                     "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
                     "half a set, like biceps on rows or triceps on bench. Most people do well with " +
                     "${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle each week; " +
-                    "the set count turns green inside that range.",
+                    "the count of the last 7 days turns green inside that range.",
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
@@ -324,7 +321,8 @@ private fun RecoveryRow(item: MuscleRecoveryItem) {
     Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
-            val sets = if (item.weeklyWorkingSets == 1) "1 set this week" else "${item.weeklyWorkingSets} sets this week"
+            // A rolling 7 days, not the calendar week Today counts workouts in.
+            val sets = if (item.weeklyWorkingSets == 1) "1 set in 7 days" else "${item.weeklyWorkingSets} sets in 7 days"
             val last = item.hoursSinceTrained?.let { h -> when { h < 1 -> "just now"; h < 48 -> "${h}h ago"; else -> "${h / 24} days ago" } } ?: "not trained yet"
             Text(
                 "$sets · $last",

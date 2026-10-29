@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -38,7 +39,10 @@ fun HomeScreen(
     userProfile: UserProfile,
     programName: String,
     activeSplitTitle: String?,
+    /** Exercises in the running workout, which may differ from the day's list. */
+    activeExerciseCount: Int,
     onStartWorkout: (WorkoutSplit) -> Unit,
+    onStartQuickWorkout: () -> Unit,
     onOpenProgress: () -> Unit,
     onOpenHistory: () -> Unit
 ) {
@@ -47,7 +51,10 @@ fun HomeScreen(
     val program = programFor(userProfile.splitProgram)
     val week = remember(history, program) { computeWeekSummary(history, 0, userProfile.splitProgram) }
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
-    val upNext = splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
+    val upNext = when (activeSplitTitle) {
+        QUICK_WORKOUT_TITLE -> WorkoutSplit(QUICK_WORKOUT_TITLE, "Exercises you pick as you go", "")
+        else -> splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
+    }
 
     // Filled only while the tips are showing: positions change on every scroll frame.
     val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
@@ -97,7 +104,8 @@ fun HomeScreen(
                     split = upNext,
                     history = history,
                     isInProgress = activeSplitTitle != null,
-                    onStart = { onStartWorkout(upNext) },
+                    activeExerciseCount = activeExerciseCount,
+                    onStart = { if (upNext.title == QUICK_WORKOUT_TITLE) onStartQuickWorkout() else onStartWorkout(upNext) },
                     modifier = Modifier
                         .enterAnimation(1)
                         .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["UP_NEXT"] = it.boundsInRoot() } else Modifier)
@@ -128,9 +136,10 @@ fun HomeScreen(
             }
 
             val others = splits.filter { it.title != upNext.title }
-            if (others.isNotEmpty()) {
+            val showQuick = activeSplitTitle != QUICK_WORKOUT_TITLE
+            if (others.isNotEmpty() || showQuick) {
                 item { SectionHeader("Other workouts", Modifier.enterAnimation(4)) }
-                // One grouped list rather than a card per day.
+                // One grouped list rather than a card per day; an empty workout for off-plan days last.
                 item {
                     AppCard(Modifier.fillMaxWidth().enterAnimation(5), contentPadding = PaddingValues(vertical = 4.dp)) {
                         others.forEachIndexed { i, split ->
@@ -141,6 +150,10 @@ fun HomeScreen(
                                 lastDone = history.firstOrNull { it.splitTitle == split.title },
                                 onClick = { onStartWorkout(split) }
                             )
+                        }
+                        if (showQuick) {
+                            if (others.isNotEmpty()) Box(Modifier.padding(start = 74.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                            QuickWorkoutRow(onClick = onStartQuickWorkout)
                         }
                     }
                 }
@@ -190,12 +203,16 @@ private fun UpNextCard(
     split: WorkoutSplit,
     history: List<CompletedWorkout>,
     isInProgress: Boolean,
+    activeExerciseCount: Int,
     onStart: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val exerciseCount = remember(split.title) { LocalStorage.loadTemplateForSplit(context, split.title).size }
+    val plannedCount = remember(split.title, isInProgress) {
+        if (isInProgress) 0 else LocalStorage.loadTemplateForSplit(context, split.title).size
+    }
+    val exerciseCount = if (isInProgress) activeExerciseCount else plannedCount
     val last = history.firstOrNull { it.splitTitle == split.title }
 
     AppCard(modifier = modifier.fillMaxWidth(), elevated = true, contentPadding = PaddingValues(0.dp)) {
@@ -212,7 +229,7 @@ private fun UpNextCard(
             Text(split.subtitle, style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("$exerciseCount exercises", container = P.bgCard.copy(alpha = 0.7f))
+                Pill(if (exerciseCount == 1) "1 exercise" else "$exerciseCount exercises", container = P.bgCard.copy(alpha = 0.7f))
                 Pill(
                     last?.let { "Last done ${relativeDay(it.id)}" } ?: "Not done yet",
                     container = P.bgCard.copy(alpha = 0.7f)
@@ -397,5 +414,25 @@ private fun SplitRow(
                 )
             }
             Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.textTertiary, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** Starts a workout with no exercises, for days that don't follow the program. */
+@Composable
+private fun QuickWorkoutRow(onClick: () -> Unit) {
+    val P = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().pressable(pressedScale = 0.99f, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(P.bgControl), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Add, null, tint = P.textSecondary, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Empty workout", style = AppType.bodyStrong, color = P.textPrimary)
+            Text("Pick exercises as you go", style = AppType.caption, color = P.textSecondary)
+        }
+        Icon(Icons.Rounded.PlayArrow, "Start an empty workout", tint = P.textTertiary, modifier = Modifier.size(22.dp))
     }
 }

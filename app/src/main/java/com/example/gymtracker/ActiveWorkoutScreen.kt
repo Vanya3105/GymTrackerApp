@@ -120,7 +120,8 @@ fun ActiveWorkoutScreen(
     val latestExercises by rememberUpdatedState(exercises)
     val startTimeMillis = remember { LocalStorage.getActiveSessionStartTime(context) }
 
-    var showPicker by remember { mutableStateOf(false) }
+    // An empty workout has nothing to show until something is picked.
+    var showPicker by remember { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
     var showFinish by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
@@ -183,8 +184,10 @@ fun ActiveWorkoutScreen(
     val skipped = exercises.withIndex().filter { it.value.isSkipped }
     val totalSets = active.sumOf { it.value.sets.size }
     val doneSets = active.sumOf { ex -> ex.value.sets.count { it.isCompleted } }
+    // Quick workouts differ every time, so the last one is no template.
     val previousSplitWorkout = remember(split.title, history) {
-        history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
+        if (split.title == QUICK_WORKOUT_TITLE) null
+        else history.firstOrNull { it.splitTitle.equals(split.title, ignoreCase = true) }
     }
 
     fun supersetRange(pos: Int): IntRange {
@@ -599,6 +602,7 @@ fun ActiveWorkoutScreen(
             text = {
                 Text(
                     if (isEditingPastWorkout) "It will be removed from this logged workout."
+                    else if (split.title == QUICK_WORKOUT_TITLE) "It will be removed from this workout."
                     else "It won't show up in future ${split.title} workouts. You can add it back any time.",
                     style = AppType.body,
                     color = P.textSecondary
