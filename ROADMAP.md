@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through design polish is merged into `master` (2026-10-29). Two branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), then **Watch v2** (`watch-v2`, built on it; needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed). Check on the watch: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview (tap the exercise name, swipe right to go back), finish from the watch, and that the phone's open workout closes itself when the watch finishes it. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`). Known issue: `./gradlew assembleRelease` fails in `:wear` lint (InvalidFragmentVersionForActivityResult, wants androidx.fragment ≥ 1.3); `:app:assembleRelease` is fine.
+Everything through design polish is merged into `master` (2026-10-29). Two branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), then **Watch v2** (`watch-v2`, built on it; needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed). Check on the watch: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview (tap the exercise name, swipe right to go back), finish from the watch, and that the phone's open workout closes itself when the watch finishes it. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -114,6 +114,7 @@ The watch was only a remote for the current set. Now it can run a whole workout:
 - [x] Overview (tap the exercise name or "Next: …"): elapsed time, sets done, each exercise with its progress (current outlined, done ones ticked), Finish, Undo, Open on phone. Swipe right to go back
 - [x] Undo the last ticked set (rest screen and overview): un-ticks the last finished set before the next one, in the previous exercise if needed, and ends its rest
 - [x] Finish from the watch, with a confirmation that says how many sets aren't ticked. Saved like Finish → Save on the phone (no photo); the phone's open workout closes itself instead of offering to save it twice. Afterwards a "Workout saved" screen (time, sets, volume, new bests) for 30 minutes, also after finishing on the phone
+- [x] `./gradlew assembleRelease` builds both apps again: the watch asks for the notification permission from Compose (as the phone does) instead of `registerForActivityResult`, which lint flagged because Play services pulls in Fragment 1.1
 - [x] Protocol stays compatible both ways (new fields are optional; v2 in the JSON). Tests: `WatchSyncTest` (start, finish, undo, shorter rest, progress), `WatchLinkTest`, screenshots of every new screen at 40 and 44+ mm
 
 ## Phase 7 — Data in/out
