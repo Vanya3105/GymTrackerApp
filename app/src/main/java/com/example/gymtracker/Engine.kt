@@ -669,6 +669,23 @@ fun isSetPersonalRecord(setEntry: SetEntry, records: ExerciseRecords, type: Exer
     }
 }
 
+/**
+ * The set that best sums up a session of [sets]: heaviest for its reps (est. 1RM) on loaded lifts,
+ * then most reps, least assistance, longest time or longest distance. Null without work sets.
+ */
+fun bestSetOf(sets: List<SetEntry>, type: ExerciseType): SetEntry? {
+    val work = sets.filter { it.isValidWorkSet(type) }
+    return when (type) {
+        ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT ->
+            work.maxWithOrNull(compareBy<SetEntry> { calculateEstimated1Rm(it.weightKg, it.repCount) }.thenBy { it.repCount })
+                ?.takeIf { it.weightKg > 0f } ?: work.maxByOrNull { it.repCount }
+        ExerciseType.BODYWEIGHT -> work.maxByOrNull { it.repCount }
+        ExerciseType.ASSISTED -> work.minWithOrNull(compareBy<SetEntry> { it.weightKg }.thenByDescending { it.repCount })
+        ExerciseType.DURATION -> work.maxByOrNull { it.secondCount }
+        ExerciseType.DISTANCE_TIME -> work.maxByOrNull { it.distanceMeters }
+    }
+}
+
 fun computeWeekSummary(
     history: List<CompletedWorkout>,
     weekOffset: Int = 0,
@@ -767,9 +784,9 @@ object RestAlarmScheduler {
         LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
 
         val nextEx = active?.second?.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
-        val nextSet = nextEx?.sets?.firstOrNull { !it.isCompleted }
+        val nextSet = nextEx?.let { it.sets.getOrNull(it.nextSetIndex()) }
         val detailLine = if (nextEx != null && nextSet != null) {
-            "Next: ${nextEx.name} · ${formatSet(nextSet)}"
+            "Next: ${nextEx.name} · ${formatSet(nextSet, nextEx.type)}"
         } else {
             "Time for your next set."
         }

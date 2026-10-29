@@ -2,6 +2,13 @@ package com.example.gymtracker
 
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -703,6 +710,38 @@ fun TrendChart(points: List<Pair<String, Float>>, modifier: Modifier = Modifier,
 // ============================================================================
 // MOTION HELPERS
 // ============================================================================
+
+/**
+ * Horizontal swipe to page (weeks, months): right goes back, left goes forward when [canGoNext].
+ * Vertical scrolling inside still works; only a clear sideways swipe counts.
+ */
+fun Modifier.swipeToPage(onPrevious: () -> Unit, onNext: () -> Unit, canGoNext: Boolean = true): Modifier = composed {
+    val threshold = with(LocalDensity.current) { 64.dp.toPx() }
+    val prev by rememberUpdatedState(onPrevious)
+    val next by rememberUpdatedState(onNext)
+    val allowNext by rememberUpdatedState(canGoNext)
+    pointerInput(Unit) {
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = {
+                if (total > threshold) prev()
+                else if (total < -threshold && allowNext) next()
+            }
+        ) { change, amount ->
+            change.consume()
+            total += amount
+        }
+    }
+}
+
+/** Slide direction for paged content: newer pages come in from the right. */
+fun <S : Comparable<S>> AnimatedContentTransitionScope<S>.pageTransition(): ContentTransform {
+    val forward = targetState > initialState
+    val spec = spring<IntOffset>(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)
+    return (slideInHorizontally(spec) { if (forward) it / 3 else -it / 3 } + fadeIn(tween(220)))
+        .togetherWith(slideOutHorizontally(spec) { if (forward) -it / 3 else it / 3 } + fadeOut(tween(150)))
+}
 
 /** Fades and lifts content in on first appearance, staggered by [index]. */
 fun Modifier.enterAnimation(index: Int = 0): Modifier = composed {

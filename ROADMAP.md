@@ -99,6 +99,9 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Workout: the next set to do (across the workout) has an accent outline; an exercise gets a check badge once all its work sets are done
 - [x] Bottom bar: one pill slides to the selected tab with a little overshoot; icons go from outlined to filled with a small bounce. The "workout in progress" bar is hidden on Today, which already has a Resume card
 - [x] Split builder: the day count rolls, day names slide when they change, the name field always shows the default name, clearer note for days that already exist; the "Your split" card crossfades on change
+- [x] Finish sheet: a check badge pops in (a trophy and "New best!" when records fell, with a confetti burst); the stats count up one after another; a "New bests" list with each record set; volume compared with the last session of the same day
+- [x] History: each card lists its exercises (work sets, best set, a trophy on new bests, "+N more"); swipe sideways between weeks and months, which slide in from the matching side; the week header stays put; kinder empty states ("A rest week", "Rest day")
+- [x] One rule for the next set everywhere (`nextSetIndex`): the first unfinished set after the last finished one, so a skipped warm-up no longer holds the workout outline, rest bar, rest alert, widget and watch on it. Tested by `NextSetTest`; best set of a session by `BestSetTest`
 
 ## Phase 7 — Data in/out
 - [ ] CSV export

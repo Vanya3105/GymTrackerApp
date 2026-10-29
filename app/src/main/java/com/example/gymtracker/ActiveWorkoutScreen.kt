@@ -35,6 +35,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -84,6 +87,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private const val EXERCISE_KEY_PREFIX = "ex:"
 
@@ -173,9 +177,8 @@ fun ActiveWorkoutScreen(
     }
 
     val active = exercises.withIndex().filter { !it.value.isSkipped }
-    // The set to do next, across the workout: first unfinished set of the first unfinished exercise.
-    val nextUp = active.firstOrNull { iv -> iv.value.sets.any { !it.isCompleted } }
-        ?.let { iv -> iv.value.name to iv.value.sets.indexOfFirst { !it.isCompleted } }
+    // The set to do next, across the workout: in the first unfinished exercise, see nextSetIndex.
+    val nextUp = active.firstOrNull { iv -> iv.value.sets.any { !it.isCompleted } }?.let { iv -> iv.value.name to iv.value.nextSetIndex() }
     val skipped = exercises.withIndex().filter { it.value.isSkipped }
     val totalSets = active.sumOf { it.value.sets.size }
     val doneSets = active.sumOf { ex -> ex.value.sets.count { it.isCompleted } }
@@ -1208,8 +1211,7 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
     val visible = remaining > 0L
     val next = remember(exercises) {
         exercises.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }?.let { ex ->
-            val s = ex.sets.first { !it.isCompleted }
-            "${ex.name} · ${formatSet(s)}"
+            "${ex.name} · ${formatSet(ex.sets[ex.nextSetIndex()], ex.type)}"
         }
     }
 
@@ -1407,8 +1409,20 @@ private fun FinishSheet(
     val P = LocalPalette.current
     val context = LocalContext.current
     val stats = remember(exercises, history) { computeWorkoutStats(exercises, history) }
+    // Each exercise's best new record, judged like the "New bests" count.
+    val bests = remember(exercises, history) {
+        exercises.filter { !it.isSkipped }.mapNotNull { ex ->
+            val records = computeExerciseRecords(ex.name, history)
+            bestSetOf(ex.sets.filter { isSetPersonalRecord(it, records, ex.type) }, ex.type)?.let { ex to it }
+        }
+    }
+    val previous = remember(history, split.title) {
+        if (isEditing) null else history.filter { it.splitTitle == split.title }.maxByOrNull { it.id }
+    }
+    val celebrate = !isEditing && stats.prCount > 0
 
     AppBottomSheet(onDismiss = onDismiss) {
+        Box {
         Column(
             Modifier
                 .verticalScroll(rememberScrollState())
@@ -1416,21 +1430,78 @@ private fun FinishSheet(
                 .padding(bottom = 20.dp)
                 .navigationBarsPadding()
         ) {
-            Text(if (isEditing) "Save changes" else "Nice work", style = AppType.display, color = P.textPrimary)
-            Text(
-                if (isEditing) split.title else "That's ${split.title} done.",
-                style = AppType.body,
-                color = P.textSecondary
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when {
+                            isEditing -> "Save changes"
+                            celebrate -> if (stats.prCount == 1) "New best!" else "${stats.prCount} new bests!"
+                            else -> "Nice work"
+                        },
+                        style = AppType.display,
+                        color = P.textPrimary
+                    )
+                    Text(
+                        if (isEditing) split.title else "That's ${split.title} done.",
+                        style = AppType.body,
+                        color = P.textSecondary
+                    )
+                }
+                if (!isEditing) FinishBadge(trophy = celebrate)
+            }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile(formatDuration(durationSeconds), "Time", Modifier.weight(1f))
-                StatTile("${stats.workSets}", "Sets", Modifier.weight(1f))
+                CountUpTile(durationSeconds.toFloat(), { formatDuration(it.toLong()) }, "Time", Modifier.weight(1f).enterAnimation(1), delayMillis = 150)
+                CountUpTile(stats.workSets.toFloat(), { "${it.roundToInt()}" }, "Sets", Modifier.weight(1f).enterAnimation(2), delayMillis = 200)
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile(formatVolume(stats.volumeKg), "Volume", Modifier.weight(1f))
-                StatTile("${stats.prCount}", "New bests", Modifier.weight(1f), valueColor = if (stats.prCount > 0) P.warningText else null)
+                CountUpTile(stats.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, "Volume", Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
+                CountUpTile(
+                    stats.prCount.toFloat(), { "${it.roundToInt()}" }, "New bests", Modifier.weight(1f).enterAnimation(4), delayMillis = 300,
+                    valueColor = if (stats.prCount > 0) P.warningText else null
+                )
+            }
+
+            val prevVolume = previous?.totalVolumeKg ?: 0
+            if (prevVolume > 0 && stats.volumeKg > 0) {
+                val pct = ((stats.volumeKg - prevVolume) * 100f / prevVolume).roundToInt()
+                val up = pct > 0
+                Row(Modifier.padding(top = 10.dp).enterAnimation(5), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (up) Icons.AutoMirrored.Rounded.TrendingUp else if (pct < 0) Icons.AutoMirrored.Rounded.TrendingDown else Icons.AutoMirrored.Rounded.TrendingFlat,
+                        null,
+                        tint = if (up) P.successText else P.textSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when {
+                            up -> "$pct% more volume than your last ${split.title}"
+                            pct < 0 -> "${-pct}% less volume than your last ${split.title}"
+                            else -> "Same volume as your last ${split.title}"
+                        },
+                        style = AppType.label,
+                        color = if (up) P.successText else P.textSecondary
+                    )
+                }
+            }
+
+            if (bests.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Column(
+                    Modifier.fillMaxWidth().enterAnimation(6).clip(RoundedCornerShape(16.dp)).background(P.warningSurface).padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Text("New bests", style = AppType.overline, color = P.warningText)
+                    bests.forEach { (ex, set) ->
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.EmojiEvents, null, tint = P.warningText, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(ex.name, style = AppType.body, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(formatSet(set, ex.type), style = AppType.bodyStrong.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
+                        }
+                    }
+                }
             }
 
             if (skipped.isNotEmpty()) {
@@ -1478,5 +1549,37 @@ private fun FinishSheet(
                 icon = Icons.Rounded.IosShare
             )
         }
+        if (celebrate) ConfettiBurst(Modifier.matchParentSize())
+        }
+    }
+}
+
+/** A check (or a trophy for new bests) that pops in with a little twist. */
+@Composable
+private fun FinishBadge(trophy: Boolean) {
+    val P = LocalPalette.current
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(120)
+        pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMediumLow))
+    }
+    Box(
+        Modifier
+            .size(60.dp)
+            .graphicsLayer {
+                scaleX = pop.value
+                scaleY = pop.value
+                rotationZ = (1f - pop.value) * -35f
+            }
+            .clip(CircleShape)
+            .background(if (trophy) P.warningSurface else P.successSurface),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            if (trophy) Icons.Rounded.EmojiEvents else Icons.Rounded.Check,
+            null,
+            tint = if (trophy) P.warningText else P.successText,
+            modifier = Modifier.size(32.dp)
+        )
     }
 }
