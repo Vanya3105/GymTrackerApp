@@ -1625,7 +1625,7 @@ private fun FinishSheet(
             SecondaryButton(
                 "Share",
                 {
-                    shareWorkoutCardImage(context, split.title, durationSeconds, exercises, history, userProfile.currentWeightKg, photoPath)
+                    shareWorkoutCardImage(split.title, durationSeconds, exercises, history, photoPath)
                 },
                 Modifier.fillMaxWidth(),
                 icon = Icons.Rounded.IosShare

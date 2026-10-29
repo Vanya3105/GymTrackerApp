@@ -735,6 +735,8 @@ fun GymTrackerApp(
             }
         }
 
+        ShareSheetHost()
+
         val forgotten = activeSplit
         if (forgottenSince > 0L && forgotten != null) {
             val keepGoing = {

@@ -9,7 +9,11 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). **Everyday fixes** is tested on the phone and merged into `master` (2026-10-29). Now on branch `phase-7-data`: **step 1, auto-backup**, is done, waiting for the owner's phone test (Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on). Next: **step 2, merge duplicate exercises**, then CSV export/import.
+**Everyday fixes** is tested and merged into `master` (2026-10-29). Branch `share-design` sits on top of `phase-7-data`, so one build has both; the owner's phone test of that build is next:
+- Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
+- Share sheet (`share-design`): Share on the finish sheet, History's ⋮ menu, or Today's week card.
+
+Next: the owner has widget changes to describe; then Phase 7 step 2, merge duplicate exercises.
 
 ---
 
@@ -136,6 +140,13 @@ From using the app as a new user would, on the emulator:
 - [x] Previous column (like Strong's): each set row shows the matching set from last time, quiet ("95×8"); a tap copies it into the set. Sets line up by kind and place (warm-up with warm-up, first work set with first work set, drop with drop); "—" when last time had fewer. Last time = this day's last workout if it had the exercise, else the latest workout that did (so quick workouts get it too); no column for an exercise never logged. Replaces the one-line "Last time" under the name. Tests: `PreviousSetsTest`
 - [x] Never-logged exercises: "First time: find a weight you can lift 6–10 times with good form…" instead of "Aim for 6–10 reps at 95 lb" (a placeholder weight presented as advice), and no "Use" button
 - [x] "Use last time's numbers" only shows when last time had at least one of today's exercises (it did nothing otherwise)
+
+## Share design (branch `share-design`, after Everyday fixes)
+Researched Strava (stats stickers over your own photo), Hevy (several shareables per workout; light, dark or transparent; "you lifted a truck" comparisons; muscle charts) and Spotify Wrapped (one stat per card, framed as you, vertical Stories format).
+- [x] Share opens a preview sheet (`ShareCards.kt`) instead of going straight to Android's share menu: swipe between cards, pick a background, then Share or Save (to Pictures/GymTracker, Android 10+)
+- [x] Cards, only when they have something to say: Summary (title, date, workout number, volume as a hero number with "about 4 small cars" and "↑ 24% vs last Push", time/sets/new bests, top sets with bests marked), New bests (PR medal, each best with the one it beat), Muscles (where the sets went, helpers half, like recovery), Streak (weeks in a row or workouts logged, this week's days, this month / all time)
+- [x] Backgrounds: Dark, Light, Clear (transparent PNG to add as a sticker over your own photo or video; text turns white there and gets a soft shadow) and Photo (the workout's photo, content in the lower half). Inter like the app (it was the system font); content kept clear of Instagram's top and bottom bars; no "0 new bests" (that slot counts exercises instead)
+- [x] Shared past workouts use their own date and numbers (were dated today). Tests: `ShareCardsTest` (data, comparisons, every card drawn to `app/build/screenshots/share-*.png`)
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.

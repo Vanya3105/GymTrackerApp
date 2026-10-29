@@ -10,15 +10,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -28,12 +23,7 @@ import android.widget.RemoteViews
 import com.example.gymtracker.watchlink.WatchExercise
 import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
-import android.widget.Toast
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.content.FileProvider
-import java.io.File
-import java.io.FileOutputStream
-import java.util.Date
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -731,142 +721,4 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             return bmp
         }
     }
-}
-
-// ============================================================================
-// 5. SHARE CARD (1080×1920 image for stories and chats)
-// ============================================================================
-
-fun shareWorkoutCardImage(
-    context: Context,
-    splitTitle: String,
-    durationSeconds: Long,
-    exercises: List<ExerciseEntry>,
-    history: List<CompletedWorkout>,
-    bodyWeightKg: Float,
-    photoPath: String? = null
-) {
-    try {
-        val card = generateShareCard(context, splitTitle, durationSeconds, exercises, history, bodyWeightKg, photoPath)
-
-        // Share cards are throwaway: keep them in cache and replace the previous one.
-        val folder = File(context.cacheDir, "share_cards").apply { mkdirs() }
-        folder.listFiles()?.forEach { it.delete() }
-        // Older versions saved share cards next to workout photos and never removed them.
-        File(context.filesDir, "workout_photos").listFiles { f -> f.name.startsWith("gym_story_share_") }?.forEach { it.delete() }
-        val file = File(folder, "workout_${System.currentTimeMillis()}.jpg")
-        FileOutputStream(file).use { out -> card.compress(Bitmap.CompressFormat.JPEG, 95, out) }
-        card.recycle()
-
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "image/jpeg"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, "$splitTitle done. Logged with GymTracker.")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(send, "Share workout").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (e: Exception) {
-        Toast.makeText(context, "Couldn't create the image", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun generateShareCard(
-    context: Context,
-    splitTitle: String,
-    durationSeconds: Long,
-    exercises: List<ExerciseEntry>,
-    history: List<CompletedWorkout>,
-    bodyWeightKg: Float,
-    photoPath: String?
-): Bitmap {
-    val W = 1080f
-    val H = 1920f
-    val bmp = Bitmap.createBitmap(W.toInt(), H.toInt(), Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    val photo = photoPath?.takeIf { it.isNotBlank() && File(it).exists() }?.let { BitmapFactory.decodeFile(it) }
-    // Text over a photo always needs the dark palette to stay readable.
-    val p = if (photo != null) DarkPalette else appPalette(context)
-    val accent = p.accentPrimary.toArgb()
-
-    if (photo != null) {
-        val scale = maxOf(W / photo.width, H / photo.height)
-        val m = Matrix().apply {
-            postScale(scale, scale)
-            postTranslate((W - photo.width * scale) / 2f, (H - photo.height * scale) / 2f)
-        }
-        canvas.drawBitmap(photo, m, Paint(Paint.FILTER_BITMAP_FLAG))
-        photo.recycle()
-        canvas.drawRect(0f, 0f, W, H, Paint().apply {
-            shader = LinearGradient(
-                0f, 0f, 0f, H,
-                intArrayOf(Color.argb(150, 0, 0, 0), Color.argb(0, 0, 0, 0), Color.argb(200, 10, 10, 12), Color.argb(245, 10, 10, 12)),
-                floatArrayOf(0f, 0.3f, 0.55f, 1f),
-                Shader.TileMode.CLAMP
-            )
-        })
-    } else {
-        canvas.drawColor(p.bgPrimary.toArgb())
-        canvas.drawRect(0f, 0f, W, H, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(W * 0.85f, H * 0.08f, 900f, Color.argb(70, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        })
-    }
-
-    val left = 96f
-    val right = W - 96f
-    val text = p.textPrimary.toArgb()
-    val muted = p.textSecondary.toArgb()
-
-    // Header
-    canvas.drawCircle(left + 14f, 158f, 14f, fillPaint(accent))
-    canvas.drawText("GymTracker", left + 44f, 170f, textPaint(text, 40f))
-    canvas.drawText(DateUtils.formatShortDayYear(Date()), right, 170f, textPaint(muted, 36f, REGULAR, Paint.Align.RIGHT))
-
-    val stats = computeWorkoutStats(exercises, history)
-    val lifts = exercises.filter { !it.isSkipped }.mapNotNull { ex ->
-        bestSetOf(ex.type, ex.workSets)?.let { ex.name to formatSet(it, ex.type) }
-    }
-
-    // Title block sits lower when a photo fills the top.
-    var y = if (photo != null) 1040f else 520f
-    val bw = if (bodyWeightKg > 0f) "  ·  ${formatWeightKg(bodyWeightKg)} body weight" else ""
-    canvas.drawText("Workout complete$bw", left, y, textPaint(accent, 40f).fitTo("Workout complete$bw", right - left))
-    y += 120f
-    canvas.drawText(splitTitle, left, y, textPaint(text, 120f, BOLD).fitTo(splitTitle, right - left))
-    y += 90f
-
-    // Stats grid (2 × 2)
-    val gap = 24f
-    val cellW = (right - left - gap) / 2
-    val cellH = 170f
-    listOf(
-        formatDuration(durationSeconds) to "Time",
-        formatVolume(stats.volumeKg) to "Volume",
-        "${stats.workSets}" to "Sets",
-        "${stats.prCount}" to "New bests"
-    ).forEachIndexed { i, (value, label) ->
-        val cx = left + (i % 2) * (cellW + gap)
-        val cy = y + (i / 2) * (cellH + gap)
-        canvas.drawRoundRect(RectF(cx, cy, cx + cellW, cy + cellH), 36f, 36f, fillPaint(p.bgCard.toArgb(), if (photo != null) 200 else 255))
-        canvas.drawText(value, cx + 36f, cy + 92f, textPaint(text, 58f, BOLD))
-        canvas.drawText(label, cx + 36f, cy + 136f, textPaint(muted, 32f, REGULAR))
-    }
-    y += cellH * 2 + gap + 90f
-
-    // Top sets
-    val maxRows = ((H - 200f - y) / 76f).toInt().coerceIn(0, 7)
-    if (lifts.isNotEmpty() && maxRows > 0) {
-        canvas.drawText("Top sets", left, y, textPaint(muted, 34f))
-        y += 30f
-        lifts.take(maxRows).forEach { (name, set) ->
-            y += 76f
-            val setPaint = textPaint(text, 40f, MEDIUM, Paint.Align.RIGHT)
-            val namePaint = textPaint(text, 40f, REGULAR)
-            canvas.drawText(namePaint.ellipsize(name, right - left - setPaint.measureText(set) - 32f), left, y, namePaint)
-            canvas.drawText(set, right, y, setPaint)
-        }
-    }
-
-    canvas.drawText("Logged with GymTracker", W / 2, H - 110f, textPaint(muted, 30f, REGULAR, Paint.Align.CENTER))
-    return bmp
 }

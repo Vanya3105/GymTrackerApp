@@ -355,8 +355,8 @@ fun WorkoutHistoryCard(
                         onClick = {
                             menuOpen = false
                             shareWorkoutCardImage(
-                                context, workout.splitTitle, workout.durationSeconds, workout.exercises,
-                                allHistory.filter { it.id < workout.id }, workout.bodyWeightKg, workout.photoPath
+                                workout.splitTitle, workout.durationSeconds, workout.exercises,
+                                allHistory.filter { it.id < workout.id }, workout.photoPath, whenMillis = workout.id
                             )
                         }
                     )

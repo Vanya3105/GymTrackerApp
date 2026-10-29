@@ -293,8 +293,8 @@ private fun WeekCard(
                     onClick = {
                         val latest = week.workouts.first()
                         shareWorkoutCardImage(
-                            context, latest.splitTitle, latest.durationSeconds, latest.exercises,
-                            history.filter { it.id < latest.id }, bodyWeightKg, latest.photoPath
+                            latest.splitTitle, latest.durationSeconds, latest.exercises,
+                            history.filter { it.id < latest.id }, latest.photoPath, whenMillis = latest.id
                         )
                     },
                     size = 36.dp
