@@ -33,7 +33,8 @@ private const val WHITE = 0xFFFFFFFF.toInt()
 private const val BLACK = 0xFF000000.toInt()
 
 /**
- * The GymTracker tile: the current set, the rest end time or "no workout", and an Open chip.
+ * The GymTracker tile: the current set, the rest end time, or the day that's up next with a
+ * chip that starts it.
  * Reads the last state the phone published (the Data Layer keeps it), so it works offline too.
  */
 class WorkoutTileService : TileService() {
@@ -72,14 +73,16 @@ internal fun workoutTile(context: Context, state: WatchState?, device: DevicePar
 }
 
 private fun tileLayout(context: Context, state: WatchState?, device: DeviceParameters, now: Long): LayoutElementBuilders.LayoutElement {
+    val upNext = state?.days?.firstOrNull()?.takeIf { !state.active }
     val (label, title, detail) = when {
+        upNext != null -> Triple("Up next", upNext, "Tap Start to begin")
         state == null || !state.active -> Triple("GymTracker", "No workout", "Start one on your phone")
         state.restEndsAtMillis > now -> Triple(
             state.workoutName, "Resting",
             "Until ${DateFormat.getTimeFormat(context).format(Date(state.restEndsAtMillis))}" +
                 (state.exerciseName?.let { "\nNext: $it" } ?: "")
         )
-        state.exerciseName == null -> Triple(state.workoutName, "All sets done", "Save it on your phone")
+        state.exerciseName == null -> Triple(state.workoutName, "All sets done", "Open to finish it")
         else -> Triple(state.workoutName, state.exerciseName.orEmpty(), "${state.setLabel} · ${state.summary}")
     }
 
@@ -90,18 +93,13 @@ private fun tileLayout(context: Context, state: WatchState?, device: DeviceParam
         .setMultilineAlignment(LayoutElementBuilders.TEXT_ALIGN_CENTER)
         .build()
 
+    val activity = ActionBuilders.AndroidActivity.Builder()
+        .setPackageName(context.packageName)
+        .setClassName(WatchActivity::class.java.name)
+    upNext?.let { activity.addKeyToExtraMapping(WatchActivity.EXTRA_START, ActionBuilders.stringExtra(it)) }
     val open = ModifiersBuilders.Clickable.Builder()
-        .setId("open")
-        .setOnClick(
-            ActionBuilders.LaunchAction.Builder()
-                .setAndroidActivity(
-                    ActionBuilders.AndroidActivity.Builder()
-                        .setPackageName(context.packageName)
-                        .setClassName(WatchActivity::class.java.name)
-                        .build()
-                )
-                .build()
-        )
+        .setId(if (upNext != null) "start" else "open")
+        .setOnClick(ActionBuilders.LaunchAction.Builder().setAndroidActivity(activity.build()).build())
         .build()
 
     return PrimaryLayout.Builder(device)
@@ -115,7 +113,7 @@ private fun tileLayout(context: Context, state: WatchState?, device: DeviceParam
                 .build()
         )
         .setPrimaryChipContent(
-            CompactChip.Builder(context, "Open", open, device)
+            CompactChip.Builder(context, if (upNext != null) "Start" else "Open", open, device)
                 .setChipColors(ChipColors(ORANGE, BLACK))
                 .build()
         )

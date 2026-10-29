@@ -3,6 +3,7 @@ package com.example.gymtracker
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.gymtracker.watchlink.WatchAction
+import com.example.gymtracker.watchlink.WatchExercise
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -93,5 +94,89 @@ class WatchSyncTest {
         WatchSync.apply(context, WatchAction.COMPLETE_SET)
         assertNull(watchStateOf(context).exerciseName)
         assertTrue(watchStateOf(context).active)
+    }
+
+    @Test
+    fun sendsProgressThroughTheWorkout() {
+        startWorkout()
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        val s = watchStateOf(context)
+        assertEquals(listOf(WatchExercise("Bench Press", 1, 2), WatchExercise("Plank", 0, 1)), s.exercises)
+        assertEquals(0, s.currentExercise)
+        assertEquals(2, s.setNumber)
+        assertEquals(2, s.setCount)
+        assertTrue(s.canUndo)
+        assertTrue(s.startedAtMillis > 0L)
+    }
+
+    @Test
+    fun removeRest_shortensIt_andEndsItWhenLittleIsLeft() {
+        startWorkout()
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        val end = watchStateOf(context).restEndsAtMillis
+        WatchSync.apply(context, WatchAction.REMOVE_REST)
+        assertEquals(end - 15_000L, watchStateOf(context).restEndsAtMillis)
+        LocalStorage.setRestEndTimeMillis(context, System.currentTimeMillis() + 10_000L)
+        WatchSync.apply(context, WatchAction.REMOVE_REST)
+        assertEquals(0L, watchStateOf(context).restEndsAtMillis)
+    }
+
+    @Test
+    fun undo_unticksTheLastSet_evenInThePreviousExercise() {
+        startWorkout()
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        WatchSync.apply(context, WatchAction.SKIP_REST)
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        WatchSync.apply(context, WatchAction.SKIP_REST)
+        assertEquals("Plank", watchStateOf(context).exerciseName)
+
+        WatchSync.apply(context, WatchAction.UNDO_SET)
+        val back = watchStateOf(context)
+        assertEquals("Bench Press", back.exerciseName)
+        assertEquals("Set 2", back.setLabel)
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        WatchSync.apply(context, WatchAction.UNDO_SET)
+        assertEquals("rest it started ends too", 0L, watchStateOf(context).restEndsAtMillis)
+
+        WatchSync.apply(context, WatchAction.UNDO_SET)
+        WatchSync.apply(context, WatchAction.UNDO_SET)
+        assertFalse(watchStateOf(context).canUndo)
+        WatchSync.apply(context, WatchAction.UNDO_SET) // nothing left: no crash, no change
+        assertEquals("Set 1", watchStateOf(context).setLabel)
+    }
+
+    @Test
+    fun finish_savesToHistory_andTheWatchShowsIt() {
+        startWorkout()
+        WatchSync.apply(context, WatchAction.COMPLETE_SET)
+        WatchSync.apply(context, WatchAction.FINISH_WORKOUT)
+        assertNull(LocalStorage.loadActiveSession(context))
+        val saved = LocalStorage.loadHistory(context).single()
+        assertEquals("Push", saved.splitTitle)
+        assertEquals(listOf("Bench Press", "Plank"), saved.exercises.map { it.name })
+
+        val s = watchStateOf(context)
+        assertFalse(s.active)
+        assertEquals("Push", s.lastWorkout?.workoutName)
+        // Counted like the phone's finish sheet: filled-in sets count even if not ticked.
+        val stats = computeWorkoutStats(saved.exercises, emptyList())
+        assertEquals(stats.workSets, s.lastWorkout?.sets)
+        assertEquals(formatVolume(stats.volumeKg), s.lastWorkout?.volume)
+    }
+
+    @Test
+    fun start_usesTheDaysTemplate_andIgnoresUnknownDaysOrARunningWorkout() {
+        val days = watchStateOf(context).days
+        assertTrue(days.isNotEmpty())
+        WatchSync.startWorkout(context, "Not a day")
+        assertNull(LocalStorage.loadActiveSession(context))
+
+        WatchSync.startWorkout(context, days.first())
+        val (title, exercises) = LocalStorage.loadActiveSession(context)!!
+        assertEquals(days.first(), title)
+        assertEquals(LocalStorage.loadTemplateForSplit(context, title).map { it.first }, exercises.map { it.name })
+
+        WatchSync.startWorkout(context, days.last())
+        assertEquals(days.first(), LocalStorage.loadActiveSession(context)!!.first)
     }
 }

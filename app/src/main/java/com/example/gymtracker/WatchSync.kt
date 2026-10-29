@@ -8,6 +8,7 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.PutDataRequest
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
+import java.util.Date
 
 // ============================================================================
 // WATCH (Wear OS remote)
@@ -52,7 +53,65 @@ object WatchSync {
                 LocalStorage.setRestEndTimeMillis(context, restEnd + 15_000L, fromWidget = true)
             }
             WatchAction.SKIP_REST -> if (restEnd > 0L) LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+            WatchAction.REMOVE_REST -> if (restEnd > System.currentTimeMillis()) {
+                // Less than a second left would flash 0:00: end the rest instead.
+                val shorter = restEnd - 15_000L
+                LocalStorage.setRestEndTimeMillis(context, if (shorter > System.currentTimeMillis() + 1_000L) shorter else 0L, fromWidget = true)
+            }
+            WatchAction.UNDO_SET -> undoLastSet(context)
+            WatchAction.FINISH_WORKOUT -> finishWorkout(context)
         }
+    }
+
+    /** Starts [splitTitle] like Start on the Today screen. Ignored while a workout runs or for a day not in the program. */
+    fun startWorkout(context: Context, splitTitle: String) {
+        if (LocalStorage.loadActiveSession(context) != null) return
+        if (programFor(LocalStorage.loadUserProfile(context).splitProgram).splits.none { it.title == splitTitle }) return
+        val history = LocalStorage.loadHistory(context)
+        val settings = LocalStorage.loadSettings(context)
+        val entries = LocalStorage.loadTemplateForSplit(context, splitTitle).map { (name, muscle) ->
+            newExerciseEntry(context, splitTitle, name, muscle, history, settings)
+        }
+        LocalStorage.saveActiveSession(context, splitTitle, entries, fromWidget = true)
+    }
+
+    /**
+     * Un-ticks the set ticked last: the last finished set before the next one to do, so in the
+     * current exercise or, if it has none yet, the exercise before. Also ends the rest it started.
+     */
+    internal fun undoLastSet(context: Context) {
+        val (splitTitle, exercises) = LocalStorage.loadActiveSession(context) ?: return
+        val current = exercises.indexOfFirst { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
+        val searchUpTo = if (current == -1) exercises.lastIndex else current
+        val exIdx = (searchUpTo downTo 0).firstOrNull { i -> !exercises[i].isSkipped && exercises[i].sets.any { it.isCompleted } } ?: return
+        val ex = exercises[exIdx]
+        val setIdx = ex.sets.indexOfLast { it.isCompleted }
+        val sets = ex.sets.toMutableList().also { it[setIdx] = it[setIdx].copy(isCompleted = false) }
+        LocalStorage.saveActiveSession(context, splitTitle, exercises.toMutableList().also { it[exIdx] = ex.copy(sets = sets) }, fromWidget = true)
+        LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+    }
+
+    /** Saves the workout like Finish → Save on the phone (no photo), timed from its start to now. */
+    internal fun finishWorkout(context: Context) {
+        val (splitTitle, exercises) = LocalStorage.loadActiveSession(context) ?: return
+        val now = Date()
+        val start = LocalStorage.getActiveSessionStartTime(context)
+        val completed = buildCompletedWorkout(
+            CompletedWorkout(
+                id = now.time,
+                splitTitle = splitTitle,
+                dateKey = DateUtils.formatDayKey(now),
+                displayDate = DateUtils.formatDisplayDate(now),
+                durationSeconds = ((now.time - start) / 1000L).coerceAtLeast(0L),
+                bodyWeightKg = LocalStorage.loadUserProfile(context).currentWeightKg,
+                photoPath = null,
+                skippedExercises = exercises.filter { it.isSkipped }.map { it.name },
+                exercises = emptyList()
+            ),
+            exercises,
+            LocalStorage.loadHistory(context)
+        )
+        LocalStorage.saveCompletedWorkout(context, completed, fromWidget = true)
     }
 }
 
@@ -64,8 +123,12 @@ class WatchListenerService : WearableListenerService() {
             WatchSync.resend(context)
             return
         }
-        val action = WatchLink.actionFromPath(event.path) ?: return
-        WatchSync.apply(context, action)
+        if (event.path == WatchLink.START_WORKOUT) {
+            WatchSync.startWorkout(context, String(event.data ?: ByteArray(0), Charsets.UTF_8))
+        } else {
+            val action = WatchLink.actionFromPath(event.path) ?: return
+            WatchSync.apply(context, action)
+        }
         LocalStorage.flush(context)
         Wearable.getMessageClient(context).sendMessage(event.sourceNodeId, WatchLink.ACK, null)
     }
