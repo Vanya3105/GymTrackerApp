@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through design polish is merged into `master` (2026-10-29). Three branches wait for a phone test, stacked: **Performance pass 2** (`perf-pass-2`), **Watch v2** (`watch-v2`, needs the phone *and* the Galaxy Watch, both apps reinstalled since the watch protocol changed), then **Design polish 2** (`design-polish-2`). Check on the phone: typing set values with the keypad (Next, −/+, Done, back closes it), the one-line coaching and "Use …", "Go lighter for the rest" in an exercise's ⋮ menu, swipe-left to delete a weigh-in, tapping/dragging the body-weight chart, Profile's Age/Body weight editors, light mode. Watch checklist: start a day from the start list and from the tile, the bezel on weight/reps and on a rest, undo, the overview, finish from the watch. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Everything through **Design polish 2** is merged into `master` (2026-10-29, at the owner's request, before a phone test): performance pass 2, Watch v2 and Design polish 2. Still to try on the phone and Galaxy Watch (reinstall both apps, the watch protocol changed): the set keypad (Next, −/+, Done, back closes it), "Use …" and "Go lighter for the rest", swipe-left on a weigh-in, the body-weight chart, Profile's editors, light mode; on the watch: start from the list and the tile, the bezel, undo, the overview, finish. Fixes from that test go on a new branch. Then: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
