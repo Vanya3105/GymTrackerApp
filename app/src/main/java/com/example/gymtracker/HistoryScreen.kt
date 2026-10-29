@@ -361,11 +361,6 @@ fun WorkoutHistoryCard(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Edit", style = AppType.body) },
-                        leadingIcon = { Icon(Icons.Rounded.Edit, null) },
-                        onClick = { menuOpen = false; onOpen() }
-                    )
-                    DropdownMenuItem(
                         text = { Text("Delete", style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onDelete() }

@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LinkOff
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -41,11 +40,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -53,7 +50,6 @@ fun SettingsScreen(
     userProfile: UserProfile,
     onUpdateSettings: (AppSettings) -> Unit,
     onUpdateProfile: (UserProfile) -> Unit,
-    onOpenOnboarding: () -> Unit,
     onReplayTips: () -> Unit,
     onDataRestored: () -> Unit,
     onEditProgram: (String) -> Unit,
@@ -87,23 +83,12 @@ fun SettingsScreen(
         }
     }
 
-    var editing by remember { mutableStateOf<ProfileField?>(null) }
-
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Text("Profile", style = AppType.display, color = P.textPrimary, modifier = Modifier.statusBarsPadding().padding(top = 20.dp))
-        }
-
-        item {
-            // Plain rows that open an editor: steppers made the profile look like a form.
-            SettingsGroup("You", padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-                ValueRow("Age", if (userProfile.age > 0) "${userProfile.age}" else "Not set") { editing = ProfileField.AGE }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                ValueRow("Body weight", if (userProfile.currentWeightKg > 0f) formatWeightKg(userProfile.currentWeightKg) else "Not set") { editing = ProfileField.WEIGHT }
-            }
         }
 
         item {
@@ -187,7 +172,10 @@ fun SettingsScreen(
                 AutoBackupSection()
                 Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SecondaryButton("Save backup", { exportLauncher.launch("gymtracker_backup.json") }, Modifier.weight(1f), icon = Icons.Rounded.FileDownload)
+                    // With automatic backup on, "Back up now" above does this job.
+                    if (!AutoBackup.status.isOn) {
+                        SecondaryButton("Save backup", { exportLauncher.launch("gymtracker_backup.json") }, Modifier.weight(1f), icon = Icons.Rounded.FileDownload)
+                    }
                     SecondaryButton("Restore", { importLauncher.launch(arrayOf("application/json", "*/*")) }, Modifier.weight(1f), icon = Icons.Rounded.FileUpload)
                 }
                 Spacer(Modifier.height(8.dp))
@@ -205,7 +193,6 @@ fun SettingsScreen(
                     TutorialPrefs.resetAllTutorials(context)
                     onReplayTips()
                 }
-                LinkRow(Icons.Rounded.Tune, "Redo first-time setup", onOpenOnboarding)
                 Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
                     Icon(Icons.Rounded.Widgets, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
@@ -231,84 +218,6 @@ fun SettingsScreen(
         }
     }
 
-    when (editing) {
-        ProfileField.AGE -> EditNumberSheet(
-            title = "Age",
-            initial = if (userProfile.age > 0) "${userProfile.age}" else "",
-            unit = null,
-            decimal = false,
-            step = 1f,
-            onDismiss = { editing = null },
-            onSave = { v -> onUpdateProfile(userProfile.copy(age = v.toInt().coerceIn(10, 120))); editing = null }
-        )
-        ProfileField.WEIGHT -> EditNumberSheet(
-            title = "Body weight",
-            initial = if (userProfile.currentWeightKg > 0f) settings.weightUnit.number(userProfile.currentWeightKg) else "",
-            unit = settings.weightUnit.label,
-            decimal = true,
-            step = settings.weightUnit.bodyStep,
-            note = "To track a trend, log weigh-ins on the Progress tab.",
-            onDismiss = { editing = null },
-            onSave = { v -> onUpdateProfile(userProfile.copy(currentWeightKg = settings.weightUnit.toKg(v).coerceAtLeast(20f))); editing = null }
-        )
-        null -> {}
-    }
-}
-
-private enum class ProfileField { AGE, WEIGHT }
-
-@Composable
-private fun ValueRow(label: String, value: String, onClick: () -> Unit) {
-    val P = LocalPalette.current
-    Row(
-        Modifier.fillMaxWidth().pressable(pressedScale = 0.99f, onClick = onClick).padding(vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
-        Text(value, style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
-        Spacer(Modifier.width(4.dp))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
-    }
-}
-
-/** One number, typed or nudged, then saved. */
-@Composable
-private fun EditNumberSheet(
-    title: String,
-    initial: String,
-    unit: String?,
-    decimal: Boolean,
-    step: Float,
-    note: String? = null,
-    onDismiss: () -> Unit,
-    onSave: (Float) -> Unit
-) {
-    val P = LocalPalette.current
-    var input by remember { mutableStateOf(initial) }
-    val value = input.toFloatOrNull()
-    fun nudge(delta: Float) {
-        val next = ((value ?: 0f) + delta).coerceAtLeast(0f)
-        input = if (decimal) formatKgClean((next * 10).roundToInt() / 10f) else "${next.roundToInt()}"
-    }
-    AppBottomSheet(onDismiss = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
-            Text(title, style = AppType.title, color = P.textPrimary)
-            if (note != null) Text(note, style = AppType.caption, color = P.textSecondary)
-            Spacer(Modifier.height(20.dp))
-            NumberStepper(
-                value = input,
-                onValueChange = { v -> if (decimal) sanitizeDecimalInput(v)?.let { input = it } else input = v.filter(Char::isDigit).take(3) },
-                onMinus = { nudge(-step) },
-                onPlus = { nudge(step) },
-                keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
-                modifier = Modifier.fillMaxWidth(),
-                height = 56.dp
-            )
-            if (unit != null) Text(unit, style = AppType.caption, color = P.textTertiary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp))
-            Spacer(Modifier.height(20.dp))
-            PrimaryButton("Save", onClick = { value?.takeIf { it > 0f }?.let(onSave) }, enabled = (value ?: 0f) > 0f, modifier = Modifier.fillMaxWidth())
-        }
-    }
 }
 
 @Composable

@@ -247,6 +247,8 @@ fun GymTrackerApp(
     var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
     // Split builder, opened from onboarding or Profile with the name typed in the search (may be blank).
     var buildingSplit by rememberSaveable { mutableStateOf<String?>(null) }
+    // Bumped when an exercise's page changes its note or training max.
+    var exerciseInfoVersion by remember { mutableIntStateOf(0) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -469,7 +471,6 @@ fun GymTrackerApp(
                             // One body weight everywhere: a new weight here is a weigh-in too.
                             if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, updated.currentWeightKg)
                         },
-                        onOpenOnboarding = { showOnboarding = true },
                         onReplayTips = { selectedTab = AppTab.TODAY },
                         onDataRestored = {
                             history = LocalStorage.loadHistory(context)
@@ -529,6 +530,7 @@ fun GymTrackerApp(
                             initialPhotoPath = editing.photoPath,
                             haptics = haptics,
                             hasUnsavedEdits = currentExercises != editing.exercises,
+                            infoVersion = exerciseInfoVersion,
                             onOpenExercise = { openExercise = it },
                             onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { currentExercises = it },
@@ -568,6 +570,7 @@ fun GymTrackerApp(
                             isEditingPastWorkout = false,
                             initialPhotoPath = null,
                             haptics = haptics,
+                            infoVersion = exerciseInfoVersion,
                             onOpenExercise = { openExercise = it },
                             onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { updated ->
@@ -682,7 +685,23 @@ fun GymTrackerApp(
                         renamed
                     },
                     onChangeType = { type -> changeExerciseType(name, type) },
-                    onBack = { openExercise = null }
+                    onBack = { openExercise = null },
+                    onInfoChanged = {
+                        exerciseInfoVersion++
+                        // A new training max lays the exercise out again, if none of today's sets are done.
+                        val split = activeSplit
+                        if (split != null && editingPastWorkout == null) {
+                            val relaid = currentExercises.map { ex ->
+                                if (exerciseKey(ex.name) == exerciseKey(name) && ex.sets.none { it.isCompleted } && liftPlanFor(split.title, ex.name) != null) {
+                                    newExerciseEntry(context, split.title, ex.name, ex.targetMuscle, history, settings).copy(restSeconds = ex.restSeconds)
+                                } else ex
+                            }
+                            if (relaid != currentExercises) {
+                                currentExercises = relaid
+                                LocalStorage.saveActiveSession(context, split.title, relaid)
+                            }
+                        }
+                    }
                 )
             }
             StatusBarScrim()

@@ -9,9 +9,10 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Everyday fixes** is tested and merged into `master` (2026-10-29). Branch `share-design` sits on top of `phase-7-data`, so one build has both; the owner's phone test of that build is next:
+**Everyday fixes** is tested and merged into `master` (2026-10-29). Three branches are stacked, each on the one before, so the checked-out `declutter` build has all of them; the owner's phone test is next:
 - Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
-- Share sheet (`share-design`): Share on the finish sheet, History's ⋮ menu, or Today's week card.
+- Share sheet (`share-design`): Share on the finish sheet or History's ⋮ menu.
+- Declutter (`declutter`): see its section below.
 
 Next: the owner has widget changes to describe; then Phase 7 step 2, merge duplicate exercises.
 
@@ -147,6 +148,15 @@ Researched Strava (stats stickers over your own photo), Hevy (several shareables
 - [x] Cards, only when they have something to say: Summary (title, date, workout number, volume as a hero number with "about 4 small cars" and "↑ 24% vs last Push", time/sets/new bests, top sets with bests marked), New bests (PR medal, each best with the one it beat), Muscles (where the sets went, helpers half, like recovery), Streak (weeks in a row or workouts logged, this week's days, this month / all time)
 - [x] Backgrounds: Dark, Light, Clear (transparent PNG to add as a sticker over your own photo or video; text turns white there and gets a soft shadow) and Photo (the workout's photo, content in the lower half). Inter like the app (it was the system font); content kept clear of Instagram's top and bottom bars; no "0 new bests" (that slot counts exercises instead)
 - [x] Shared past workouts use their own date and numbers (were dated today). Tests: `ShareCardsTest` (data, comparisons, every card drawn to `app/build/screenshots/share-*.png`)
+
+## Declutter (branch `declutter`, after Share design)
+One place for each thing; the owner found buttons and rows that did the same as something elsewhere.
+- [x] One exercise page: the workout's "Notes & history" sheet repeated the exercise page (type, training max, best tiles, chart, recent sessions) and linked to it. Tapping an exercise's name now opens the page (a › after the name says so); the page gained the editable setup note and puts type / training max / note above "Nothing logged yet", so new exercises can be set up. A new training max still re-lays out today's untouched sets. The sheet's move up/down (the drag handle does it) and "Remove" (the ⋮ menu has it) went with it
+- [x] Rest: the pill on each exercise opens the rest choices (it cycled through them on every tap) and the ⋮ menu no longer repeats them
+- [x] Workout ⋮: no "Use last time's numbers" (the card at the top does it); only Discard is left
+- [x] History ⋮: no "Edit" (tapping the card opens it)
+- [x] Today: no body-weight pill in the header (Progress has the weight and the Log button) and no share button on the week card (History's ⋮ and the finish sheet share)
+- [x] Profile: the "You" group is gone (Age wasn't used anywhere; body weight is logged on Progress), "Redo first-time setup" too (units, split and weight all have their place), and "Save backup" hides while automatic backup is on ("Back up now" does it)
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.

@@ -60,7 +60,9 @@ fun ExerciseDetailScreen(
     canRename: Boolean,
     onRename: (String) -> Boolean,
     onChangeType: (ExerciseType) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** The note or training max changed, so a running workout can reread them. */
+    onInfoChanged: () -> Unit = {}
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -71,7 +73,8 @@ fun ExerciseDetailScreen(
     val muscle = info?.muscle ?: remember(exerciseName, history) {
         history.firstNotNullOfOrNull { w -> w.exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(exerciseName) }?.targetMuscle }
     }
-    val note = remember(exerciseName, history) { LocalStorage.getExerciseNote(context, exerciseName) }
+    var note by remember(exerciseName) { mutableStateOf(LocalStorage.getExerciseNote(context, exerciseName)) }
+    var editingNote by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -99,6 +102,13 @@ fun ExerciseDetailScreen(
                 if (sub.isNotEmpty()) Text(sub, style = AppType.body, color = P.textSecondary)
             }
         }
+
+        // Set-up first: a new exercise needs its type and note before it has any history.
+        item { ExerciseTypeRow(stats.type, onChangeType) }
+        if (programsUsingTrainingMaxOf(exerciseName).isNotEmpty()) {
+            item { TrainingMaxRow(exerciseName, history, stats.best1RmKg, onChanged = onInfoChanged) }
+        }
+        item { NoteRow(note) { editingNote = true } }
 
         if (stats.sessions.isEmpty()) {
             item { EmptyState(Icons.Rounded.FitnessCenter, "Nothing logged yet", "Finish a workout with this exercise to see your progress.") }
@@ -140,25 +150,7 @@ fun ExerciseDetailScreen(
             }
         }
 
-        item { ExerciseTypeRow(stats.type, onChangeType) }
-        if (programsUsingTrainingMaxOf(exerciseName).isNotEmpty()) {
-            item { TrainingMaxRow(exerciseName, history, stats.best1RmKg) }
-        }
-
         item { ProgressChartCard(stats, haptics, Modifier.enterAnimation(0)) }
-
-        if (note.isNotBlank()) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Rounded.PushPin, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(note, style = AppType.body, color = P.textPrimary)
-                }
-            }
-        }
 
         if (stats.type.hasWeightSuggestions) {
             item { SectionHeader("Rep records") }
@@ -167,6 +159,20 @@ fun ExerciseDetailScreen(
 
         item { SectionHeader("History") }
         items(stats.sessions, key = { it.workoutId }) { session -> SessionCard(session) }
+    }
+
+    if (editingNote) {
+        NoteDialog(
+            current = note,
+            onDismiss = { editingNote = false },
+            onSave = { text ->
+                LocalStorage.saveExerciseNote(context, exerciseName, text)
+                note = LocalStorage.getExerciseNote(context, exerciseName)
+                editingNote = false
+                haptics.tick()
+                onInfoChanged()
+            }
+        )
     }
 
     if (showRename) {
@@ -539,4 +545,48 @@ private fun xFraction(points: List<Pair<Long, Float>>, i: Int): Float {
 private fun nearestPoint(points: List<Pair<Long, Float>>, x: Float, width: Float, padX: Float): Int =
     points.indices.minBy { i -> abs(padX + xFraction(points, i) * (width - padX * 2) - x) }
 
+/** The setup note (seat height, grip…), or an invitation to add one. Tap to edit. */
+@Composable
+private fun NoteRow(note: String, onEdit: () -> Unit) {
+    val P = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(P.bgControl).pressable(pressedScale = 0.99f, onClick = onEdit).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Rounded.PushPin, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            note.ifBlank { "Add a setup note (seat height, grip…)" },
+            style = AppType.body,
+            color = if (note.isBlank()) P.textTertiary else P.textPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(Icons.Rounded.Edit, "Edit note", tint = P.textTertiary, modifier = Modifier.size(16.dp))
+    }
+}
 
+@Composable
+private fun NoteDialog(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    val P = LocalPalette.current
+    var text by remember { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = P.bgElevated,
+        title = { Text("Setup note", style = AppType.headline, color = P.textPrimary) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Seat height, grip, pin…") },
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = P.accentPrimary,
+                    unfocusedBorderColor = P.borderStrong
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save", color = P.accentPrimary, style = AppType.label) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+    )
+}
