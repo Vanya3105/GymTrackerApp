@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Phases 0–6 are merged into `master` (v3.6.0). **Coaching v2** (branch `coaching-v2`) is done and waits for the owner to try it on a phone before merging. Then: the owner wants to rework the start screen and the split picker (they'll describe it). After that: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
+Phases 0–6 are merged into `master` (v3.6.0). **Coaching v2** (branch `coaching-v2`) and the **split picker** (branch `split-picker`, built on top of it) are done and wait for the owner to try them on a phone before merging. Next: design polishing of the split picker and builder (the owner will say what to change). After that: **Phase 7, step 1**: CSV export (branch `phase-7-data`).
 
 ---
 
@@ -86,6 +86,12 @@ Weight suggestions rewritten from published guidance (all in `Coaching.kt`, test
 - [x] Default ranges 6–10 (compound) / 8–12 (isolation), unified (they disagreed before); a day's target overrides; even sets of ≤5 twice running (5×5, 3×3) read as strength work (3–5), not misses
 - [x] Uses the same day's history first, any day's when this day has none (was: none)
 - [x] Muscle recovery per muscle (Room-free, computed from history): 11 groups instead of 5 (Biceps, Triceps, Forearms split from "Arms"; Quads, Hamstrings, Glutes, Calves from "Legs"; Core added). Each exercise loads its target muscle fully and assisting muscles by half (triceps/front delts on presses, biceps on rows and pulldowns, forearms on deadlifts and hammer curls) or a quarter (grip, traps). Recovery time per muscle (quads/hamstrings/back ~72 h, glutes 60, chest/shoulders 48, triceps 42, biceps/calves 36, forearms/core 30), longer with more sets; sessions close together stack. Home and the widget show the least rested muscles that fit; Progress lists all. Tested by `RecoveryTest`
+
+## Split picker ✅ (branch `split-picker`, after Coaching v2)
+- [x] Onboarding and Profile show the current split, a search bar and "Build your own" instead of every split in a list. The search (`SplitPicker.kt`, ranked by `searchSplits` in `SplitLibrary.kt`) opens as a sheet: name, day names, keywords ("ppl", "bro", "531") and "4 days"; filter by days a week; your own splits first with an edit button (Profile)
+- [x] Four more built-in splits: Full body 2-day, Bro split, Push / Pull / Legs ×2, PHUL, with starting exercises
+- [x] Split builder (`SplitBuilderScreen.kt`): days a week → each day's muscles (quick layouts PPL / Upper-Lower / Full body / One muscle a day, then tap muscles; days name themselves, rename by hand) → review: name, each day's exercises (remove, add from the library). Nothing is saved until "Create split", which makes it the active split
+- [x] Days are named like the built-in ones where the muscles match ("Push", "Legs", repeated days "Upper A"/"Upper B"), so they reuse those days' exercises and history; new names get starter exercises picked per muscle (`starterExercises`, a B day gets different ones). Tested by `SplitLibraryTest`
 
 ## Phase 7 — Data in/out
 - [ ] CSV export

@@ -47,7 +47,8 @@ fun SettingsScreen(
     onOpenOnboarding: () -> Unit,
     onReplayTips: () -> Unit,
     onDataRestored: () -> Unit,
-    onEditProgram: (String) -> Unit
+    onEditProgram: (String) -> Unit,
+    onBuildSplit: (String) -> Unit
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -110,31 +111,23 @@ fun SettingsScreen(
                 Spacer(Modifier.height(16.dp))
                 Text("Training split", style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
-                allPrograms().forEach { prog ->
-                    val selected = userProfile.splitProgram == prog.id
-                    ProgramOption(
-                        prog,
-                        selected = selected,
-                        actionLabel = if (prog.isBuiltIn) "Customize" else "Edit",
-                        onAction = {
-                            if (prog.isBuiltIn) {
-                                // Built-in programs stay as they are; edits go to a copy.
-                                val copy = customizedCopy(prog)
-                                LocalStorage.saveProgram(context, copy)
-                                if (selected) onUpdateProfile(userProfile.copy(splitProgram = copy.id))
-                                onEditProgram(copy.id)
-                            } else onEditProgram(prog.id)
-                        }
-                    ) {
-                        onUpdateProfile(userProfile.copy(splitProgram = prog.id))
+                val current = programFor(userProfile.splitProgram)
+                SplitPicker(
+                    selectedId = current.id,
+                    onSelect = { onUpdateProfile(userProfile.copy(splitProgram = it.id)) },
+                    onBuild = onBuildSplit,
+                    onEdit = { onEditProgram(it.id) },
+                    cardActionLabel = if (current.isBuiltIn) "Customize" else "Edit",
+                    onCardAction = {
+                        if (current.isBuiltIn) {
+                            // Built-in programs stay as they are; edits go to a copy.
+                            val copy = customizedCopy(current)
+                            LocalStorage.saveProgram(context, copy)
+                            onUpdateProfile(userProfile.copy(splitProgram = copy.id))
+                            onEditProgram(copy.id)
+                        } else onEditProgram(current.id)
                     }
-                    Spacer(Modifier.height(8.dp))
-                }
-                SecondaryButton("New program", {
-                    val program = SplitProgramInfo(newProgramId(), "My program", "", 3, listOf(WorkoutSplit("Day 1", "", "01")))
-                    LocalStorage.saveProgram(context, program)
-                    onEditProgram(program.id)
-                }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
+                )
             }
         }
 
@@ -340,53 +333,6 @@ private fun LabeledStepper(label: String, modifier: Modifier = Modifier, content
         Text(label, style = AppType.label, color = P.textSecondary)
         Spacer(Modifier.height(6.dp))
         content()
-    }
-}
-
-@Composable
-fun ProgramOption(
-    prog: SplitProgramInfo,
-    selected: Boolean,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    val P = LocalPalette.current
-    val border by animateColorAsState(if (selected) P.accentPrimary else P.borderSubtle, label = "prog_border")
-    val bg by animateColorAsState(if (selected) P.accentSoft else P.bgCard.copy(alpha = 0f), label = "prog_bg")
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .border(1.5.dp, border, RoundedCornerShape(14.dp))
-            .pressable(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(prog.name, style = AppType.bodyStrong, color = P.textPrimary)
-            val tagline = prog.tagline.ifBlank { prog.splits.joinToString(", ") { it.title } }
-            Text("$tagline · ${prog.weeklyGoal} days a week", style = AppType.caption, color = P.textSecondary)
-        }
-        if (actionLabel != null && onAction != null) {
-            Text(
-                actionLabel,
-                style = AppType.label,
-                color = P.accentPrimary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onAction).padding(horizontal = 8.dp, vertical = 6.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-        Box(
-            Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(if (selected) P.accentPrimary else P.bgControl),
-            contentAlignment = Alignment.Center
-        ) {
-            if (selected) Icon(Icons.Rounded.Check, null, tint = P.onAccentPrimary, modifier = Modifier.size(14.dp))
-        }
     }
 }
 

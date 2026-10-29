@@ -197,6 +197,8 @@ fun GymTrackerApp(
     // Exercise detail screen, shown over everything else (including a running workout).
     var openExercise by rememberSaveable { mutableStateOf<String?>(null) }
     var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Split builder, opened from onboarding or Profile with the name typed in the search (may be blank).
+    var buildingSplit by rememberSaveable { mutableStateOf<String?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -363,7 +365,8 @@ fun GymTrackerApp(
                             weightHistory = LocalStorage.loadWeightHistory(context)
                             onUpdateSettings(LocalStorage.loadSettings(context))
                         },
-                        onEditProgram = { haptics.tick(); editingProgramId = it }
+                        onEditProgram = { haptics.tick(); editingProgramId = it },
+                        onBuildSplit = { haptics.tick(); buildingSplit = it }
                     )
                 }
             }
@@ -582,6 +585,7 @@ fun GymTrackerApp(
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
                     onBack = { showOnboarding = false },
+                    onBuildSplit = { haptics.tick(); buildingSplit = it },
                     onSaveProfile = { newProfile ->
                         val weightChanged = newProfile.currentWeightKg != userProfile.currentWeightKg
                         userProfile = newProfile
@@ -589,6 +593,28 @@ fun GymTrackerApp(
                         if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
                         showOnboarding = false
                     }
+                )
+            }
+        }
+
+        // Last, so it also covers onboarding.
+        var shownBuilderName by remember { mutableStateOf(buildingSplit) }
+        if (buildingSplit != null) shownBuilderName = buildingSplit
+        AnimatedVisibility(
+            visible = buildingSplit != null,
+            enter = slideInHorizontallyBy(1f) + fadeIn(tween(150)),
+            exit = fadeOut(tween(180))
+        ) {
+            shownBuilderName?.let { name ->
+                SplitBuilderScreen(
+                    initialName = name,
+                    haptics = haptics,
+                    onCreated = { program ->
+                        userProfile = userProfile.copy(splitProgram = program.id)
+                        LocalStorage.saveUserProfile(context, userProfile)
+                        buildingSplit = null
+                    },
+                    onClose = { buildingSplit = null }
                 )
             }
         }

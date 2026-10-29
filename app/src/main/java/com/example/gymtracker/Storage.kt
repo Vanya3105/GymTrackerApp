@@ -583,6 +583,10 @@ object LocalStorage {
         data(context).templates[splitTitle]
             ?: defaultTemplateForSplit(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
 
+    /** The exercises a day of this name already has (saved or built-in), without saving anything; null if none. */
+    fun existingTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>>? =
+        (data(context).templates[splitTitle] ?: defaultTemplateForSplit(splitTitle)).takeIf { it.isNotEmpty() }
+
     /** Replaces a day's exercise list. Targets of exercises that stay on it are kept. */
     fun saveTemplateForSplit(context: Context, splitTitle: String, list: List<Pair<String, String>>) {
         val keys = list.mapTo(HashSet()) { exerciseKey(it.first) }
