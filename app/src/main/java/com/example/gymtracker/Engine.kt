@@ -225,6 +225,55 @@ val SPLIT_PROGRAMS = mapOf(
             WorkoutSplit("Full Body B", "Shoulder press, row, RDL", "02"),
             WorkoutSplit("Full Body C", "Dips, chin-ups, leg press", "03")
         )
+    ),
+    "FULL_BODY_2" to SplitProgramInfo(
+        id = "FULL_BODY_2",
+        name = "Full body, 2 days",
+        tagline = "Two whole-body days for a busy week",
+        weeklyGoal = 2,
+        splits = listOf(
+            WorkoutSplit("Full Body A", "Incline press, pulldown, squat", "01"),
+            WorkoutSplit("Full Body B", "Shoulder press, row, RDL", "02")
+        )
+    ),
+    "BRO_SPLIT" to SplitProgramInfo(
+        id = "BRO_SPLIT",
+        name = "Bro split",
+        tagline = "One muscle group a day, five days",
+        weeklyGoal = 5,
+        splits = listOf(
+            WorkoutSplit("Chest", "Presses and flyes", "01"),
+            WorkoutSplit("Back", "Pulldowns, rows, deadlift", "02"),
+            WorkoutSplit("Shoulders", "Presses and raises", "03"),
+            WorkoutSplit("Arms", "Biceps and triceps", "04"),
+            WorkoutSplit("Legs", "Quads, hamstrings, calves", "05")
+        )
+    ),
+    "PPL_6" to SplitProgramInfo(
+        id = "PPL_6",
+        name = "Push / Pull / Legs ×2",
+        tagline = "Six days, every muscle twice a week",
+        weeklyGoal = 6,
+        splits = listOf(
+            WorkoutSplit("Push A", "Bench, shoulder press, triceps", "01"),
+            WorkoutSplit("Pull A", "Rows, pulldown, biceps", "02"),
+            WorkoutSplit("Legs A", "Squat, RDL, calves", "03"),
+            WorkoutSplit("Push B", "Overhead press, incline, triceps", "04"),
+            WorkoutSplit("Pull B", "Pulldown, rows, rear delts", "05"),
+            WorkoutSplit("Legs B", "Hack squat, leg curls, calves", "06")
+        )
+    ),
+    "PHUL" to SplitProgramInfo(
+        id = "PHUL",
+        name = "PHUL",
+        tagline = "Heavy upper/lower days plus muscle-building days",
+        weeklyGoal = 4,
+        splits = listOf(
+            WorkoutSplit("Upper Power", "Heavy bench, row, press", "01"),
+            WorkoutSplit("Lower Power", "Heavy squat and deadlift", "02"),
+            WorkoutSplit("Upper Hypertrophy", "Higher reps, chest, back, arms", "03"),
+            WorkoutSplit("Lower Hypertrophy", "Higher reps, quads, hamstrings", "04")
+        )
     )
 )
 
@@ -514,6 +563,20 @@ fun defaultTemplateForSplit(splitTitle: String): List<Pair<String, String>> {
         "Full Body A" -> listOf("Incline Dumbbell Press", "Lat Pulldown", "Leg Press", "Lateral Raise")
         "Full Body B" -> listOf("Seated Dumbbell Shoulder Press", "Chest-Supported Row", "Romanian Deadlift", "Incline Dumbbell Curl")
         "Full Body C" -> listOf("Dips", "Weighted Pull-Up", "Leg Extension", "Overhead Cable Tricep Extension")
+        "Chest" -> listOf("Barbell Bench Press", "Incline Dumbbell Press", "Machine Chest Press", "Cable Fly", "Pec Deck")
+        "Back" -> listOf("Deadlift", "Lat Pulldown", "Barbell Row", "Seated Cable Row", "Straight-Arm Pulldown")
+        "Shoulders" -> listOf("Overhead Press", "Lateral Raise", "Cable Lateral Raise", "Rear Delt Fly", "Face Pull")
+        "Arms" -> listOf("Barbell Curl", "Skull Crusher", "Incline Dumbbell Curl", "Rope Pushdown", "Hammer Curl", "Overhead Cable Tricep Extension")
+        "Push A" -> listOf("Barbell Bench Press", "Seated Dumbbell Shoulder Press", "Incline Dumbbell Press", "Lateral Raise", "Tricep Pushdown")
+        "Pull A" -> listOf("Barbell Row", "Lat Pulldown", "Face Pull", "Barbell Curl", "Hammer Curl")
+        "Legs A" -> listOf("Back Squat", "Romanian Deadlift", "Leg Press", "Lying Leg Curl", "Standing Calf Raise")
+        "Push B" -> listOf("Overhead Press", "Incline Barbell Bench Press", "Cable Fly", "Cable Lateral Raise", "Overhead Cable Tricep Extension")
+        "Pull B" -> listOf("Close-Grip Lat Pulldown", "Chest-Supported Row", "Seated Cable Row", "Rear Delt Fly", "Incline Dumbbell Curl")
+        "Legs B" -> listOf("Hack Squat", "Stiff-Leg Deadlift", "Bulgarian Split Squat", "Seated Leg Curl", "Seated Calf Raise")
+        "Upper Power" -> listOf("Barbell Bench Press", "Barbell Row", "Overhead Press", "Lat Pulldown", "Barbell Curl", "Skull Crusher")
+        "Lower Power" -> listOf("Back Squat", "Deadlift", "Leg Press", "Lying Leg Curl", "Standing Calf Raise")
+        "Upper Hypertrophy" -> listOf("Incline Dumbbell Press", "Seated Cable Row", "Cable Fly", "Lateral Raise", "Incline Dumbbell Curl", "Rope Pushdown")
+        "Lower Hypertrophy" -> listOf("Front Squat", "Romanian Deadlift", "Leg Extension", "Seated Leg Curl", "Seated Calf Raise")
         else -> emptyList()
     }
     return names.map { it to (ExerciseDatabase.find(it)?.muscle ?: "") }

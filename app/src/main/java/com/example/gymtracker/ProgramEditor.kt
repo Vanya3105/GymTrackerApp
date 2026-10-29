@@ -435,7 +435,7 @@ private fun TargetDialog(
 }
 
 @Composable
-private fun fieldColors() = LocalPalette.current.let { P ->
+internal fun fieldColors() = LocalPalette.current.let { P ->
     OutlinedTextFieldDefaults.colors(
         focusedBorderColor = P.accentPrimary,
         unfocusedBorderColor = P.borderStrong,

@@ -38,6 +38,8 @@ fun OnboardingScreen(
     canGoBack: Boolean,
     haptics: Haptics,
     onBack: () -> Unit,
+    /** Opens the split builder; a split built there becomes [initialProfile]'s split. */
+    onBuildSplit: (String) -> Unit,
     onSaveProfile: (UserProfile) -> Unit
 ) {
     val P = LocalPalette.current
@@ -45,7 +47,8 @@ fun OnboardingScreen(
     var age by remember { mutableStateOf(if (initialProfile.age > 0) initialProfile.age.toString() else "25") }
     // Kept in kg; the field shows and takes the chosen unit.
     var weightKg by remember { mutableStateOf(if (initialProfile.currentWeightKg > 0f) initialProfile.currentWeightKg.toString() else "75") }
-    var program by remember { mutableStateOf(initialProfile.splitProgram) }
+    // Keyed so a split made in the builder is picked here too.
+    var program by remember(initialProfile.splitProgram) { mutableStateOf(initialProfile.splitProgram) }
 
     BackHandler(enabled = step > 0 || canGoBack) {
         if (step > 0) step-- else onBack()
@@ -130,15 +133,13 @@ fun OnboardingScreen(
                 } else {
                     Text("How do you train?", style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
-                    Text("Pick the split closest to yours. You can change it any time in Profile.", style = AppType.body, color = P.textSecondary)
+                    Text("Find your split, or build your own. You can change it any time in Profile.", style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(24.dp))
-                    allPrograms().forEach { prog ->
-                        ProgramOption(prog, selected = program == prog.id) {
-                            haptics.tick()
-                            program = prog.id
-                        }
-                        Spacer(Modifier.height(10.dp))
-                    }
+                    SplitPicker(
+                        selectedId = program,
+                        onSelect = { haptics.tick(); program = it.id },
+                        onBuild = onBuildSplit
+                    )
                 }
             }
         }
@@ -174,7 +175,7 @@ fun OnboardingScreen(
 }
 
 @Composable
-private fun StepDots(count: Int, current: Int) {
+internal fun StepDots(count: Int, current: Int) {
     val P = LocalPalette.current
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(count) { i ->
