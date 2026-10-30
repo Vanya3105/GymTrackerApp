@@ -1,6 +1,8 @@
 package com.example.gymtracker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import kotlinx.coroutines.launch
@@ -43,7 +45,6 @@ fun HomeScreen(
     activeExerciseCount: Int,
     onStartWorkout: (WorkoutSplit) -> Unit,
     onStartQuickWorkout: () -> Unit,
-    onOpenProgress: () -> Unit,
     onOpenHistory: () -> Unit,
     /** False while something covers Today (a workout, onboarding), so its tips wait. */
     tipsAllowed: Boolean = true
@@ -59,6 +60,7 @@ fun HomeScreen(
     }
 
     val listState = rememberLazyListState()
+    var showRecovery by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val tour = rememberTipTour(
         Tips.HOME,
@@ -121,7 +123,7 @@ fun HomeScreen(
             item {
                 RecoveryStrip(
                     items = recovery,
-                    onClick = onOpenProgress,
+                    onClick = { showRecovery = true },
                     modifier = Modifier
                         .enterAnimation(3)
                         .tipTarget(tour, "RECOVERY")
@@ -152,6 +154,8 @@ fun HomeScreen(
                 }
             }
         }
+
+        if (showRecovery) RecoverySheet(recovery, onDismiss = { showRecovery = false })
 
         // Each card is scrolled into view before it's pointed at (Other workouts is below the fold).
         TipTourOverlay(tour, onShowStep = { key ->
@@ -395,5 +399,72 @@ private fun QuickWorkoutRow(onClick: () -> Unit) {
             Text("Pick exercises as you go", style = AppType.caption, color = P.textSecondary)
         }
         Icon(Icons.Rounded.PlayArrow, "Start an empty workout", tint = P.textTertiary, modifier = Modifier.size(22.dp))
+    }
+}
+
+/**
+ * Every muscle, least rested first: how recovered it is and when it was last trained. Opens from
+ * the Recovery card; recovery is a "what can I train today" question, so it lives on Today.
+ */
+@Composable
+private fun RecoverySheet(items: List<MuscleRecoveryItem>, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    var explain by remember { mutableStateOf(false) }
+    val sorted = remember(items) { items.sortedBy { it.recoveryPercent } }
+    val ready = items.count { it.status == RecoveryStatus.READY }
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(
+            Modifier.fillMaxHeight(0.85f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()
+        ) {
+            Text("Recovery", style = AppType.title, color = P.textPrimary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (ready == items.size) "Everything's recovered" else "${items.size - ready} of ${items.size} muscles still recovering",
+                    style = AppType.body,
+                    color = P.textSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (explain) "Hide" else "How it works",
+                    style = AppType.label,
+                    color = P.textSecondary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
+                )
+            }
+            if (explain) {
+                Text(
+                    "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
+                        "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
+                        "half a set, like biceps on rows or triceps on bench.",
+                    style = AppType.caption,
+                    color = P.textSecondary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            sorted.forEachIndexed { i, item ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                val color = recoveryColor(item.status, P)
+                Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
+                        Text(
+                            item.hoursSinceTrained?.let { h -> "Trained " + when { h < 1 -> "just now"; h < 48 -> "${h}h ago"; else -> "${h / 24} days ago" } } ?: "Not trained yet",
+                            style = AppType.caption,
+                            color = P.textSecondary
+                        )
+                    }
+                    if (item.status == RecoveryStatus.READY) {
+                        Text("Ready", style = AppType.caption, color = P.successText)
+                    } else {
+                        Column(Modifier.width(80.dp), horizontalAlignment = Alignment.End) {
+                            Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)
+                            Spacer(Modifier.height(4.dp))
+                            AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 4.dp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
