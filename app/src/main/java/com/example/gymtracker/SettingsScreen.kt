@@ -38,6 +38,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.SettingsBackupRestore
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOff
+import androidx.compose.material.icons.rounded.CreateNewFolder
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -187,28 +201,22 @@ fun SettingsScreen(
         item { HealthConnectGroup(onImported = onDataRestored) }
 
         item {
-            SettingsGroup("Your data") {
-                GoogleBackupSection(onRestoreContent = { pendingBackup = it })
-                Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                AutoBackupSection()
-                Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // With automatic backup on, "Back up now" above does this job.
-                    if (!AutoBackup.status.isOn) {
-                        SecondaryButton("Save backup", { exportLauncher.launch("gymtracker_backup.json") }, Modifier.weight(1f), icon = Icons.Rounded.FileDownload)
-                    }
-                    SecondaryButton("Restore", { importLauncher.launch(arrayOf("application/json", "*/*")) }, Modifier.weight(1f), icon = Icons.Rounded.FileUpload)
-                }
-                Spacer(Modifier.height(10.dp))
-                SecondaryButton(
-                    "Import from Strong or Hevy",
-                    { otherAppLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*")) },
-                    Modifier.fillMaxWidth(),
-                    icon = Icons.Rounded.MoveToInbox
+            SettingsGroup("Backups") {
+                BackupsSection(
+                    onRestoreContent = { pendingBackup = it },
+                    onRestoreFile = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                    onSaveFile = { exportLauncher.launch("gymtracker_backup.json") }
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        item {
+            SettingsGroup("Bring in data") {
+                LinkRow(Icons.Rounded.MoveToInbox, "Import from Strong or Hevy") {
+                    otherAppLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*"))
+                }
                 Text(
-                    "Restore can add a backup to your data (to combine backups) or replace it. Imports from Strong and Hevy are added to your history. A copy of your data is kept first either way.",
+                    "Workouts from their export file are added to your history. A copy of your data is kept first.",
                     style = AppType.caption,
                     color = P.textTertiary
                 )
@@ -355,90 +363,6 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-/** Off: what it does and "Choose a folder". On: the folder, the last backup or what went wrong. */
-@Composable
-private fun AutoBackupSection() {
-    val P = LocalPalette.current
-    val context = LocalContext.current
-    val status = AutoBackup.status
-    LaunchedEffect(Unit) { AutoBackup.refreshStatus(context) }
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
-        if (tree != null) {
-            try {
-                AutoBackup.setFolder(context, tree)
-            } catch (_: SecurityException) {
-                Toast.makeText(context, "That folder can't be used for backups. Try another one.", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-    fun choose() {
-        try {
-            pickFolder.launch(null)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "No file picker on this phone", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    if (!status.isOn) {
-        Text("Automatic backup", style = AppType.bodyStrong, color = P.textPrimary)
-        Text(
-            "Saves a copy to a folder you choose after every workout. Pick a Google Drive or OneDrive folder and a new phone can get everything back.",
-            style = AppType.caption,
-            color = P.textSecondary,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-        Spacer(Modifier.height(12.dp))
-        SecondaryButton("Choose a folder", { choose() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.FolderOpen)
-        return
-    }
-
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(
-            if (status.error != null) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone,
-            null,
-            tint = if (status.error != null) P.dangerText else P.successText,
-            modifier = Modifier.size(20.dp).padding(top = 2.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text("Automatic backup is on", style = AppType.bodyStrong, color = P.textPrimary)
-            Text("Folder: ${status.folderName}", style = AppType.caption, color = P.textSecondary)
-            Text(
-                when {
-                    status.running -> "Backing up…"
-                    status.error != null -> status.error
-                    status.lastSuccessMillis > 0L -> "Last backup " + AndroidDateUtils.formatDateTime(
-                        context, status.lastSuccessMillis,
-                        AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_ABBREV_MONTH
-                    )
-                    else -> "No backup yet"
-                },
-                style = AppType.caption,
-                color = if (status.error != null && !status.running) P.dangerText else P.textSecondary
-            )
-        }
-    }
-    Spacer(Modifier.height(12.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        SecondaryButton("Back up now", { AutoBackup.backUpNow(context) }, Modifier.weight(1f), enabled = !status.running)
-        SecondaryButton("Change folder", { choose() }, Modifier.weight(1f))
-    }
-    var confirmOff by remember { mutableStateOf(false) }
-    LinkRow(Icons.Rounded.CloudOff, "Turn off automatic backup") { confirmOff = true }
-    if (confirmOff) {
-        AlertDialog(
-            onDismissRequest = { confirmOff = false },
-            containerColor = P.bgElevated,
-            title = { Text("Turn off automatic backup?", style = AppType.headline, color = P.textPrimary) },
-            text = { Text("Backups already in the folder stay there, but new workouts won't be copied.", style = AppType.body, color = P.textSecondary) },
-            confirmButton = {
-                TextButton(onClick = { confirmOff = false; AutoBackup.turnOff(context) }) { Text("Turn off", color = P.dangerText, style = AppType.label) }
-            },
-            dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Keep it on", color = P.textSecondary, style = AppType.label) } }
-        )
     }
 }
 
@@ -645,122 +569,6 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
     }
 }
 
-/**
- * Off: what signing in does and the button. On: the account, the last backup or what went wrong,
- * Back up now, Restore from Drive, Sign out. Right after signing in on a phone with nothing logged
- * (a new phone), the backups in Drive are offered straight away.
- */
-@Composable
-private fun GoogleBackupSection(onRestoreContent: (String) -> Unit) {
-    val P = LocalPalette.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val status = DriveBackup.status
-    LaunchedEffect(Unit) { DriveBackup.refreshStatus(context) }
-    var signingIn by remember { mutableStateOf(false) }
-    var choosing by remember { mutableStateOf(false) }
-    var confirmSignOut by remember { mutableStateOf(false) }
-
-    fun afterSignIn(step: DriveBackup.SignInStep) {
-        signingIn = false
-        when (step) {
-            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
-            is DriveBackup.SignInStep.NeedsUser -> Unit
-            is DriveBackup.SignInStep.Done -> scope.launch {
-                val found = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty()
-                if (found.isNotEmpty() && LocalStorage.loadHistory(context).isEmpty()) choosing = true
-                else DriveBackup.backUpNow(context)
-            }
-        }
-    }
-    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        DriveBackup.finishSignIn(context, result.data, ::afterSignIn)
-    }
-    fun signIn() {
-        signingIn = true
-        DriveBackup.startSignIn(context) { step ->
-            if (step is DriveBackup.SignInStep.NeedsUser) {
-                consent.launch(IntentSenderRequest.Builder(step.intent).build())
-            } else afterSignIn(step)
-        }
-    }
-
-    if (!status.signedIn) {
-        Text("Back up to Google", style = AppType.bodyStrong, color = P.textPrimary)
-        Text(
-            "Sign in and your workouts are saved to your own Google Drive after every workout. On a new phone, sign in and everything comes back.",
-            style = AppType.caption,
-            color = P.textSecondary,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-        Spacer(Modifier.height(12.dp))
-        PrimaryButton(if (signingIn) "Signing in…" else "Sign in with Google", { signIn() }, Modifier.fillMaxWidth(), enabled = !signingIn, height = 48.dp)
-        Text(
-            "Backups go to a private app folder in your Drive. Only this app can read them; nothing goes to us.",
-            style = AppType.caption,
-            color = P.textTertiary,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    } else {
-        Row(verticalAlignment = Alignment.Top) {
-            Icon(
-                if (status.error != null) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone,
-                null,
-                tint = if (status.error != null) P.dangerText else P.successText,
-                modifier = Modifier.size(20.dp).padding(top = 2.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Backing up to Google Drive", style = AppType.bodyStrong, color = P.textPrimary)
-                Text(status.email.orEmpty(), style = AppType.caption, color = P.textSecondary)
-                Text(
-                    when {
-                        status.running -> "Backing up…"
-                        status.error != null -> status.error
-                        status.lastSuccessMillis > 0L -> "Last backup " + AndroidDateUtils.formatDateTime(
-                            context, status.lastSuccessMillis,
-                            AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_ABBREV_MONTH
-                        )
-                        else -> "Backs up after your next workout"
-                    },
-                    style = AppType.caption,
-                    color = if (status.error != null && !status.running) P.dangerText else P.textSecondary
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (status.error == "Google needs you to sign in again.") {
-                SecondaryButton("Sign in again", { signIn() }, Modifier.weight(1f))
-            } else {
-                SecondaryButton("Back up now", { DriveBackup.backUpNow(context) }, Modifier.weight(1f), enabled = !status.running)
-            }
-            SecondaryButton("Restore", { choosing = true }, Modifier.weight(1f))
-        }
-        LinkRow(Icons.AutoMirrored.Rounded.Logout, "Sign out") { confirmSignOut = true }
-    }
-
-    if (choosing) {
-        DriveRestoreSheet(
-            onPick = { content -> choosing = false; onRestoreContent(content) },
-            onDismiss = {
-                choosing = false
-                DriveBackup.backUpNow(context)
-            }
-        )
-    }
-    if (confirmSignOut) {
-        AlertDialog(
-            onDismissRequest = { confirmSignOut = false },
-            containerColor = P.bgElevated,
-            title = { Text("Sign out of Google?", style = AppType.headline, color = P.textPrimary) },
-            text = { Text("Your backups stay in Google Drive, but new workouts won't be backed up there.", style = AppType.body, color = P.textSecondary) },
-            confirmButton = { TextButton(onClick = { confirmSignOut = false; DriveBackup.signOut(context) }) { Text("Sign out", color = P.dangerText, style = AppType.label) } },
-            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
-        )
-    }
-}
-
 /** The backups in Drive, newest first; picking one hands its contents to Restore (add or replace). */
 @Composable
 private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
@@ -815,6 +623,232 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * One place for backups: where they go and when the last one ran, then one "Back up now" (every
+ * destination that's on) and one "Restore" (asks: Google Drive or a file). The folder backup,
+ * saving a file and signing out sit under "More options". Signed out, signing in with Google is
+ * the main action. Right after signing in on a phone with nothing logged (a new phone), the
+ * backups in Drive are offered straight away.
+ */
+@Composable
+private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: () -> Unit, onSaveFile: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val drive = DriveBackup.status
+    val folder = AutoBackup.status
+    LaunchedEffect(Unit) {
+        DriveBackup.refreshStatus(context)
+        AutoBackup.refreshStatus(context)
+    }
+    var signingIn by remember { mutableStateOf(false) }
+    var choosingDrive by remember { mutableStateOf(false) }
+    var choosingSource by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
+    var confirmFolderOff by remember { mutableStateOf(false) }
+    var moreOpen by rememberSaveable { mutableStateOf(false) }
+
+    fun afterSignIn(step: DriveBackup.SignInStep) {
+        signingIn = false
+        when (step) {
+            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
+            is DriveBackup.SignInStep.NeedsUser -> Unit
+            is DriveBackup.SignInStep.Done -> scope.launch {
+                val found = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty()
+                if (found.isNotEmpty() && LocalStorage.loadHistory(context).isEmpty()) choosingDrive = true
+                else DriveBackup.backUpNow(context)
+            }
+        }
+    }
+    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        DriveBackup.finishSignIn(context, result.data, ::afterSignIn)
+    }
+    fun signIn() {
+        signingIn = true
+        DriveBackup.startSignIn(context) { step ->
+            if (step is DriveBackup.SignInStep.NeedsUser) consent.launch(IntentSenderRequest.Builder(step.intent).build())
+            else afterSignIn(step)
+        }
+    }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            try {
+                AutoBackup.setFolder(context, tree)
+            } catch (_: SecurityException) {
+                Toast.makeText(context, "That folder can't be used for backups. Try another one.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    fun chooseFolder() {
+        try {
+            pickFolder.launch(null)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "No file picker on this phone", Toast.LENGTH_SHORT).show()
+        }
+    }
+    fun restore() {
+        if (drive.signedIn) choosingSource = true else onRestoreFile()
+    }
+    fun whenText(millis: Long) = AndroidDateUtils.formatDateTime(
+        context, millis, AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_ABBREV_MONTH
+    )
+
+    val anyOn = drive.signedIn || folder.isOn
+    val running = drive.running || folder.running
+    val error = drive.error ?: folder.error
+    val needsSignIn = drive.error == "Google needs you to sign in again."
+
+    // Status
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            when {
+                !anyOn -> Icons.Rounded.CloudOff
+                error != null -> Icons.Rounded.ErrorOutline
+                else -> Icons.Rounded.CloudDone
+            },
+            null,
+            tint = when {
+                !anyOn -> P.textTertiary
+                error != null -> P.dangerText
+                else -> P.successText
+            },
+            modifier = Modifier.size(20.dp).padding(top = 2.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                when {
+                    drive.signedIn -> "Backed up to Google Drive"
+                    folder.isOn -> "Backed up to a folder"
+                    else -> "Only on this phone"
+                },
+                style = AppType.bodyStrong,
+                color = P.textPrimary
+            )
+            val where = listOfNotNull(drive.email, folder.folderName?.let { if (drive.signedIn) "and folder $it" else it }).joinToString(" ")
+            if (where.isNotEmpty()) Text(where, style = AppType.caption, color = P.textSecondary)
+            val last = maxOf(drive.lastSuccessMillis, folder.lastSuccessMillis)
+            Text(
+                when {
+                    !anyOn -> "Sign in and your workouts are saved to your own Google Drive after every workout. On a new phone, sign in and everything comes back."
+                    running -> "Backing up…"
+                    error != null -> error
+                    last > 0L -> "Last backup ${whenText(last)}"
+                    else -> "Backs up after your next workout"
+                },
+                style = AppType.caption,
+                color = if (anyOn && error != null && !running) P.dangerText else P.textSecondary
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+
+    // Actions
+    if (!drive.signedIn) {
+        PrimaryButton(if (signingIn) "Signing in…" else "Sign in with Google", { signIn() }, Modifier.fillMaxWidth(), enabled = !signingIn, height = 48.dp)
+        Spacer(Modifier.height(10.dp))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        when {
+            needsSignIn -> SecondaryButton("Sign in again", { signIn() }, Modifier.weight(1f))
+            anyOn -> SecondaryButton(
+                "Back up now",
+                {
+                    DriveBackup.backUpNow(context)
+                    AutoBackup.backUpNow(context)
+                },
+                Modifier.weight(1f),
+                icon = Icons.Rounded.CloudUpload,
+                enabled = !running
+            )
+        }
+        SecondaryButton("Restore", { restore() }, Modifier.weight(1f), icon = Icons.Rounded.SettingsBackupRestore)
+    }
+
+    // More options
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.99f) { moreOpen = !moreOpen }.padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("More options", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+        val turn by animateFloatAsState(if (moreOpen) 180f else 0f, label = "more_turn")
+        Icon(Icons.Rounded.ExpandMore, null, tint = P.textTertiary, modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = turn })
+    }
+    AnimatedVisibility(moreOpen, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        Column {
+            if (folder.isOn) {
+                OptionRow(
+                    Icons.Rounded.Folder,
+                    (if (drive.signedIn) "Also backing up to " else "Backing up to ") + "folder ${folder.folderName}",
+                    (folder.error ?: (if (folder.lastSuccessMillis > 0L) "Last ${whenText(folder.lastSuccessMillis)}" else "No backup there yet")) + " · tap to change"
+                ) { chooseFolder() }
+                OptionRow(Icons.Rounded.FolderOff, "Stop backing up to the folder", null) { confirmFolderOff = true }
+            } else {
+                OptionRow(Icons.Rounded.CreateNewFolder, "Also back up to a folder", "A copy after every workout, in a folder you pick (another cloud app or the phone)") { chooseFolder() }
+            }
+            OptionRow(Icons.Rounded.FileDownload, "Save a backup file", "One file with everything, to keep or send anywhere") { onSaveFile() }
+            if (drive.signedIn) OptionRow(Icons.AutoMirrored.Rounded.Logout, "Sign out of Google", null) { confirmSignOut = true }
+        }
+    }
+
+    if (choosingSource) {
+        AppBottomSheet(onDismiss = { choosingSource = false }) {
+            Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
+                Text("Restore from…", style = AppType.title, color = P.textPrimary)
+                Spacer(Modifier.height(14.dp))
+                ChoiceRow("Google Drive", "Your automatic backups in ${drive.email}", { choosingSource = false; choosingDrive = true })
+                Spacer(Modifier.height(8.dp))
+                ChoiceRow("A file", "A backup file you saved, or one from your backup folder", { choosingSource = false; onRestoreFile() })
+            }
+        }
+    }
+    if (choosingDrive) {
+        DriveRestoreSheet(
+            onPick = { content -> choosingDrive = false; onRestoreContent(content) },
+            onDismiss = {
+                choosingDrive = false
+                DriveBackup.backUpNow(context)
+            }
+        )
+    }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            containerColor = P.bgElevated,
+            title = { Text("Sign out of Google?", style = AppType.headline, color = P.textPrimary) },
+            text = { Text("Your backups stay in Google Drive, but new workouts won't be backed up there.", style = AppType.body, color = P.textSecondary) },
+            confirmButton = { TextButton(onClick = { confirmSignOut = false; DriveBackup.signOut(context) }) { Text("Sign out", color = P.dangerText, style = AppType.label) } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+    if (confirmFolderOff) {
+        AlertDialog(
+            onDismissRequest = { confirmFolderOff = false },
+            containerColor = P.bgElevated,
+            title = { Text("Stop backing up to the folder?", style = AppType.headline, color = P.textPrimary) },
+            text = { Text("Backups already in the folder stay there, but new workouts won't be copied to it.", style = AppType.body, color = P.textSecondary) },
+            confirmButton = { TextButton(onClick = { confirmFolderOff = false; AutoBackup.turnOff(context) }) { Text("Stop", color = P.dangerText, style = AppType.label) } },
+            dismissButton = { TextButton(onClick = { confirmFolderOff = false }) { Text("Keep it", color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+}
+
+@Composable
+private fun OptionRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
+    val P = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.99f, onClick = onClick).padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = AppType.body, color = P.textPrimary)
+            if (subtitle != null) Text(subtitle, style = AppType.caption, color = P.textSecondary)
         }
     }
 }
