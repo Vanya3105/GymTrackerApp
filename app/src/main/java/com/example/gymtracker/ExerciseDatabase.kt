@@ -9,7 +9,9 @@ data class ExerciseInfo(
     val muscle: String,
     val equipment: String,
     val aliases: List<String> = emptyList(),
-    val type: ExerciseType = ExerciseType.WEIGHT_REPS
+    val type: ExerciseType = ExerciseType.WEIGHT_REPS,
+    /** The everyday exercises; search lists them before the wider library's equally good matches. */
+    val common: Boolean = true
 )
 
 /** Built-in exercise library used by the "Add exercise" search. */
@@ -126,7 +128,7 @@ object ExerciseDatabase {
         ex("Hack Squat", "Quads", "Machine"),
         ex("Pendulum Squat", "Quads", "Machine"),
         ex("Smith Machine Squat", "Quads", "Smith machine"),
-        ex("Goblet Squat", "Quads", "Dumbbell"),
+        ex("Goblet Squat", "Quads", "Dumbbell", "kettlebell goblet squat"),
         ex("Leg Press", "Quads", "Machine"),
         ex("Leg Extension", "Quads", "Machine", "quad extension"),
         ex("Bulgarian Split Squat", "Quads", "Dumbbell", "bss", "split squat"),
@@ -195,6 +197,187 @@ object ExerciseDatabase {
         ex("Walking", "Cardio", "None", ExerciseType.DISTANCE_TIME, "walk"),
         ex("Stair Climber", "Cardio", "Machine", ExerciseType.DURATION, "stairmaster", "stepper"),
         ex("Jump Rope", "Cardio", "None", ExerciseType.DURATION, "skipping")
+    ) + more().map { it.copy(common = false) }
+
+    /**
+     * The wider library (2026-10-30): bodyweight and calisthenics, kettlebells, Olympic lifts
+     * and more gym variations, picked from free-exercise-db. Search ranks them after the
+     * everyday exercises above. Its own function to stay under the JVM's method size limit.
+     */
+    private fun more(): List<ExerciseInfo> = listOf(
+        // Chest
+        ex("Incline Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "easy push-up", "bench push-up"),
+        ex("Decline Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "feet elevated push-up"),
+        ex("Wide Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "wide grip push-up"),
+        ex("Knee Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "kneeling push-up", "easy push-up"),
+        ex("Archer Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "calisthenics"),
+        ex("Clap Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "plyo push-up", "explosive push-up"),
+        ex("Single-Arm Push-Up", "Chest", "Bodyweight", ExerciseType.BODYWEIGHT, "one arm push-up", "calisthenics"),
+        ex("Ring Push-Up", "Chest", "Rings", ExerciseType.BODYWEIGHT, "trx push-up", "suspended push-up"),
+        ex("Dumbbell Pullover", "Chest", "Dumbbell", "pullover"),
+        ex("Dumbbell Floor Press", "Chest", "Dumbbell", "floor press"),
+        ex("Neutral-Grip Dumbbell Press", "Chest", "Dumbbell", "hammer press", "db press"),
+        ex("Cable Chest Press", "Chest", "Cable", "standing chest press"),
+        ex("Incline Cable Fly", "Chest", "Cable", "incline fly"),
+        ex("Wide-Grip Bench Press", "Chest", "Barbell", "wide bench"),
+        ex("Barbell Floor Press", "Chest", "Barbell", "floor press"),
+        ex("Kettlebell Floor Press", "Chest", "Kettlebell", "kb floor press"),
+        ex("Svend Press", "Chest", "Plate", "plate press"),
+
+        // Back
+        ex("Neutral-Grip Pull-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "parallel grip pull-up", "hammer pull-up"),
+        ex("Negative Pull-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "eccentric pull-up", "slow pull-up"),
+        ex("Scapular Pull-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "scap pull-up", "calisthenics"),
+        ex("Muscle-Up", "Back", "Bodyweight", ExerciseType.BODYWEIGHT, "calisthenics", "bar muscle up"),
+        ex("Ring Row", "Back", "Rings", ExerciseType.BODYWEIGHT, "trx row", "suspended row"),
+        ex("Rope Climb", "Back", "Rope", ExerciseType.BODYWEIGHT, "climb"),
+        ex("Superman Hold", "Back", "Bodyweight", ExerciseType.DURATION, "superman", "back raise"),
+        ex("Kettlebell Row", "Back", "Kettlebell", "kb row"),
+        ex("Renegade Row", "Back", "Dumbbell", "plank row"),
+        ex("Bent-Over Dumbbell Row", "Back", "Dumbbell", "two arm dumbbell row"),
+        ex("Underhand Barbell Row", "Back", "Barbell", "reverse grip row", "yates row"),
+        ex("Single-Arm Cable Row", "Back", "Cable", "one arm cable row"),
+        ex("Underhand Lat Pulldown", "Back", "Cable", "reverse grip pulldown"),
+        ex("Trap Bar Deadlift", "Back", "Trap bar", "hex bar deadlift"),
+        ex("Deficit Deadlift", "Back", "Barbell"),
+        ex("Cable Shrug", "Back", "Cable", "traps"),
+        ex("Kettlebell High Pull", "Back", "Kettlebell", "sumo high pull"),
+
+        // Shoulders
+        ex("Pike Push-Up", "Shoulders", "Bodyweight", ExerciseType.BODYWEIGHT, "calisthenics", "shoulder push-up"),
+        ex("Handstand Push-Up", "Shoulders", "Bodyweight", ExerciseType.BODYWEIGHT, "hspu", "calisthenics"),
+        ex("Handstand Hold", "Shoulders", "Bodyweight", ExerciseType.DURATION, "wall handstand", "calisthenics"),
+        ex("Push Press", "Shoulders", "Barbell"),
+        ex("Standing Dumbbell Press", "Shoulders", "Dumbbell", "standing db press"),
+        ex("Seated Barbell Press", "Shoulders", "Barbell", "seated military press"),
+        ex("Kettlebell Press", "Shoulders", "Kettlebell", "kb press", "kettlebell overhead press"),
+        ex("Landmine Press", "Shoulders", "Barbell", "landmine"),
+        ex("Cable Front Raise", "Shoulders", "Cable"),
+        ex("Plate Front Raise", "Shoulders", "Plate", "plate raise"),
+        ex("Cable Rear Delt Fly", "Shoulders", "Cable", "reverse cable fly", "rear delt"),
+        ex("Dumbbell Upright Row", "Shoulders", "Dumbbell"),
+        ex("Cable Upright Row", "Shoulders", "Cable"),
+        ex("Cuban Press", "Shoulders", "Dumbbell", "rotator cuff"),
+        ex("Cable External Rotation", "Shoulders", "Cable", "rotator cuff", "external rotation"),
+        ex("Dumbbell External Rotation", "Shoulders", "Dumbbell", "rotator cuff"),
+        ex("Kettlebell Halo", "Shoulders", "Kettlebell", "halo"),
+        ex("Turkish Get-Up", "Shoulders", "Kettlebell", "tgu", "get up"),
+        ex("Kettlebell Snatch", "Shoulders", "Kettlebell", "kb snatch"),
+        ex("Clean and Press", "Shoulders", "Barbell"),
+
+        // Biceps
+        ex("Alternating Dumbbell Curl", "Biceps", "Dumbbell", "alternate curl"),
+        ex("Seated Dumbbell Curl", "Biceps", "Dumbbell"),
+        ex("Incline Hammer Curl", "Biceps", "Dumbbell"),
+        ex("Cross-Body Hammer Curl", "Biceps", "Dumbbell", "pinwheel curl"),
+        ex("Zottman Curl", "Biceps", "Dumbbell"),
+        ex("Drag Curl", "Biceps", "Barbell"),
+        ex("Overhead Cable Curl", "Biceps", "Cable", "double biceps cable curl"),
+        ex("Single-Arm Cable Curl", "Biceps", "Cable", "one arm cable curl"),
+        ex("Cable Preacher Curl", "Biceps", "Cable"),
+        ex("Machine Bicep Curl", "Biceps", "Machine", "bicep machine"),
+
+        // Triceps
+        ex("Diamond Push-Up", "Triceps", "Bodyweight", ExerciseType.BODYWEIGHT, "close grip push-up", "triangle push-up"),
+        ex("Bodyweight Tricep Extension", "Triceps", "Bodyweight", ExerciseType.BODYWEIGHT, "bodyweight skull crusher", "calisthenics"),
+        ex("Ring Dips", "Triceps", "Rings", ExerciseType.BODYWEIGHT, "calisthenics"),
+        ex("V-Bar Pushdown", "Triceps", "Cable", "v bar pushdown"),
+        ex("Reverse-Grip Pushdown", "Triceps", "Cable", "underhand pushdown"),
+        ex("Dumbbell Skull Crusher", "Triceps", "Dumbbell", "lying dumbbell extension"),
+        ex("Close-Grip Dumbbell Press", "Triceps", "Dumbbell", "crush press"),
+        ex("Tate Press", "Triceps", "Dumbbell"),
+        ex("Single-Arm Overhead Extension", "Triceps", "Dumbbell", "one arm overhead extension"),
+
+        // Quads
+        ex("Bodyweight Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "air squat", "squat"),
+        ex("Jump Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "squat jump", "plyometric"),
+        ex("Pistol Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "single leg squat", "calisthenics"),
+        ex("Shrimp Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "calisthenics", "single leg squat"),
+        ex("Cossack Squat", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "side squat"),
+        ex("Wall Sit", "Quads", "Bodyweight", ExerciseType.DURATION, "wall squat", "hold"),
+        ex("Jumping Lunge", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "split jump", "plyometric"),
+        ex("Box Jump", "Quads", "Bodyweight", ExerciseType.BODYWEIGHT, "plyometric", "jump"),
+        ex("Box Squat", "Quads", "Barbell"),
+        ex("Overhead Squat", "Quads", "Barbell", "ohs"),
+        ex("Dumbbell Squat", "Quads", "Dumbbell", "db squat"),
+        ex("Kettlebell Front Squat", "Quads", "Kettlebell", "double kettlebell squat"),
+        ex("Barbell Lunge", "Quads", "Barbell"),
+        ex("Dumbbell Lunge", "Quads", "Dumbbell", "forward lunge", "lunges"),
+        ex("Single-Leg Leg Extension", "Quads", "Machine", "one leg extension"),
+        ex("Kettlebell Thruster", "Quads", "Kettlebell", "thruster"),
+        ex("Sled Push", "Quads", "Sled", ExerciseType.DISTANCE_TIME, "prowler"),
+        ex("Power Clean", "Quads", "Barbell", "clean", "olympic"),
+        ex("Hang Clean", "Quads", "Barbell", "olympic"),
+        ex("Clean and Jerk", "Quads", "Barbell", "olympic"),
+        ex("Snatch", "Quads", "Barbell", "olympic"),
+
+        // Hamstrings
+        ex("Single-Leg Romanian Deadlift", "Hamstrings", "Dumbbell", "single leg rdl", "sl rdl"),
+        ex("Stability Ball Leg Curl", "Hamstrings", "Ball", ExerciseType.BODYWEIGHT, "ball leg curl", "swiss ball curl"),
+        ex("Sliding Leg Curl", "Hamstrings", "Bodyweight", ExerciseType.BODYWEIGHT, "slider curl", "towel leg curl"),
+        ex("Kettlebell Clean", "Hamstrings", "Kettlebell", "kb clean"),
+
+        // Glutes
+        ex("Kettlebell Swing", "Glutes", "Kettlebell", "kb swing", "russian swing"),
+        ex("Bodyweight Glute Bridge", "Glutes", "Bodyweight", ExerciseType.BODYWEIGHT, "glute bridge", "hip bridge"),
+        ex("Single-Leg Glute Bridge", "Glutes", "Bodyweight", ExerciseType.BODYWEIGHT, "single leg bridge"),
+        ex("Single-Leg Hip Thrust", "Glutes", "Bodyweight", ExerciseType.BODYWEIGHT, "single leg hip thrust"),
+        ex("Donkey Kick", "Glutes", "Bodyweight", ExerciseType.BODYWEIGHT, "glute kickback", "quadruped kickback"),
+        ex("Fire Hydrant", "Glutes", "Bodyweight", ExerciseType.BODYWEIGHT, "hip abduction"),
+        ex("Curtsy Lunge", "Glutes", "Dumbbell"),
+        ex("Sumo Squat", "Glutes", "Dumbbell", "plie squat", "sumo dumbbell squat"),
+        ex("Reverse Hyperextension", "Glutes", "Machine", "reverse hyper"),
+
+        // Calves
+        ex("Bodyweight Calf Raise", "Calves", "Bodyweight", ExerciseType.BODYWEIGHT, "calf raise"),
+        ex("Dumbbell Calf Raise", "Calves", "Dumbbell"),
+        ex("Barbell Calf Raise", "Calves", "Barbell"),
+        ex("Donkey Calf Raise", "Calves", "Machine"),
+        ex("Seated Dumbbell Calf Raise", "Calves", "Dumbbell"),
+        ex("Pogo Hops", "Calves", "Bodyweight", ExerciseType.BODYWEIGHT, "pogo jumps", "plyometric"),
+
+        // Core
+        ex("Crunch", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "crunches"),
+        ex("Sit-Up", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "situp"),
+        ex("Bicycle Crunch", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "obliques", "bicycle"),
+        ex("Reverse Crunch", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs"),
+        ex("Lying Leg Raise", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "leg raise"),
+        ex("Toes-to-Bar", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "ttb", "calisthenics"),
+        ex("L-Sit", "Core", "Bodyweight", ExerciseType.DURATION, "abs", "calisthenics", "hold"),
+        ex("Dragon Flag", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "calisthenics"),
+        ex("V-Up", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "jackknife"),
+        ex("Dead Bug", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs"),
+        ex("Bird Dog", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs"),
+        ex("Mountain Climbers", "Core", "Bodyweight", ExerciseType.DURATION, "abs", "cardio"),
+        ex("Flutter Kicks", "Core", "Bodyweight", ExerciseType.DURATION, "abs"),
+        ex("Heel Touches", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "abs", "obliques"),
+        ex("Oblique Crunch", "Core", "Bodyweight", ExerciseType.BODYWEIGHT, "obliques", "side crunch"),
+        ex("Stability Ball Crunch", "Core", "Ball", ExerciseType.BODYWEIGHT, "ball crunch", "swiss ball crunch"),
+        ex("Stability Ball Knee Tuck", "Core", "Ball", ExerciseType.BODYWEIGHT, "ball pull-in", "swiss ball tuck"),
+        ex("Bear Crawl", "Core", "Bodyweight", ExerciseType.DURATION, "crawl", "cardio"),
+        ex("Cable Lift", "Core", "Cable", "low to high woodchop", "obliques"),
+        ex("Dumbbell Side Bend", "Core", "Dumbbell", "obliques"),
+        ex("Landmine Rotation", "Core", "Barbell", "landmine 180", "obliques"),
+        ex("Medicine Ball Slam", "Core", "Medicine ball", "ball slam", "slam ball"),
+        ex("Kettlebell Windmill", "Core", "Kettlebell", "windmill", "obliques"),
+
+        // Forearms
+        ex("Wrist Roller", "Forearms", "Other", "grip"),
+        ex("Plate Pinch", "Forearms", "Plate", ExerciseType.DURATION, "grip", "pinch grip"),
+        ex("Behind-the-Back Wrist Curl", "Forearms", "Barbell", "grip"),
+        ex("Suitcase Carry", "Forearms", "Dumbbell", ExerciseType.DURATION, "one arm carry", "grip"),
+
+        // Cardio
+        ex("Burpee", "Cardio", "Bodyweight", ExerciseType.BODYWEIGHT, "burpees"),
+        ex("Jumping Jacks", "Cardio", "Bodyweight", ExerciseType.DURATION, "star jumps"),
+        ex("High Knees", "Cardio", "Bodyweight", ExerciseType.DURATION, "running in place"),
+        ex("Battle Ropes", "Cardio", "Battle ropes", ExerciseType.DURATION, "ropes"),
+        ex("Sprints", "Cardio", "None", ExerciseType.DISTANCE_TIME, "sprint", "intervals"),
+        ex("Hiking", "Cardio", "None", ExerciseType.DISTANCE_TIME, "hike", "trail walk"),
+        ex("Swimming", "Cardio", "None", ExerciseType.DISTANCE_TIME, "swim", "laps"),
+        ex("Recumbent Bike", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "bike"),
+        ex("Ski Erg", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "skierg", "ski machine"),
+        ex("Assault Bike", "Cardio", "Machine", ExerciseType.DISTANCE_TIME, "air bike", "fan bike", "echo bike")
     )
 
     private fun norm(s: String) = s.lowercase(Locale.US).replace("-", " ").replace("'", "")
@@ -225,7 +408,7 @@ object ExerciseDatabase {
                 else -> 3
             }
             score to info
-        }.sortedWith(compareBy({ it.first }, { it.second.name.length })).map { it.second }
+        }.sortedWith(compareBy({ it.first }, { !it.second.common }, { it.second.name.length })).map { it.second }
     }
 
     fun find(name: String): ExerciseInfo? = all.firstOrNull { it.name.equals(name, ignoreCase = true) }

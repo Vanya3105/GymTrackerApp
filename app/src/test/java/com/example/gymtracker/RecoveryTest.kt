@@ -61,7 +61,7 @@ class RecoveryTest {
     fun customExercises_guessedFromTheirNameAndTag() {
         assertEquals(1f, loads("Cable Bicep Curl")["Biceps"])
         assertEquals(1f, loads("My Hanging Leg Raise")["Core"])
-        assertEquals(1f, loads("Reverse Hyperextension")["Back"])
+        assertEquals(1f, loads("45° Hyperextension")["Back"])
         assertEquals(1f, loads("Odd Lift", muscle = "Triceps")["Triceps"])
         assertEquals(1f, loads("Mystery", split = "Push Day")["Chest"])
         // Old "Arms" tag with no clue in the name: half to each.

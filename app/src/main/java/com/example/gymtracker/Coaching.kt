@@ -67,9 +67,11 @@ internal fun muscleLoads(splitTitle: String, exName: String, targetMuscle: Strin
 
     when (primary) {
         "Chest" -> if (!has("fly", "pec deck", "crossover", "pullover")) { add("Triceps", 0.5f); add("Shoulders", 0.5f) }
-        "Triceps" -> if (has("bench", "press", "dip")) { add("Chest", 0.5f); add("Shoulders", 0.25f) }
+        "Triceps" -> if (has("bench", "press", "dip", "push-up")) { add("Chest", 0.5f); add("Shoulders", 0.25f) }
         "Shoulders" -> when {
-            has("press") -> add("Triceps", 0.5f)
+            has("snatch") -> { add("Glutes", 0.5f); add("Hamstrings", 0.5f); add("Back", 0.25f) }
+            has("press", "push-up", "handstand") -> add("Triceps", 0.5f)
+            has("get-up") -> { add("Core", 0.5f); add("Glutes", 0.25f) }
             has("upright row") -> { add("Back", 0.25f); add("Biceps", 0.25f) }
             has("rear delt", "reverse pec", "face pull") -> add("Back", 0.25f)
         }
@@ -78,7 +80,9 @@ internal fun muscleLoads(splitTitle: String, exName: String, targetMuscle: Strin
             has("back extension", "hyperextension") -> { add("Hamstrings", 0.5f); add("Glutes", 0.5f) }
             has("shrug") -> add("Forearms", 0.25f)
             has("straight-arm", "straight arm", "pullover") -> {}
-            has("pull-up", "pullup", "chin", "pulldown") -> { add("Biceps", 0.5f); add("Forearms", 0.25f) }
+            has("pull-up", "pullup", "chin", "pulldown", "muscle-up", "rope climb") -> { add("Biceps", 0.5f); add("Forearms", 0.25f) }
+            has("high pull") -> { add("Shoulders", 0.5f); add("Glutes", 0.25f) }
+            has("superman") -> { add("Glutes", 0.25f); add("Hamstrings", 0.25f) }
             has("row") -> { add("Biceps", 0.5f); add("Shoulders", 0.25f); add("Forearms", 0.25f) }
         }
         "Biceps" -> add("Forearms", if (has("hammer", "reverse")) 0.5f else 0.25f)
@@ -90,16 +94,26 @@ internal fun muscleLoads(splitTitle: String, exName: String, targetMuscle: Strin
         "Quads" -> if (!has("extension", "sissy")) {
             add("Glutes", 0.5f)
             if (has("lunge", "split", "step-up", "step up")) add("Hamstrings", 0.25f)
+            if (has("clean", "snatch", "jerk")) { add("Hamstrings", 0.5f); add("Back", 0.5f); add("Shoulders", 0.5f) }
+            if (has("thruster")) { add("Shoulders", 0.5f); add("Triceps", 0.25f) }
         }
-        "Hamstrings" -> if (has("deadlift", "good morning")) {
+        "Hamstrings" -> if (has("clean")) {
+            add("Glutes", 0.5f); add("Back", 0.25f); add("Shoulders", 0.25f)
+        } else if (has("deadlift", "good morning")) {
             add("Glutes", 0.5f); add("Back", 0.25f)
             if (has("deadlift")) add("Forearms", 0.25f)
         }
         "Glutes" -> when {
             has("deadlift") -> { add("Quads", 0.5f); add("Hamstrings", 0.5f); add("Back", 0.5f); add("Forearms", 0.5f) }
             has("thrust", "bridge", "pull-through", "pull through") -> add("Hamstrings", 0.25f)
+            has("swing") -> { add("Hamstrings", 0.5f); add("Back", 0.25f); add("Forearms", 0.25f) }
+            has("lunge", "squat") -> { add("Quads", 0.5f); add("Hamstrings", 0.25f) }
         }
-        "Core" -> if (has("hanging")) add("Forearms", 0.25f)
+        "Core" -> when {
+            has("hanging", "toes-to-bar") -> add("Forearms", 0.25f)
+            has("slam") -> { add("Shoulders", 0.5f); add("Back", 0.25f) }
+            has("windmill", "mountain", "bear crawl", "l-sit") -> add("Shoulders", 0.25f)
+        }
     }
     return loads
 }
