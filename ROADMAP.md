@@ -226,7 +226,7 @@ Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an im
 - [ ] Weekly sets per muscle vs target range, body heat map
 - [ ] Yearly calendar heat map, streaks
 - [ ] Body measurements; progress-photo side-by-side
-- [ ] Exercise instructions (cues + primary/secondary muscles)
+- [x] Exercise instructions (branch `exercise-guides`): every built-in exercise has 3–5 steps and a tip written for the app (`ExerciseGuides.kt`); the exercise page's "How to do it" card shows them with a front/back muscle figure drawn in code (`MuscleMap.kt`, main muscle in accent, helpers lighter, from `muscleLoads`). Open until an exercise has 3 sessions. Chose own drawings over the free-exercise-db photos, whose origin is undocumented. Test: `ExerciseGuidesTest`
 - [ ] PR celebration on finish; per-workout notes
 
 ## Phase 10 — Reach

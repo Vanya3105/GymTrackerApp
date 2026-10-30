@@ -17,6 +17,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.CallMerge
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.PushPin
@@ -118,6 +125,7 @@ fun ExerciseDetailScreen(
             item { TrainingMaxRow(exerciseName, history, stats.best1RmKg, onChanged = onInfoChanged) }
         }
         item { NoteRow(note) { editingNote = true } }
+        item { HowToCard(exerciseName, muscle.orEmpty(), startOpen = stats.sessions.size < 3) }
         if (onMerge != null && canRename && others.isNotEmpty()) {
             item { MergeRow { haptics.tick(); choosingMerge = true } }
         }
@@ -716,4 +724,81 @@ fun MergeExercisesDialog(a: String, b: String, history: List<CompletedWorkout>, 
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
     )
+}
+
+/**
+ * Which muscles the exercise works (front and back figures) and, for built-in exercises, how to
+ * do it. Open at first; folded once the exercise is familiar (three sessions).
+ */
+@Composable
+private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) {
+    val P = LocalPalette.current
+    var open by rememberSaveable(exerciseName) { mutableStateOf(startOpen) }
+    val guide = remember(exerciseName) { ExerciseGuides.find(exerciseName) }
+    val loads = remember(exerciseName, muscle) { muscleLoads("", exerciseName, muscle) }
+    val main = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] >= 1f }
+    val helping = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] > 0f && loads[i] < 1f }
+    if (main.isEmpty() && guide == null) return
+
+    AppCard(Modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).pressable(pressedScale = 0.99f) { open = !open },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(if (guide != null) "How to do it" else "Muscles worked", style = AppType.headline, color = P.textPrimary)
+                Text(
+                    listOfNotNull(main.joinToString(", ").ifEmpty { null }, helping.takeIf { it.isNotEmpty() }?.let { "helped by " + it.joinToString(", ") })
+                        .joinToString(", "),
+                    style = AppType.caption,
+                    color = P.textSecondary
+                )
+            }
+            Icon(
+                if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                if (open) "Hide" else "Show",
+                tint = P.textTertiary
+            )
+        }
+        if (open) {
+            if (main.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                MuscleMap(loads, Modifier.fillMaxWidth())
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Legend(P.accentPrimary, "Main")
+                    if (helping.isNotEmpty()) Legend(P.accentPrimary.copy(alpha = 0.5f), "Helping")
+                }
+            }
+            if (guide != null) {
+                Spacer(Modifier.height(16.dp))
+                guide.steps.forEachIndexed { i, step ->
+                    Row(Modifier.padding(bottom = 10.dp)) {
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(P.bgControl), contentAlignment = Alignment.Center) {
+                            Text("${i + 1}", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(step, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(P.bgControl).padding(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(Icons.Rounded.Lightbulb, null, tint = P.warningText, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(guide.tip, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Legend(color: androidx.compose.ui.graphics.Color, label: String) {
+    val P = LocalPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = AppType.caption, color = P.textSecondary)
+    }
 }
