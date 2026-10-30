@@ -448,7 +448,8 @@ fun GymTrackerApp(
                         onStartWorkout = { startWorkout(it) },
                         onStartQuickWorkout = { startQuickWorkout() },
                         onOpenProgress = { selectedTab = AppTab.PROGRESS },
-                        onOpenHistory = { selectedTab = AppTab.HISTORY }
+                        onOpenHistory = { selectedTab = AppTab.HISTORY },
+                        tipsAllowed = !showOnboarding && !(activeSplit != null && workoutExpanded) && editingPastWorkout == null
                     )
                     AppTab.HISTORY -> HistoryScreen(
                         history = history,
