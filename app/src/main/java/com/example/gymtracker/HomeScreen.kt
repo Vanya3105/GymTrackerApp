@@ -3,6 +3,8 @@ package com.example.gymtracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +44,9 @@ fun HomeScreen(
     onStartWorkout: (WorkoutSplit) -> Unit,
     onStartQuickWorkout: () -> Unit,
     onOpenProgress: () -> Unit,
-    onOpenHistory: () -> Unit
+    onOpenHistory: () -> Unit,
+    /** False while something covers Today (a workout, onboarding), so its tips wait. */
+    tipsAllowed: Boolean = true
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -54,20 +58,22 @@ fun HomeScreen(
         else -> splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
     }
 
-    // Filled only while the tips are showing: positions change on every scroll frame.
-    val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
-    var showTips by remember(TutorialPrefs.replayGeneration) { mutableStateOf(!TutorialPrefs.hasSeenHomeTutorial(context)) }
-    var tipIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
-    val tips = remember {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val tour = rememberTipTour(
+        Tips.HOME,
         listOf(
-            TutorialStepInfo("UP_NEXT", "Your next workout", "We pick the workout you haven't done yet this week. Tap Start when you're ready."),
-            TutorialStepInfo("WEEK", "Your week at a glance", "Each dot is a day. Filled dots are days you trained."),
-            TutorialStepInfo("RECOVERY", "Muscle recovery", "A rough guide to which muscles are rested. Tap it for more detail.")
-        )
-    }
+            TutorialStepInfo("UP_NEXT", "Your next workout", "The app picks the day of your plan you haven't done yet this week. Tap Start and your exercises are ready, with weights from last time."),
+            TutorialStepInfo("WEEK", "Your week", "How many of this week's workouts are done. A filled day is a day you trained; tap for your history."),
+            TutorialStepInfo("RECOVERY", "Recovery", "Which muscles are still recovering from your last sessions, so you can see what's ready to train. Tap it for every muscle."),
+            TutorialStepInfo("OTHERS", "Train something else", "Any other day of your plan, or an empty workout where you pick exercises as you go.")
+        ),
+        ready = tipsAllowed
+    )
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -97,7 +103,7 @@ fun HomeScreen(
                     onStart = { if (upNext.title == QUICK_WORKOUT_TITLE) onStartQuickWorkout() else onStartWorkout(upNext) },
                     modifier = Modifier
                         .enterAnimation(1)
-                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["UP_NEXT"] = it.boundsInRoot() } else Modifier)
+                        .tipTarget(tour, "UP_NEXT")
                 )
             }
 
@@ -108,7 +114,7 @@ fun HomeScreen(
                     onOpenHistory = onOpenHistory,
                     modifier = Modifier
                         .enterAnimation(2)
-                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["WEEK"] = it.boundsInRoot() } else Modifier)
+                        .tipTarget(tour, "WEEK")
                 )
             }
 
@@ -118,7 +124,7 @@ fun HomeScreen(
                     onClick = onOpenProgress,
                     modifier = Modifier
                         .enterAnimation(3)
-                        .then(if (showTips) Modifier.onGloballyPositioned { tutorialBounds["RECOVERY"] = it.boundsInRoot() } else Modifier)
+                        .tipTarget(tour, "RECOVERY")
                 )
             }
 
@@ -128,7 +134,7 @@ fun HomeScreen(
                 item { SectionHeader("Other workouts", Modifier.enterAnimation(4)) }
                 // One grouped list rather than a card per day; an empty workout for off-plan days last.
                 item {
-                    AppCard(Modifier.fillMaxWidth().enterAnimation(5), contentPadding = PaddingValues(vertical = 4.dp)) {
+                    AppCard(Modifier.fillMaxWidth().enterAnimation(5).tipTarget(tour, "OTHERS"), contentPadding = PaddingValues(vertical = 4.dp)) {
                         others.forEachIndexed { i, split ->
                             if (i > 0) Box(Modifier.padding(start = 74.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
                             SplitRow(
@@ -147,25 +153,11 @@ fun HomeScreen(
             }
         }
 
-        if (showTips) {
-            SpotlightTutorialOverlay(
-                steps = tips,
-                currentStepIndex = tipIndex,
-                targetBounds = tutorialBounds,
-                onNext = {
-                    if (tipIndex < tips.lastIndex) tipIndex++
-                    else {
-                        TutorialPrefs.markHomeTutorialSeen(context)
-                        showTips = false
-                    }
-                },
-                onPrev = { if (tipIndex > 0) tipIndex-- },
-                onSkip = {
-                    TutorialPrefs.markHomeTutorialSeen(context)
-                    showTips = false
-                }
-            )
-        }
+        // Each card is scrolled into view before it's pointed at (Other workouts is below the fold).
+        TipTourOverlay(tour, onShowStep = { key ->
+            val item = when (key) { "UP_NEXT" -> 0; "WEEK" -> 2; "RECOVERY" -> 3; else -> 5 }
+            scope.launch { listState.animateScrollToItem(item, scrollOffset = if (item >= 3) -200 else 0) }
+        })
     }
 }
 

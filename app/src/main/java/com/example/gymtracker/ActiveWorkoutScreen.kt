@@ -89,6 +89,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private const val EXERCISE_KEY_PREFIX = "ex:"
@@ -147,23 +148,30 @@ fun ActiveWorkoutScreen(
         uri?.let { PhotoStorage.copyUriToInternalStorage(context, it)?.let { path -> photoPath = path } }
     }
 
-    // First-run tips
-    val tutorialBounds = remember { mutableStateMapOf<String, Rect>() }
-    var showTips by remember(TutorialPrefs.replayGeneration) {
-        mutableStateOf(!isEditingPastWorkout && !TutorialPrefs.hasSeenWorkoutTutorial(context))
-    }
-    var tipIndex by remember(TutorialPrefs.replayGeneration) { mutableIntStateOf(0) }
-    val tips = remember {
+    // First workout: the tour. Later, one tip the first time the rest timer or Previous column shows.
+    val workoutTour = rememberTipTour(
+        Tips.WORKOUT,
         listOf(
-            TutorialStepInfo("HANDLE", "Change the order", "Hold and drag the handle to move an exercise up or down."),
-            TutorialStepInfo("SUGGESTION", "Weight suggestions", "Based on your last sessions and today's sets. Tap \"Use\" to fill in the suggested weight."),
-            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set number to mark it as a warm-up or drop set, change its rest, work out the plates, or delete it.")
-        )
-    }
-    fun finishTips() {
-        TutorialPrefs.markWorkoutTutorialSeen(context)
-        showTips = false
-    }
+            TutorialStepInfo("SET_ROW", "Log a set", "Tap a number to change the weight or reps. Tap \u2713 when the set is done and the rest timer starts on its own."),
+            TutorialStepInfo("SUGGESTION", "Your next weight", "Worked out from your last sessions and today's sets. Tap Use to fill it in."),
+            TutorialStepInfo("NAME", "Everything about an exercise", "Tap its name for your history, chart, records and a setup note like seat height."),
+            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set's number to make it a warm-up or drop set, change its rest or see the plates. Hold the dotted handle to move an exercise."),
+            TutorialStepInfo("FINISH", "Done for today?", "Finish saves the workout and shows your new bests. You can edit it later in History.")
+        ),
+        ready = !isEditingPastWorkout && exercises.isNotEmpty() && !showPicker
+    )
+    var restShowing by remember { mutableStateOf(false) }
+    val restTour = rememberTipTour(
+        Tips.REST_TIMER,
+        listOf(TutorialStepInfo("REST", "Rest timer", "Counts down your rest. \u221215 / +15 changes it, \u23ED skips it. It keeps going on the lock screen and your watch, and buzzes when it's time.")),
+        ready = restShowing && !workoutTour.active && !isEditingPastWorkout
+    )
+    val hasPrevious = remember(exercises, history) { exercises.any { ex -> history.any { w -> w.exercises.any { it.name.equals(ex.name, ignoreCase = true) } } } }
+    val previousTour = rememberTipTour(
+        Tips.PREVIOUS,
+        listOf(TutorialStepInfo("PREVIOUS", "Last time", "What you did on this set last time. Tap it to copy those numbers in.")),
+        ready = hasPrevious && !workoutTour.active && !restTour.active && !restShowing && !isEditingPastWorkout
+    )
 
     fun openFinish() {
         finalDuration = if (isEditingPastWorkout) initialDurationSeconds
@@ -173,7 +181,6 @@ fun ActiveWorkoutScreen(
 
     BackHandler {
         when {
-            showTips -> finishTips()
             isEditingPastWorkout && hasUnsavedEdits -> confirmDiscard = true
             isEditingPastWorkout -> onDiscardWorkout()
             else -> onMinimize()
@@ -264,6 +271,7 @@ fun ActiveWorkoutScreen(
     // Each card's records only need the workouts that have its exercise.
     val byExercise = remember(history) { historyByExercise(history) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val dragState = rememberDragDropState(
         listState = listState,
         canReorder = { key -> key is String && key.startsWith(EXERCISE_KEY_PREFIX) },
@@ -300,6 +308,7 @@ fun ActiveWorkoutScreen(
                     else onMinimize()
                 },
                 onFinish = { openFinish() },
+                finishModifier = Modifier.tipTarget(workoutTour, "FINISH"),
                 onDiscard = { confirmDiscard = true }
             )
 
@@ -343,7 +352,9 @@ fun ActiveWorkoutScreen(
                     val partners = if (range.first < range.last) range.filter { it != pos }.map { active[it].value.name } else emptyList()
                     val records = remember(exercise.name, byExercise) { computeExerciseRecords(exercise.name, byExercise[ignoreCaseKey(exercise.name)].orEmpty()) }
                     // The tips spotlight the first card; only track it while they're showing.
-                    val tracking = showTips && pos == 0
+                    // The tips point at the first card; only it reports its parts' positions.
+                    val tour = if (pos == 0) workoutTour else null
+                    val prevTour = if (pos == 0) previousTour else null
                     val unit = Units.current
                     val suggestion = remember(exercise, history, settings.weightStep, unit) {
                         suggestNextWeight(split.title, exercise, history, settings.weightStep)
@@ -369,11 +380,12 @@ fun ActiveWorkoutScreen(
                             splitTitle = split.title,
                             settings = settings,
                             headerModifier = Modifier.longPressDragHandle(dragState, key, onStart = { haptics.pickUp() }),
-                            handleModifier = Modifier
-                                .dragHandle(dragState, key, onStart = { haptics.pickUp() })
-                                .then(if (tracking) Modifier.onGloballyPositioned { tutorialBounds["HANDLE"] = it.boundsInRoot() } else Modifier),
-                            suggestionModifier = if (tracking) Modifier.onGloballyPositioned { tutorialBounds["SUGGESTION"] = it.boundsInRoot() } else Modifier,
-                            firstBadgeModifier = if (tracking) Modifier.onGloballyPositioned { tutorialBounds["SET_BADGE"] = it.boundsInRoot() } else Modifier,
+                            handleModifier = Modifier.dragHandle(dragState, key, onStart = { haptics.pickUp() }),
+                            suggestionModifier = Modifier.tipTarget(tour, "SUGGESTION"),
+                            firstBadgeModifier = Modifier.tipTarget(tour, "SET_BADGE"),
+                            nameModifier = Modifier.tipTarget(tour, "NAME"),
+                            tipRowModifier = Modifier.tipTarget(tour, "SET_ROW"),
+                            tipPreviousModifier = Modifier.tipTarget(prevTour, "PREVIOUS"),
                             haptics = haptics,
                             onUpdate = { transform -> updateAt(exIdx, transform) },
                             onToggleSet = { setIdx -> toggleSet(pos, setIdx) },
@@ -533,20 +545,15 @@ fun ActiveWorkoutScreen(
             RestTimerBar(
                 exercises = exercises,
                 haptics = haptics,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                cardModifier = Modifier.tipTarget(restTour, "REST"),
+                onShowingChange = { restShowing = it }
             )
         }
 
-        if (showTips) {
-            SpotlightTutorialOverlay(
-                steps = tips,
-                currentStepIndex = tipIndex,
-                targetBounds = tutorialBounds,
-                onNext = { if (tipIndex < tips.lastIndex) tipIndex++ else finishTips() },
-                onPrev = { if (tipIndex > 0) tipIndex-- },
-                onSkip = { finishTips() }
-            )
-        }
+        TipTourOverlay(workoutTour, onShowStep = { key -> if (key != "FINISH") scope.launch { listState.animateScrollToItem(0) } })
+        TipTourOverlay(restTour)
+        TipTourOverlay(previousTour)
     }
     }
 
@@ -661,7 +668,8 @@ private fun WorkoutTopBar(
     totalSets: Int,
     onClose: () -> Unit,
     onFinish: () -> Unit,
-    onDiscard: () -> Unit
+    onDiscard: () -> Unit,
+    finishModifier: Modifier = Modifier
 ) {
     val P = LocalPalette.current
     var menuOpen by remember { mutableStateOf(false) }
@@ -679,7 +687,7 @@ private fun WorkoutTopBar(
                 if (isEditing) Text("Editing a logged workout", style = AppType.caption, color = P.textSecondary)
                 else ElapsedClock(startTimeMillis)
             }
-            PrimaryButton(if (isEditing) "Save" else "Finish", onFinish, height = 40.dp)
+            PrimaryButton(if (isEditing) "Save" else "Finish", onFinish, finishModifier, height = 40.dp)
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, "More options", { menuOpen = true }, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
@@ -742,6 +750,10 @@ private fun ExerciseCard(
     handleModifier: Modifier,
     suggestionModifier: Modifier,
     firstBadgeModifier: Modifier,
+    nameModifier: Modifier = Modifier,
+    /** On the set row the tips point at: the next set, or the first. */
+    tipRowModifier: Modifier = Modifier,
+    tipPreviousModifier: Modifier = Modifier,
     haptics: Haptics,
     onUpdate: ((ExerciseEntry) -> ExerciseEntry) -> Unit,
     onToggleSet: (Int) -> Unit,
@@ -797,6 +809,7 @@ private fun ExerciseCard(
             Column(
                 Modifier
                     .weight(1f)
+                    .then(nameModifier)
                     .clip(RoundedCornerShape(10.dp))
                     .pressable(pressedScale = 0.99f, onClick = onOpenDetails)
                     .padding(vertical = 2.dp, horizontal = 2.dp)
@@ -931,9 +944,12 @@ private fun ExerciseCard(
             }
 
             var workNumber = 0
+            val tipRow = if (nextSetIdx >= 0) nextSetIdx else 0
             exercise.sets.forEachIndexed { setIdx, set ->
                 if (set.intensityType == "NORMAL" && !set.isWarmup) workNumber++
                 SetRow(
+                    rowModifier = if (setIdx == tipRow) tipRowModifier else Modifier,
+                    previousModifier = if (setIdx == tipRow) tipPreviousModifier else Modifier,
                     set = set,
                     refFor = { field -> FieldRef(exIdx, setIdx, field) },
                     isNext = setIdx == nextSetIdx,
@@ -1061,6 +1077,8 @@ private fun SetRow(
     /** The matching set last time, if there was one. */
     previous: SetEntry?,
     showPrevious: Boolean,
+    rowModifier: Modifier = Modifier,
+    previousModifier: Modifier = Modifier,
     isPr: Boolean,
     canDelete: Boolean,
     badgeModifier: Modifier,
@@ -1087,7 +1105,7 @@ private fun SetRow(
     }
 
     Row(
-        Modifier
+        rowModifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
             .clip(RoundedCornerShape(12.dp))
@@ -1141,7 +1159,7 @@ private fun SetRow(
             }
         }
 
-        if (showPrevious) PreviousCell(previous, type) { p ->
+        if (showPrevious) PreviousCell(previous, type, previousModifier) { p ->
             haptics.tick()
             onChange { it.copy(weight = p.weight, reps = p.reps, seconds = p.seconds, distanceM = p.distanceM) }
         }
@@ -1170,11 +1188,11 @@ private val PREVIOUS_WIDTH = 68.dp
 
 /** Last time's numbers for this set, quiet; a tap copies them into the set. "—" if there was none. */
 @Composable
-private fun PreviousCell(previous: SetEntry?, type: ExerciseType, onCopy: (SetEntry) -> Unit) {
+private fun PreviousCell(previous: SetEntry?, type: ExerciseType, modifier: Modifier = Modifier, onCopy: (SetEntry) -> Unit) {
     val P = LocalPalette.current
     val text = previous?.let { formatSetShort(it, type) } ?: "—"
     Box(
-        Modifier
+        modifier
             .width(PREVIOUS_WIDTH)
             .height(40.dp)
             .clip(RoundedCornerShape(10.dp))
@@ -1225,7 +1243,13 @@ private fun CheckButton(done: Boolean, onClick: () -> Unit) {
 
 /** Floating rest countdown. Reads the shared rest end time, so widget and lock-screen changes show here too. */
 @Composable
-private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modifier: Modifier = Modifier) {
+private fun RestTimerBar(
+    exercises: List<ExerciseEntry>,
+    haptics: Haptics,
+    modifier: Modifier = Modifier,
+    cardModifier: Modifier = Modifier,
+    onShowingChange: (Boolean) -> Unit = {}
+) {
     val P = LocalPalette.current
     val context = LocalContext.current
     var endMillis by remember { mutableLongStateOf(0L) }
@@ -1248,6 +1272,7 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
 
     val remaining = (endMillis - now).coerceAtLeast(0L)
     val visible = remaining > 0L
+    LaunchedEffect(visible) { onShowingChange(visible) }
     val next = remember(exercises) {
         exercises.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }?.let { ex ->
             "${ex.name} · ${formatSet(ex.sets[ex.nextSetIndex()], ex.type)}"
@@ -1261,7 +1286,7 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
         modifier = modifier
     ) {
         AppCard(
-            Modifier.navigationBarsPadding().padding(12.dp).fillMaxWidth(),
+            Modifier.navigationBarsPadding().padding(12.dp).fillMaxWidth().then(cardModifier),
             elevated = true,
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
         ) {

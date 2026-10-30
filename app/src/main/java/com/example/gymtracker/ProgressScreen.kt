@@ -6,6 +6,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
@@ -55,8 +57,17 @@ fun ProgressScreen(
     var showAllLifts by rememberSaveable { mutableStateOf(false) }
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
     val bestLifts = remember(history) { computeBestLifts(history) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val tour = rememberTipTour(
+        Tips.PROGRESS,
+        listOf(TutorialStepInfo("LIFTS", "Your lifts", "Tap any exercise for its chart, records and every session. Your estimated 1-rep max shows how strong you're getting, even when your reps change.")),
+        ready = bestLifts.isNotEmpty()
+    )
 
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -138,7 +149,7 @@ fun ProgressScreen(
         } else {
             item {
                 AppCard(
-                    Modifier.fillMaxWidth().enterAnimation(2).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
+                    Modifier.fillMaxWidth().enterAnimation(2).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)).tipTarget(tour, "LIFTS"),
                     contentPadding = PaddingValues(vertical = 6.dp)
                 ) {
                     (if (showAllLifts) bestLifts else bestLifts.take(6)).forEachIndexed { i, lift ->
@@ -162,6 +173,9 @@ fun ProgressScreen(
                 }
             }
         }
+    }
+    // Best lifts sits below weigh-ins and recovery: scroll it into view first.
+    TipTourOverlay(tour, onShowStep = { scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) } })
     }
 
     merging?.let { (a, b) ->

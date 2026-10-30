@@ -71,7 +71,13 @@ fun HistoryScreen(
     var photoToView by remember { mutableStateOf<String?>(null) }
 
     val byExercise = remember(history) { historyByExercise(history) }
-    CompositionLocalProvider(LocalHistoryIndex provides byExercise) {
+    val tour = rememberTipTour(
+        Tips.HISTORY,
+        listOf(TutorialStepInfo("CARD", "Your workouts", "Tap a workout to see or edit every set. ⋮ shares it as an image or deletes it. Swipe sideways for other weeks.")),
+        ready = history.isNotEmpty()
+    )
+    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalHistoryIndex provides byExercise, LocalHistoryTip provides tour) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 12.dp)) {
             Text("History", style = AppType.display, color = P.textPrimary)
@@ -94,6 +100,8 @@ fun HistoryScreen(
             }
         }
     }
+    }
+    TipTourOverlay(tour)
     }
 
     pendingDelete?.let { workout ->
@@ -296,6 +304,9 @@ private fun String.toDayLabel(): String = try {
     java.text.SimpleDateFormat("EEEE, MMM d", Locale.getDefault()).format(d!!)
 } catch (e: Exception) { this }
 
+/** The History tip, for the first workout card wherever the week or month view puts it. */
+private val LocalHistoryTip = staticCompositionLocalOf<TipTour?> { null }
+
 private fun LazyListScope.workoutList(
     workouts: List<CompletedWorkout>,
     allHistory: List<CompletedWorkout>,
@@ -316,7 +327,7 @@ private fun LazyListScope.workoutList(
                 onOpen = { onOpen(workout) },
                 onDelete = { onDelete(workout) },
                 onViewPhoto = onViewPhoto,
-                modifier = Modifier.animateItem().enterAnimation(i)
+                modifier = Modifier.animateItem().enterAnimation(i).then(if (i == 0) Modifier.tipTarget(LocalHistoryTip.current, "CARD") else Modifier)
             )
         }
     }
