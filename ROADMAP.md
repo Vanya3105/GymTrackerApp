@@ -11,7 +11,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
 
-**Exercise photos** is tested and merged (2026-10-30). **Wider library** (branch `more-exercises`) is waiting for the owner to test it on the phone; see Phase 9.
+**Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30).
 
 Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). Next: getting ready for the first Google Play release (add Android OAuth clients for the release and Play signing keys; consent screen to In production) (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
 
