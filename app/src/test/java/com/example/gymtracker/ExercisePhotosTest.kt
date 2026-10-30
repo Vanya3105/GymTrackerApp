@@ -10,7 +10,12 @@ class ExercisePhotosTest {
     private val noPhoto = setOf(
         "Machine Pullover", "Machine Lateral Raise", "Lean-Away Lateral Raise", "Cable Y-Raise",
         "Bayesian Cable Curl", "Pendulum Squat", "Belt Squat", "Machine Hip Thrust",
-        "Hollow Body Hold", "Dead Hang"
+        "Hollow Body Hold", "Dead Hang",
+        // The wider library
+        "Knee Push-Up", "Archer Push-Up", "Negative Pull-Up", "Superman Hold", "Pike Push-Up", "Handstand Hold",
+        "Shrimp Squat", "Cossack Squat", "Wall Sit", "Single-Leg Hip Thrust", "Fire Hydrant", "Curtsy Lunge",
+        "Bodyweight Calf Raise", "Pogo Hops", "L-Sit", "Dragon Flag", "Bird Dog", "Bear Crawl", "Suitcase Carry",
+        "Burpee", "Jumping Jacks", "High Knees", "Sprints", "Hiking", "Swimming", "Ski Erg", "Assault Bike"
     )
 
     @Test
