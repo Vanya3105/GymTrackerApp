@@ -86,6 +86,7 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.health.connect)
     implementation(libs.play.services.wearable)
+    implementation(libs.play.services.auth)
     implementation(project(":watchlink"))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

@@ -6,6 +6,7 @@ import android.text.format.DateUtils as AndroidDateUtils
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -186,6 +188,8 @@ fun SettingsScreen(
 
         item {
             SettingsGroup("Your data") {
+                GoogleBackupSection(onRestoreContent = { pendingBackup = it })
+                Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
                 AutoBackupSection()
                 Box(Modifier.padding(vertical = 14.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -635,6 +639,180 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                         color = P.textTertiary,
                         modifier = Modifier.padding(top = 8.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Off: what signing in does and the button. On: the account, the last backup or what went wrong,
+ * Back up now, Restore from Drive, Sign out. Right after signing in on a phone with nothing logged
+ * (a new phone), the backups in Drive are offered straight away.
+ */
+@Composable
+private fun GoogleBackupSection(onRestoreContent: (String) -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val status = DriveBackup.status
+    LaunchedEffect(Unit) { DriveBackup.refreshStatus(context) }
+    var signingIn by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
+
+    fun afterSignIn(step: DriveBackup.SignInStep) {
+        signingIn = false
+        when (step) {
+            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
+            is DriveBackup.SignInStep.NeedsUser -> Unit
+            is DriveBackup.SignInStep.Done -> scope.launch {
+                val found = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty()
+                if (found.isNotEmpty() && LocalStorage.loadHistory(context).isEmpty()) choosing = true
+                else DriveBackup.backUpNow(context)
+            }
+        }
+    }
+    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        DriveBackup.finishSignIn(context, result.data, ::afterSignIn)
+    }
+    fun signIn() {
+        signingIn = true
+        DriveBackup.startSignIn(context) { step ->
+            if (step is DriveBackup.SignInStep.NeedsUser) {
+                consent.launch(IntentSenderRequest.Builder(step.intent).build())
+            } else afterSignIn(step)
+        }
+    }
+
+    if (!status.signedIn) {
+        Text("Back up to Google", style = AppType.bodyStrong, color = P.textPrimary)
+        Text(
+            "Sign in and your workouts are saved to your own Google Drive after every workout. On a new phone, sign in and everything comes back.",
+            style = AppType.caption,
+            color = P.textSecondary,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        PrimaryButton(if (signingIn) "Signing in…" else "Sign in with Google", { signIn() }, Modifier.fillMaxWidth(), enabled = !signingIn, height = 48.dp)
+        Text(
+            "Backups go to a private app folder in your Drive. Only this app can read them; nothing goes to us.",
+            style = AppType.caption,
+            color = P.textTertiary,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    } else {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                if (status.error != null) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDone,
+                null,
+                tint = if (status.error != null) P.dangerText else P.successText,
+                modifier = Modifier.size(20.dp).padding(top = 2.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Backing up to Google Drive", style = AppType.bodyStrong, color = P.textPrimary)
+                Text(status.email.orEmpty(), style = AppType.caption, color = P.textSecondary)
+                Text(
+                    when {
+                        status.running -> "Backing up…"
+                        status.error != null -> status.error
+                        status.lastSuccessMillis > 0L -> "Last backup " + AndroidDateUtils.formatDateTime(
+                            context, status.lastSuccessMillis,
+                            AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_ABBREV_MONTH
+                        )
+                        else -> "Backs up after your next workout"
+                    },
+                    style = AppType.caption,
+                    color = if (status.error != null && !status.running) P.dangerText else P.textSecondary
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (status.error == "Google needs you to sign in again.") {
+                SecondaryButton("Sign in again", { signIn() }, Modifier.weight(1f))
+            } else {
+                SecondaryButton("Back up now", { DriveBackup.backUpNow(context) }, Modifier.weight(1f), enabled = !status.running)
+            }
+            SecondaryButton("Restore", { choosing = true }, Modifier.weight(1f))
+        }
+        LinkRow(Icons.AutoMirrored.Rounded.Logout, "Sign out") { confirmSignOut = true }
+    }
+
+    if (choosing) {
+        DriveRestoreSheet(
+            onPick = { content -> choosing = false; onRestoreContent(content) },
+            onDismiss = {
+                choosing = false
+                DriveBackup.backUpNow(context)
+            }
+        )
+    }
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            containerColor = P.bgElevated,
+            title = { Text("Sign out of Google?", style = AppType.headline, color = P.textPrimary) },
+            text = { Text("Your backups stay in Google Drive, but new workouts won't be backed up there.", style = AppType.body, color = P.textSecondary) },
+            confirmButton = { TextButton(onClick = { confirmSignOut = false; DriveBackup.signOut(context) }) { Text("Sign out", color = P.dangerText, style = AppType.label) } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+}
+
+/** The backups in Drive, newest first; picking one hands its contents to Restore (add or replace). */
+@Composable
+private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var downloading by remember { mutableStateOf<String?>(null) }
+    val files by produceState<List<DriveBackup.DriveBackupFile>?>(null) {
+        value = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) } ?: emptyList()
+    }
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
+            Text("Restore from Google Drive", style = AppType.title, color = P.textPrimary)
+            Spacer(Modifier.height(4.dp))
+            val list = files
+            when {
+                list == null -> Text("Looking for your backups…", style = AppType.body, color = P.textSecondary)
+                list.isEmpty() -> Text("No backups in this Google account yet.", style = AppType.body, color = P.textSecondary)
+                else -> {
+                    Text("Pick one. Next you choose to add it to your data or replace it.", style = AppType.caption, color = P.textSecondary)
+                    Spacer(Modifier.height(10.dp))
+                    list.take(12).forEachIndexed { i, f ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(enabled = downloading == null, pressedScale = 0.98f) {
+                                downloading = f.file.id
+                                scope.launch {
+                                    val text = withContext(Dispatchers.IO) { DriveBackup.download(context, f.file) }
+                                    downloading = null
+                                    if (text == null) Toast.makeText(context, "Couldn't download that backup", Toast.LENGTH_SHORT).show()
+                                    else onPick(text)
+                                }
+                            }.padding(horizontal = 8.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    AndroidDateUtils.formatDateTime(
+                                        context, f.modifiedMillis,
+                                        AndroidDateUtils.FORMAT_SHOW_DATE or AndroidDateUtils.FORMAT_SHOW_TIME or AndroidDateUtils.FORMAT_SHOW_YEAR
+                                    ),
+                                    style = AppType.bodyStrong,
+                                    color = P.textPrimary
+                                )
+                                Text(
+                                    (if (i == 0) "Newest · " else "") + "${(f.sizeBytes + 1023) / 1024} KB",
+                                    style = AppType.caption,
+                                    color = P.textSecondary
+                                )
+                            }
+                            if (downloading == f.file.id) Text("Downloading…", style = AppType.caption, color = P.textSecondary)
+                        }
+                    }
                 }
             }
         }

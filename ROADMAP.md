@@ -11,7 +11,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
 
-Next: getting ready for the first Google Play release (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). Next: getting ready for the first Google Play release (add Android OAuth clients for the release and Play signing keys; consent screen to In production) (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -185,6 +185,19 @@ The app should also serve runners and people who train with bodyweight (calisthe
 - [x] New tip system (`Tips.kt`, replaces the spotlight in `Components.kt`): `rememberTipTour` + `Modifier.tipTarget` + `TipTourOverlay`. Seen ids in prefs, cleared by Profile → Show tips again. Steps whose target isn't on screen are skipped; screens scroll targets into view
 - [x] Animation: scrim and card fade/slide in and out; the hole snaps onto its first target (it used to fly in from the corner) then springs between targets; an accent outline with a breathing ring; the card glides between top and bottom; text slides the way you're going; progress dots; tap anywhere for next
 - [x] Content, in the order you use things. Workout tour (first workout): log a set, your next weight, the exercise page, set options + reordering, Finish (it opened with "Change the order" and never explained logging). Today tour: up next, your week, recovery, other workouts / empty workout. One-off tips when something first appears: rest timer (lock screen + watch), Previous column, History, Progress. Today's tour waits while a workout or onboarding covers it. Checked on the emulator
+
+## Google sign-in + Drive backup (branch `google-backup`)
+- [x] `DriveBackup.kt`: "Sign in with Google" (Identity AuthorizationClient, scopes drive.appdata + userinfo.email) → backups to the hidden appDataFolder of the user's own Drive through the Drive REST API (no server, no Google API client library). Same file, triggers (`AutoBackup.request`), change check and rotation as the folder backup; its own state (`AutoBackup.run(..., prefsName)`). Background backups get a token silently; if Google needs the user again, Profile says "Sign in again"
+- [x] Profile → Your data: sign in, account and last backup, Back up now, Restore (Drive backups, newest first → the existing Add / Replace choice), Sign out (asks; Drive copies stay). Signing in on a phone with nothing logged offers the restore straight away. A phone with nothing logged never uploads (it could rotate away that day's real backup). Cancelled sign-in is quiet
+- [x] Owner's Google Cloud setup done; sign-in and backup tested on the owner's phone (2026-10-30). The app needed the INTERNET permission (it had been fully offline). Release key and Play signing key each need their own Android client before launch
+- [ ] Onboarding: "Restore from Google" on the first screen for new phones
+
+### Google sign-in setup
+1. console.cloud.google.com → new project (e.g. "GymTracker").
+2. APIs & Services → Library → enable **Google Drive API**.
+3. Google Auth Platform (OAuth consent screen): app name, support email, audience **External**. While it's in Testing, add your Gmail under Test users.
+4. Data access → add scopes `.../auth/drive.appdata` and `.../auth/userinfo.email`.
+5. Clients → Create client → **Android**: package `com.vanyaevtushenko.gymtracker`, SHA-1 of the signing key. Debug key (Android Studio Run): `2A:76:65:74:00:FF:76:20:A2:BF:FB:A2:0F:DC:94:BD:DF:CA:15:F1`. Later add one client per key: the release upload key, and the Play App Signing key (Play Console → App integrity). Nothing goes into the app's code: Google matches the package and key.
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
