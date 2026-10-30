@@ -9,17 +9,9 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Everyday fixes** is tested and merged into `master` (2026-10-29). Three branches are stacked, each on the one before, so the checked-out `declutter` build has all of them; the owner's phone test is next:
-- Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
-- Share sheet (`share-design`): Share on the finish sheet or History's ⋮ menu.
-- Declutter (`declutter`): see its section below. The smoothness pass is on the same branch.
-- Search sheets and duplicate exercises (`search-and-duplicates`, on top of `declutter`): swipe a search list past its end (no more twitch); Progress → "Same exercise?" card, or an exercise's page → "Merge them".
-- Combining backups and importing from Strong/Hevy (`backups-import`, on top of `search-and-duplicates`): Profile → Your data → Restore (now asks: Add to my data / Replace everything) and "Import from Strong or Hevy".
-- Tab switching (`tab-transitions`, on top of `backups-import`): tap between the bottom tabs; pages should fade through without a flash.
-- Workout notification (same branch): pull down the shade or look at the lock screen during a workout; the collapsed card should read fully, with a ✓ button.
-- For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
+Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
 
-Next: the owner has widget changes to describe; then Phase 7 step 3, CSV export.
+Next: getting ready for the first Google Play release (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
