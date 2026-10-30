@@ -323,11 +323,6 @@ fun formatDuration(totalSec: Long): String {
     }
 }
 
-fun cycleRestPreset(current: Int): Int {
-    val idx = REST_PRESETS.indexOf(current)
-    return if (idx == -1 || idx == REST_PRESETS.lastIndex) REST_PRESETS.first() else REST_PRESETS[idx + 1]
-}
-
 fun formatKgClean(value: Float): String {
     val clamped = (value.coerceAtLeast(0f) * 100f).roundToInt() / 100f
     return if (clamped % 1f == 0f) "${clamped.toInt()}" else "$clamped"

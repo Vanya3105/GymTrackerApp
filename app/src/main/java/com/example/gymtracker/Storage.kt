@@ -492,6 +492,48 @@ object LocalStorage {
         return true
     }
 
+    /**
+     * Adds a GymTracker backup to what's here instead of replacing it ([combineData]); settings,
+     * profile and the running workout stay as they are. Null if [jsonContent] isn't a backup.
+     */
+    fun addBackupJsonString(context: Context, jsonContent: String): CombineResult? {
+        val parsed = try {
+            JSONObject(jsonContent.removePrefix("﻿").trim())
+        } catch (e: Exception) {
+            return null
+        }
+        if (!StoreCodec.looksLikeBackup(parsed)) return null
+        return addData(context, StoreCodec.readData(parsed))
+    }
+
+    /** Adds [incoming] (a backup or another app's export) to what's here; a copy is kept first. */
+    fun addData(context: Context, incoming: StoreData): CombineResult? {
+        try {
+            savePreImportCopy(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Couldn't save a copy before adding data", e)
+            return null
+        }
+        val result: CombineResult
+        synchronized(lock) {
+            val (combined, summary) = combineData(data(context), incoming)
+            try {
+                cachedData = onIoThread(context) { db ->
+                    RoomStore.replaceAll(db, combined)
+                    RoomStore.load(db)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Adding data failed", e)
+                cachedData = null
+                return null
+            }
+            result = summary
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = false)
+        AutoBackup.request(context)
+        return result
+    }
+
     private fun savePreImportCopy(context: Context) {
         val dir = context.applicationContext.filesDir
         File(dir, "$PRE_IMPORT_PREFIX${System.currentTimeMillis()}.json").writeText(exportJsonBackupString(context))
@@ -562,6 +604,49 @@ object LocalStorage {
         }
         scheduleSurfaceRefresh(context, notifyInApp = false)
         return true
+    }
+
+    /**
+     * Makes [fromName] part of [intoName] everywhere (history, day lists, settings, the running
+     * workout) and removes [fromName]. A copy of the data is kept first, as a restore does.
+     * Returns false if either exercise doesn't exist or they're the same one.
+     */
+    fun mergeExercise(context: Context, fromName: String, intoName: String): Boolean {
+        synchronized(lock) {
+            data(context)
+            try {
+                savePreImportCopy(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "Couldn't save a copy before merging", e)
+                return false
+            }
+            val merged = onIoThread(context) { db -> RoomStore.mergeExercise(db, fromName, intoName) }
+            if (!merged) return false
+            cachedData = onIoThread(context, RoomStore::load)
+            // The kept exercise's spelling, as logged.
+            val into = data(context).history.firstNotNullOfOrNull { w ->
+                w.exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(intoName) }?.name
+            } ?: intoName.trim()
+            loadActiveSession(context)?.let { (split, exercises) ->
+                if (exercises.any { exerciseKey(it.name) == exerciseKey(fromName) }) {
+                    saveActiveSession(context, split, mergeEntries(exercises, fromName, into))
+                }
+            }
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = true)
+        AutoBackup.request(context)
+        return true
+    }
+
+    /** Pairs the user said aren't the same exercise, as sorted [exerciseKey]s joined by "|". */
+    fun notDuplicates(context: Context): Set<String> {
+        val arr = root(context).optJSONArray("notDuplicates") ?: return emptySet()
+        return (0 until arr.length()).map { arr.optString(it) }.toSet()
+    }
+
+    fun markNotDuplicates(context: Context, a: String, b: String) = edit(context) { root ->
+        val arr = root.optJSONArray("notDuplicates") ?: JSONArray().also { root.put("notDuplicates", it) }
+        arr.put(duplicatePairKey(a, b))
     }
 
     // --- Programs ---
@@ -730,6 +815,7 @@ object LocalStorage {
         edit(context, notifyInApp = fromWidget) { root -> root.remove("activeSession") }
         RestAlarmScheduler.scheduleOrCancel(context.applicationContext, 0L)
         HealthSync.workoutSaved(context, workout)
+        AutoBackup.request(context)
     }
 
     fun updateCompletedWorkout(context: Context, updatedWorkout: CompletedWorkout) {
@@ -737,6 +823,7 @@ object LocalStorage {
             d.copy(history = d.history.map { if (it.id == updatedWorkout.id) updatedWorkout else it })
         }) { RoomStore.insertWorkout(it, updatedWorkout) }
         HealthSync.workoutSaved(context, updatedWorkout)
+        AutoBackup.request(context)
     }
 
     fun deleteWorkoutFromHistory(context: Context, workoutId: Long) {
@@ -744,6 +831,7 @@ object LocalStorage {
             RoomStore.deleteWorkout(it, workoutId)
         }
         HealthSync.workoutDeleted(context, workoutId)
+        AutoBackup.request(context)
     }
 
     /** Newest first. The same list instance is returned until history changes, so callers can use it as a stable key. */
@@ -1007,3 +1095,17 @@ internal object StoreCodec {
         }.sortedByDescending { it.id }
     }
 }
+
+/**
+ * A list of today's exercises after merging [fromName] into [intoName]: [fromName]'s entry takes
+ * the name, or, when both are in the list, [intoName]'s entry gets [fromName]'s sets after its own.
+ */
+internal fun mergeEntries(exercises: List<ExerciseEntry>, fromName: String, intoName: String): List<ExerciseEntry> {
+    val from = exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(fromName) } ?: return exercises
+    val into = exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(intoName) }
+        ?: return exercises.map { if (it === from) it.copy(name = intoName) else it }
+    val combined = into.copy(sets = (into.sets + from.sets).mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+    return exercises.filter { it !== from }.map { if (it === into) combined else it }
+}
+
+internal fun duplicatePairKey(a: String, b: String): String = listOf(exerciseKey(a), exerciseKey(b)).sorted().joinToString("|")

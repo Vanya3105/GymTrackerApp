@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.Undo
@@ -106,6 +107,8 @@ fun ActiveWorkoutScreen(
     initialPhotoPath: String?,
     haptics: Haptics,
     hasUnsavedEdits: Boolean = false,
+    /** Goes up when an exercise's page changed its note or training max, so the cards reread them. */
+    infoVersion: Int = 0,
     onOpenExercise: (String) -> Unit,
     onChangeExerciseType: (name: String, type: ExerciseType) -> Unit,
     onUpdateExercises: (List<ExerciseEntry>) -> Unit,
@@ -125,9 +128,7 @@ fun ActiveWorkoutScreen(
     var showPicker by remember { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
     var showFinish by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
-    var detailsFor by remember { mutableStateOf<String?>(null) }
     var removeCandidate by remember { mutableStateOf<String?>(null) }
-    var noteVersion by remember { mutableIntStateOf(0) }
     var photoPath by remember { mutableStateOf(initialPhotoPath) }
     var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
     var banner by remember { mutableStateOf<Banner?>(null) }
@@ -293,18 +294,12 @@ fun ActiveWorkoutScreen(
                 startTimeMillis = startTimeMillis,
                 doneSets = doneSets,
                 totalSets = totalSets,
-                canCopyLast = !isEditingPastWorkout && canCopyLast,
                 onClose = {
                     if (isEditingPastWorkout && hasUnsavedEdits) confirmDiscard = true
                     else if (isEditingPastWorkout) onDiscardWorkout()
                     else onMinimize()
                 },
                 onFinish = { openFinish() },
-                onCopyLast = {
-                    val prev = previousSplitWorkout ?: return@WorkoutTopBar
-                    haptics.tick()
-                    onUpdateExercises(latestExercises.map { cur -> copyFromPrevious(cur, prev, settings) })
-                },
                 onDiscard = { confirmDiscard = true }
             )
 
@@ -356,7 +351,7 @@ fun ActiveWorkoutScreen(
                     val previousSets = remember(exercise.name, exercise.type, previousSplitWorkout, byExercise) {
                         lastSessionSets(exercise.name, exercise.type, previousSplitWorkout, byExercise[ignoreCaseKey(exercise.name)].orEmpty())
                     }
-                    val note = remember(exercise.name, noteVersion) { LocalStorage.getExerciseNote(context, exercise.name) }
+                    val note = remember(exercise.name, infoVersion) { LocalStorage.getExerciseNote(context, exercise.name) }
 
                     DraggableItem(dragState, key) { isDragging ->
                         ExerciseCard(
@@ -421,7 +416,7 @@ fun ActiveWorkoutScreen(
                                 haptics.tick()
                                 updateAt(exIdx) { it.copy(isSkipped = true, isSuperset = false) }
                             },
-                            onOpenDetails = { detailsFor = exercise.name },
+                            onOpenDetails = { onOpenExercise(exercise.name) },
                             onRemove = { removeCandidate = exercise.name }
                         )
                     }
@@ -567,34 +562,6 @@ fun ActiveWorkoutScreen(
         )
     }
 
-    detailsFor?.let { name ->
-        val idx = exercises.indexOfFirst { it.name == name }
-        if (idx == -1) detailsFor = null
-        else ExerciseDetailsSheet(
-            exercise = exercises[idx],
-            history = history,
-            canMoveUp = idx > 0,
-            canMoveDown = idx < exercises.lastIndex,
-            onMoveUp = { haptics.tick(); onReorderExercises(idx, idx - 1) },
-            onMoveDown = { haptics.tick(); onReorderExercises(idx, idx + 1) },
-            onSaveNote = { text ->
-                LocalStorage.saveExerciseNote(context, name, text)
-                noteVersion++
-            },
-            onRemove = { detailsFor = null; removeCandidate = name },
-            onOpenHistory = { detailsFor = null; onOpenExercise(name) },
-            onChangeType = { type -> onChangeExerciseType(name, type) },
-            onTrainingMaxChanged = {
-                // Nothing logged yet: lay the exercise out again from the new training max.
-                val current = latestExercises.getOrNull(idx)
-                if (current != null && current.sets.none { it.isCompleted }) {
-                    updateAt(idx) { newExerciseEntry(context, split.title, it.name, it.targetMuscle, history, settings).copy(restSeconds = it.restSeconds) }
-                }
-            },
-            splitTitle = split.title,
-            onDismiss = { detailsFor = null }
-        )
-    }
 
     removeCandidate?.let { name ->
         AlertDialog(
@@ -692,10 +659,8 @@ private fun WorkoutTopBar(
     startTimeMillis: Long,
     doneSets: Int,
     totalSets: Int,
-    canCopyLast: Boolean,
     onClose: () -> Unit,
     onFinish: () -> Unit,
-    onCopyLast: () -> Unit,
     onDiscard: () -> Unit
 ) {
     val P = LocalPalette.current
@@ -718,13 +683,6 @@ private fun WorkoutTopBar(
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, "More options", { menuOpen = true }, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
-                    if (canCopyLast) {
-                        DropdownMenuItem(
-                            text = { Text("Use last time's numbers", style = AppType.body) },
-                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
-                            onClick = { menuOpen = false; onCopyLast() }
-                        )
-                    }
                     DropdownMenuItem(
                         text = { Text(if (isEditing) "Discard changes" else "Discard workout", style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
@@ -852,6 +810,8 @@ private fun ExerciseCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
+                    // The name opens the exercise's page: say so without a separate button.
+                    if (!collapsed) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
                     AnimatedVisibility(allDone, enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                         Box(Modifier.padding(start = 6.dp).size(18.dp).clip(CircleShape).background(P.successSurface), contentAlignment = Alignment.Center) {
                             Icon(Icons.Rounded.Check, "All sets done", tint = P.successText, modifier = Modifier.size(12.dp))
@@ -868,17 +828,16 @@ private fun ExerciseCard(
                 }.joinToString(" · ")
                 if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable {
-                onSetExerciseRest(cycleRestPreset(exercise.restSeconds))
-            })
+            Box {
+                var restOpen by remember { mutableStateOf(false) }
+                Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
+                DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
+                    RestChooser("Rest between sets", exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
+                }
+            }
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, "Exercise options", { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
-                    DropdownMenuItem(
-                        text = { Text("Notes & history", style = AppType.body) },
-                        leadingIcon = { Icon(Icons.Rounded.Info, null) },
-                        onClick = { menuOpen = false; onOpenDetails() }
-                    )
                     if (canLinkNext) {
                         DropdownMenuItem(
                             text = { Text(if (exercise.isSuperset) "Unlink from next" else "Superset with next", style = AppType.body) },
@@ -902,7 +861,6 @@ private fun ExerciseCard(
                             }
                         )
                     }
-                    RestChooser("Rest between sets", exercise.restSeconds) { menuOpen = false; onSetExerciseRest(it) }
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
                         text = { Text("Skip for today", style = AppType.body) },
@@ -1356,121 +1314,6 @@ private fun RestTimerBar(exercises: List<ExerciseEntry>, haptics: Haptics, modif
 // ============================================================================
 
 @Composable
-private fun ExerciseDetailsSheet(
-    exercise: ExerciseEntry,
-    history: List<CompletedWorkout>,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    splitTitle: String,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onSaveNote: (String) -> Unit,
-    onRemove: () -> Unit,
-    onOpenHistory: () -> Unit,
-    onChangeType: (ExerciseType) -> Unit,
-    onTrainingMaxChanged: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val P = LocalPalette.current
-    val context = LocalContext.current
-    val rec = remember(exercise.name, history) { computeExerciseRecords(exercise.name, history) }
-    var note by remember(exercise.name) { mutableStateOf(LocalStorage.getExerciseNote(context, exercise.name)) }
-    val info = remember(exercise.name) { ExerciseDatabase.find(exercise.name) }
-
-    AppBottomSheet(onDismiss = { onSaveNote(note); onDismiss() }) {
-        Column(
-            Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-                .navigationBarsPadding()
-                .imePadding()
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(exercise.name, style = AppType.title, color = P.textPrimary)
-                    val sub = listOfNotNull(exercise.targetMuscle.ifBlank { info?.muscle }, info?.equipment).joinToString(" · ")
-                    if (sub.isNotBlank()) Text(sub, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textSecondary)
-                }
-                CircleIconButton(Icons.Rounded.ArrowUpward, "Move up", onMoveUp, enabled = canMoveUp, size = 36.dp)
-                Spacer(Modifier.width(6.dp))
-                CircleIconButton(Icons.Rounded.ArrowDownward, "Move down", onMoveDown, enabled = canMoveDown, size = 36.dp)
-            }
-            Spacer(Modifier.height(12.dp))
-            val type = exercise.type
-            ExerciseTypeRow(type, onChangeType)
-            if (programsUsingTrainingMaxOf(exercise.name).isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                TrainingMaxRow(exercise.name, history, rec.bestEstimated1Rm, onChanged = onTrainingMaxChanged)
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (type.hasWeightSuggestions) {
-                    StatTile(if (rec.bestEstimated1Rm > 0f) formatWeightKg(rec.bestEstimated1Rm) else "—", "Est. 1-rep max", Modifier.weight(1f))
-                    StatTile(if (rec.maxWeightKg > 0f) formatWeightKg(rec.maxWeightKg) else "—", "Heaviest", Modifier.weight(1f))
-                    StatTile(rec.bestSet?.let { formatSetShort(it, type) } ?: "—", "Best set", Modifier.weight(1f))
-                } else {
-                    val bestLabel = when (type) {
-                        ExerciseType.BODYWEIGHT -> "Most reps"
-                        ExerciseType.ASSISTED -> "Least help"
-                        else -> "Longest"
-                    }
-                    StatTile(rec.bestSet?.let { formatSet(it, type) } ?: "—", bestLabel, Modifier.weight(1f))
-                    val last = rec.recentHistory.firstOrNull()?.second?.let { formatSessionValue(type, sessionValue(type, it)) }
-                    StatTile(last ?: "—", "Last time", Modifier.weight(1f))
-                }
-            }
-            if (rec.chartPoints.size >= 2) {
-                Spacer(Modifier.height(16.dp))
-                Text(sessionValueTitle(type), style = AppType.label, color = P.textSecondary)
-                Spacer(Modifier.height(8.dp))
-                TrendChart(rec.chartPoints, label = { formatSessionValueShort(type, it) })
-            }
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text("Setup note (seat height, grip…)") },
-                leadingIcon = { Icon(Icons.Rounded.PushPin, null) },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = P.accentPrimary,
-                    unfocusedBorderColor = P.borderStrong,
-                    focusedLabelColor = P.accentPrimary,
-                    unfocusedLabelColor = P.textSecondary
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Recent sessions", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
-                if (rec.recentHistory.isNotEmpty()) {
-                    Text(
-                        "Full history",
-                        style = AppType.label,
-                        color = P.accentPrimary,
-                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onSaveNote(note); onOpenHistory() }.padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
-                }
-            }
-            if (rec.recentHistory.isEmpty()) {
-                Text("Nothing logged yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 6.dp))
-            } else {
-                rec.recentHistory.forEach { (label, sets) ->
-                    Column(Modifier.padding(top = 10.dp)) {
-                        Text(label, style = AppType.caption, color = P.textTertiary)
-                        Text(sets.joinToString("  ·  ") { formatSetShort(it, exercise.type) }, style = AppType.body.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
-                    }
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            SecondaryButton("Remove from $splitTitle", onRemove, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteOutline, contentColor = P.dangerText)
-        }
-    }
-}
-
-@Composable
 private fun FinishSheet(
     split: WorkoutSplit,
     exercises: List<ExerciseEntry>,
@@ -1625,7 +1468,7 @@ private fun FinishSheet(
             SecondaryButton(
                 "Share",
                 {
-                    shareWorkoutCardImage(context, split.title, durationSeconds, exercises, history, userProfile.currentWeightKg, photoPath)
+                    shareWorkoutCardImage(split.title, durationSeconds, exercises, history, photoPath)
                 },
                 Modifier.fillMaxWidth(),
                 icon = Icons.Rounded.IosShare

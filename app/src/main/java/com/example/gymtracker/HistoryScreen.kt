@@ -355,15 +355,10 @@ fun WorkoutHistoryCard(
                         onClick = {
                             menuOpen = false
                             shareWorkoutCardImage(
-                                context, workout.splitTitle, workout.durationSeconds, workout.exercises,
-                                allHistory.filter { it.id < workout.id }, workout.bodyWeightKg, workout.photoPath
+                                workout.splitTitle, workout.durationSeconds, workout.exercises,
+                                allHistory.filter { it.id < workout.id }, workout.photoPath, whenMillis = workout.id
                             )
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Edit", style = AppType.body) },
-                        leadingIcon = { Icon(Icons.Rounded.Edit, null) },
-                        onClick = { menuOpen = false; onOpen() }
                     )
                     DropdownMenuItem(
                         text = { Text("Delete", style = AppType.body, color = P.dangerText) },

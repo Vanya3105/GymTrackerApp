@@ -1,0 +1,6 @@
+The fonts in app/src/main/res/font/inter_*.ttf are fixed instances of Inter's variable font
+(Inter 4, SIL Open Font License 1.1, see Inter-OFL.txt): text at optical size 14 (weights 400,
+500, 600, 700) and display at optical size 28 (weights 400, 600, 700, 800). They were made with
+fontTools (varLib.instancer, then subset to Latin, Latin Extended, Cyrillic, Greek, punctuation,
+arrows and math symbols, keeping the ccmp, locl, calt, liga, kern, mark, mkmk, tnum and case
+features). They stay under the same license.

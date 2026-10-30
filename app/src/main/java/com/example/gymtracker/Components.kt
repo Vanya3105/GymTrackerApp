@@ -10,6 +10,10 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -881,6 +885,19 @@ private class EnterAnimationNode(private val index: Int) : Modifier.Node(), Layo
 // BOTTOM SHEET
 // ============================================================================
 
+/**
+ * Scrolling content in a sheet hands what it can't use to the sheet. At the end of a list that
+ * leftover moved the whole sheet up a few pixels and it sprang back every frame: a twitch while
+ * the finger kept going. Keep it in the content; pulling down (to close the sheet) still reaches it.
+ */
+private val SheetScrollGuard = object : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+        if (available.y < 0f) Offset(0f, available.y) else Offset.Zero
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        if (available.y < 0f) Velocity(0f, available.y) else Velocity.Zero
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppBottomSheet(
@@ -905,7 +922,7 @@ fun AppBottomSheet(
                     .background(P.borderStrong)
             )
         },
-        content = content
+        content = { Column(Modifier.nestedScroll(SheetScrollGuard), content = content) }
     )
 }
 

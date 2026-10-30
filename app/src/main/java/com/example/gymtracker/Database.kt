@@ -12,6 +12,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
@@ -170,6 +171,24 @@ interface GymDao {
     @Query("SELECT COUNT(*) FROM workout_exercises WHERE exerciseId = :id") fun loggedCount(id: Long): Int
     @Query("SELECT COUNT(*) FROM workout_sets s JOIN workout_exercises e ON s.workoutExerciseId = e.id WHERE e.exerciseId = :id AND CAST(s.weight AS REAL) > 0")
     fun weightedSetCount(id: Long): Int
+
+    // Merging two exercises
+    @Query("SELECT * FROM workout_exercises WHERE exerciseId = :id") fun entriesOf(id: Long): List<WorkoutExerciseEntity>
+    @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId AND exerciseId = :exerciseId LIMIT 1")
+    fun entryIn(workoutId: Long, exerciseId: Long): WorkoutExerciseEntity?
+    @Query("UPDATE workout_exercises SET exerciseId = :into WHERE id = :entryId") fun pointEntryAt(entryId: Long, into: Long)
+    @Query("SELECT COUNT(*) FROM workout_sets WHERE workoutExerciseId = :entryId") fun setCount(entryId: Long): Int
+    @Query("SELECT COALESCE(MAX(position), -1) FROM workout_sets WHERE workoutExerciseId = :entryId") fun lastSetPosition(entryId: Long): Int
+    @Query("UPDATE workout_sets SET workoutExerciseId = :to, position = position + :positionShift, setNumber = setNumber + :numberShift WHERE workoutExerciseId = :from")
+    fun moveSets(from: Long, to: Long, positionShift: Int, numberShift: Int)
+    @Query("DELETE FROM workout_exercises WHERE id = :entryId") fun deleteEntry(entryId: Long)
+    @Query("SELECT * FROM split_template_items WHERE exerciseId = :id") fun templateItemsOf(id: Long): List<SplitTemplateItemEntity>
+    @Query("UPDATE split_template_items SET exerciseId = :into WHERE splitTitle = :title AND position = :position")
+    fun pointTemplateItemAt(title: String, position: Int, into: Long)
+    @Query("DELETE FROM split_template_items WHERE splitTitle = :title AND position = :position") fun deleteTemplateItem(title: String, position: Int)
+    @Update fun updateExercise(e: ExerciseEntity)
+    @Query("DELETE FROM exercises WHERE id = :id") fun deleteExercise(id: Long)
+    @Query("UPDATE workouts SET skippedExercises = :skipped WHERE id = :id") fun setSkipped(id: Long, skipped: List<String>)
 
     @Query("SELECT * FROM workouts") fun workouts(): List<WorkoutEntity>
     @Query("SELECT * FROM workout_exercises") fun workoutExercises(): List<WorkoutExerciseEntity>
@@ -527,6 +546,52 @@ object RoomStore {
      * Renames an exercise everywhere (history, templates, notes). Returns false if another
      * exercise already has that name, since merging two histories is a separate decision.
      */
+    /**
+     * Makes [fromName] part of [intoName]: its sessions, places in day lists and settings move to
+     * [intoName], and [fromName] is removed. A workout that logged both keeps one entry, [intoName]'s
+     * sets first. [intoName]'s note, rest, type and training max win; [fromName]'s fill any it lacks.
+     * Returns false if either is missing or they're the same exercise.
+     */
+    fun mergeExercise(db: GymDatabase, fromName: String, intoName: String): Boolean {
+        val dao = db.dao()
+        var ok = false
+        db.runInTransaction {
+            val from = dao.exerciseByKey(exerciseKey(fromName)) ?: return@runInTransaction
+            val into = dao.exerciseByKey(exerciseKey(intoName)) ?: return@runInTransaction
+            if (from.id == into.id) return@runInTransaction
+
+            for (entry in dao.entriesOf(from.id)) {
+                val kept = dao.entryIn(entry.workoutId, into.id)
+                if (kept == null) {
+                    dao.pointEntryAt(entry.id, into.id)
+                } else {
+                    dao.moveSets(entry.id, kept.id, dao.lastSetPosition(kept.id) + 1, dao.setCount(kept.id))
+                    dao.deleteEntry(entry.id)
+                }
+            }
+            for (item in dao.templateItemsOf(from.id)) {
+                val dayHasBoth = dao.templateFor(item.splitTitle).any { it.exerciseId == into.id }
+                if (dayHasBoth) dao.deleteTemplateItem(item.splitTitle, item.position)
+                else dao.pointTemplateItemAt(item.splitTitle, item.position, into.id)
+            }
+            dao.workouts().filter { w -> w.skippedExercises.any { exerciseKey(it) == from.nameKey } }.forEach { w ->
+                dao.setSkipped(w.id, w.skippedExercises.map { if (exerciseKey(it) == from.nameKey) into.name else it }.distinct())
+            }
+            dao.updateExercise(
+                into.copy(
+                    note = into.note.ifBlank { from.note },
+                    defaultRestSeconds = into.defaultRestSeconds ?: from.defaultRestSeconds,
+                    muscle = into.muscle.ifBlank { from.muscle },
+                    trainingMaxKg = into.trainingMaxKg ?: from.trainingMaxKg,
+                    trainingMaxSetAt = if (into.trainingMaxKg != null) into.trainingMaxSetAt else from.trainingMaxSetAt
+                )
+            )
+            dao.deleteExercise(from.id)
+            ok = true
+        }
+        return ok
+    }
+
     fun renameExercise(db: GymDatabase, oldName: String, newName: String): Boolean {
         val dao = db.dao()
         val trimmed = newName.trim()

@@ -20,13 +20,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -37,7 +38,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -53,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -227,7 +229,11 @@ fun GymTrackerApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val P = LocalPalette.current
 
-    remember { LocalStorage.reconcileProfileWeight(context) }
+    remember {
+        LocalStorage.reconcileProfileWeight(context)
+        // Read before Profile first draws, so it doesn't show "off" for a frame and then jump.
+        AutoBackup.refreshStatus(context)
+    }
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
     var history by remember { mutableStateOf(LocalStorage.loadHistory(context)) }
@@ -243,6 +249,8 @@ fun GymTrackerApp(
     var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
     // Split builder, opened from onboarding or Profile with the name typed in the search (may be blank).
     var buildingSplit by rememberSaveable { mutableStateOf<String?>(null) }
+    // Bumped when an exercise's page changes its note or training max.
+    var exerciseInfoVersion by remember { mutableIntStateOf(0) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -301,6 +309,9 @@ fun GymTrackerApp(
                 reloadFromDisk.value()
                 pullFromHealth.value()
                 checkForgotten.value()
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                // Edits outside a workout (weigh-ins, programs, settings) reach the backup here.
+                AutoBackup.request(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -402,6 +413,21 @@ fun GymTrackerApp(
         currentExercises = currentExercises.map { if (exerciseKey(it.name) == exerciseKey(name)) it.copy(type = type) else it }
     }
 
+    /** Joins two names for one exercise; returns whether it worked. */
+    fun mergeExercises(from: String, into: String): Boolean {
+        val ok = LocalStorage.mergeExercise(context, from, into)
+        if (ok) {
+            haptics.confirm()
+            history = LocalStorage.loadHistory(context)
+            if (activeSplit != null) currentExercises = LocalStorage.loadActiveSession(context)?.second ?: currentExercises
+            exerciseInfoVersion++
+            Toast.makeText(context, "Merged into $into", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Couldn't merge those exercises", Toast.LENGTH_SHORT).show()
+        }
+        return ok
+    }
+
     fun deletePastWorkout(id: Long) {
         haptics.tick()
         LocalStorage.deleteWorkoutFromHistory(context, id)
@@ -410,16 +436,7 @@ fun GymTrackerApp(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = {
-                    val forward = targetState.ordinal > initialState.ordinal
-                    (fadeIn(tween(220, delayMillis = 60)) + slideInHorizontallyBy(if (forward) 0.06f else -0.06f))
-                        .togetherWith(fadeOut(tween(120)))
-                },
-                modifier = Modifier.weight(1f),
-                label = "tab_content"
-            ) { tab ->
+            TabHost(selected = selectedTab, modifier = Modifier.weight(1f)) { tab ->
                 when (tab) {
                     AppTab.TODAY -> HomeScreen(
                         splits = splits,
@@ -449,7 +466,8 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                         },
                         onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) },
-                        onOpenExercise = { haptics.tick(); openExercise = it }
+                        onOpenExercise = { haptics.tick(); openExercise = it },
+                        onMergeExercises = { from, into -> mergeExercises(from, into) }
                     )
                     AppTab.PROFILE -> SettingsScreen(
                         settings = settings,
@@ -462,7 +480,6 @@ fun GymTrackerApp(
                             // One body weight everywhere: a new weight here is a weigh-in too.
                             if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, updated.currentWeightKg)
                         },
-                        onOpenOnboarding = { showOnboarding = true },
                         onReplayTips = { selectedTab = AppTab.TODAY },
                         onDataRestored = {
                             history = LocalStorage.loadHistory(context)
@@ -522,6 +539,7 @@ fun GymTrackerApp(
                             initialPhotoPath = editing.photoPath,
                             haptics = haptics,
                             hasUnsavedEdits = currentExercises != editing.exercises,
+                            infoVersion = exerciseInfoVersion,
                             onOpenExercise = { openExercise = it },
                             onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { currentExercises = it },
@@ -561,6 +579,7 @@ fun GymTrackerApp(
                             isEditingPastWorkout = false,
                             initialPhotoPath = null,
                             haptics = haptics,
+                            infoVersion = exerciseInfoVersion,
                             onOpenExercise = { openExercise = it },
                             onChangeExerciseType = ::changeExerciseType,
                             onUpdateExercises = { updated ->
@@ -675,7 +694,27 @@ fun GymTrackerApp(
                         renamed
                     },
                     onChangeType = { type -> changeExerciseType(name, type) },
-                    onBack = { openExercise = null }
+                    onBack = { openExercise = null },
+                    onMerge = { from, into ->
+                        // The page follows the kept name if its own exercise was merged away.
+                        if (mergeExercises(from, into) && exerciseKey(from) == exerciseKey(name)) openExercise = into
+                    },
+                    onInfoChanged = {
+                        exerciseInfoVersion++
+                        // A new training max lays the exercise out again, if none of today's sets are done.
+                        val split = activeSplit
+                        if (split != null && editingPastWorkout == null) {
+                            val relaid = currentExercises.map { ex ->
+                                if (exerciseKey(ex.name) == exerciseKey(name) && ex.sets.none { it.isCompleted } && liftPlanFor(split.title, ex.name) != null) {
+                                    newExerciseEntry(context, split.title, ex.name, ex.targetMuscle, history, settings).copy(restSeconds = ex.restSeconds)
+                                } else ex
+                            }
+                            if (relaid != currentExercises) {
+                                currentExercises = relaid
+                                LocalStorage.saveActiveSession(context, split.title, relaid)
+                            }
+                        }
+                    }
                 )
             }
             StatusBarScrim()
@@ -727,6 +766,8 @@ fun GymTrackerApp(
                 )
             }
         }
+
+        ShareSheetHost()
 
         val forgotten = activeSplit
         if (forgottenSince > 0L && forgotten != null) {
@@ -1049,6 +1090,69 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
                 Spacer(Modifier.width(8.dp))
             }
             Text("Resume", style = AppType.label, color = P.accentPrimary)
+        }
+    }
+}
+
+/**
+ * Keeps each tab composed after its first visit: switching back is instant (no rebuilding the
+ * screen and measuring its text again) and returns to where it was scrolled. Hidden tabs aren't
+ * measured, placed or drawn, so they take no touches and cost nothing per frame.
+ *
+ * Switching is Material's "fade through": the old tab fades out over the first 30%, then the new
+ * one fades in while growing from 96%. Both are driven by one progress value that is reset in the
+ * same frame the tab changes, so the new tab is never drawn at full opacity before its fade (it
+ * used to flash in for a frame, vanish and fade back: the "twitch"). Timing starts after the new
+ * tab's first frame, so a slow first visit doesn't swallow the animation.
+ */
+@Composable
+private fun TabHost(selected: AppTab, modifier: Modifier, content: @Composable (AppTab) -> Unit) {
+    val visited = remember { mutableStateListOf(selected) }
+    if (selected !in visited) visited += selected
+    // Which tab was showing before [selected]; a plain holder, worked out during composition.
+    val order = remember { object { var current = selected; var previous: AppTab? = null } }
+    if (order.current != selected) {
+        order.previous = order.current
+        order.current = selected
+    }
+    val from = order.previous
+    // A new value per switch, created at 0 in the same composition the tab changes.
+    val progress = remember(selected) { Animatable(if (from == null) 1f else 0f) }
+    var settled by remember(selected) { mutableStateOf(from == null) }
+    LaunchedEffect(selected) {
+        if (settled) return@LaunchedEffect
+        withFrameNanos { }
+        progress.animateTo(1f, tween(300, easing = LinearEasing))
+        settled = true
+    }
+    val shown = selected
+    val leaving = if (settled) null else from
+
+    Box(modifier) {
+        for (tab in AppTab.entries) {
+            if (tab !in visited) continue
+            key(tab) {
+                val incoming = tab == shown
+                val outgoing = tab == leaving
+                Box(
+                    Modifier.fillMaxSize().then(
+                        when {
+                            incoming -> Modifier.zIndex(1f).graphicsLayer {
+                                val t = ((progress.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                val eased = FastOutSlowInEasing.transform(t)
+                                alpha = eased
+                                val scale = 0.96f + 0.04f * eased
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            outgoing -> Modifier.graphicsLayer {
+                                alpha = 1f - FastOutLinearInEasing.transform((progress.value / 0.3f).coerceIn(0f, 1f))
+                            }
+                            else -> Modifier.layout { _, constraints -> layout(constraints.maxWidth, constraints.maxHeight) {} }
+                        }
+                    )
+                ) { content(tab) }
+            }
         }
     }
 }

@@ -9,7 +9,21 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **Design polish 2** is merged into `master` and the owner tested it on the phone and watch (2026-10-29). **Everyday fixes** is tested on the phone and merged into `master` (2026-10-29). Next: **Phase 7, step 1: auto-backup** to a folder the owner picks (branch `phase-7-data`), then merging duplicate exercises, then CSV export/import.
+**Everyday fixes** is tested and merged into `master` (2026-10-29). Three branches are stacked, each on the one before, so the checked-out `declutter` build has all of them; the owner's phone test is next:
+- Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
+- Share sheet (`share-design`): Share on the finish sheet or History's ⋮ menu.
+- Declutter (`declutter`): see its section below. The smoothness pass is on the same branch.
+- Search sheets and duplicate exercises (`search-and-duplicates`, on top of `declutter`): swipe a search list past its end (no more twitch); Progress → "Same exercise?" card, or an exercise's page → "Merge them".
+- Combining backups and importing from Strong/Hevy (`backups-import`, on top of `search-and-duplicates`): Profile → Your data → Restore (now asks: Add to my data / Replace everything) and "Import from Strong or Hevy".
+- Tab switching (`tab-transitions`, on top of `backups-import`): tap between the bottom tabs; pages should fade through without a flash.
+- Workout notification (same branch): pull down the shade or look at the lock screen during a workout; the collapsed card should read fully, with a ✓ button.
+- For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
+
+Next: the owner has widget changes to describe; then Phase 7 step 3, CSV export.
+
+**Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
+
+**App name (undecided):** the owner asked for a name that isn't taken and is easy for search engines and AI assistants to find. Recommended **Kilonaut** (no results anywhere online on 2026-10-29; kilonaut.app looked unregistered, kilonaut.com is registered by someone). Owner to check Play Store / trademarks and decide; renaming keeps the `applicationId`.
 
 ---
 
@@ -137,12 +151,51 @@ From using the app as a new user would, on the emulator:
 - [x] Never-logged exercises: "First time: find a weight you can lift 6–10 times with good form…" instead of "Aim for 6–10 reps at 95 lb" (a placeholder weight presented as advice), and no "Use" button
 - [x] "Use last time's numbers" only shows when last time had at least one of today's exercises (it did nothing otherwise)
 
+## Share design (branch `share-design`, after Everyday fixes)
+Researched Strava (stats stickers over your own photo), Hevy (several shareables per workout; light, dark or transparent; "you lifted a truck" comparisons; muscle charts) and Spotify Wrapped (one stat per card, framed as you, vertical Stories format).
+- [x] Share opens a preview sheet (`ShareCards.kt`) instead of going straight to Android's share menu: swipe between cards, pick a background, then Share or Save (to Pictures/GymTracker, Android 10+)
+- [x] Cards, only when they have something to say: Summary (title, date, workout number, volume as a hero number with "about 4 small cars" and "↑ 24% vs last Push", time/sets/new bests, top sets with bests marked), New bests (PR medal, each best with the one it beat), Muscles (where the sets went, helpers half, like recovery), Streak (weeks in a row or workouts logged, this week's days, this month / all time)
+- [x] Backgrounds: Dark, Light, Clear (transparent PNG to add as a sticker over your own photo or video; text turns white there and gets a soft shadow) and Photo (the workout's photo, content in the lower half). Inter like the app (it was the system font); content kept clear of Instagram's top and bottom bars; no "0 new bests" (that slot counts exercises instead)
+- [x] Shared past workouts use their own date and numbers (were dated today). Tests: `ShareCardsTest` (data, comparisons, every card drawn to `app/build/screenshots/share-*.png`)
+
+## Declutter (branch `declutter`, after Share design)
+One place for each thing; the owner found buttons and rows that did the same as something elsewhere.
+- [x] One exercise page: the workout's "Notes & history" sheet repeated the exercise page (type, training max, best tiles, chart, recent sessions) and linked to it. Tapping an exercise's name now opens the page (a › after the name says so); the page gained the editable setup note and puts type / training max / note above "Nothing logged yet", so new exercises can be set up. A new training max still re-lays out today's untouched sets. The sheet's move up/down (the drag handle does it) and "Remove" (the ⋮ menu has it) went with it
+- [x] Rest: the pill on each exercise opens the rest choices (it cycled through them on every tap) and the ⋮ menu no longer repeats them
+- [x] Workout ⋮: no "Use last time's numbers" (the card at the top does it); only Discard is left
+- [x] History ⋮: no "Edit" (tapping the card opens it)
+- [x] Today: no body-weight pill in the header (Progress has the weight and the Log button) and no share button on the week card (History's ⋮ and the finish sheet share)
+- [x] Profile: the "You" group is gone (Age wasn't used anywhere; body weight is logged on Progress), "Redo first-time setup" too (units, split and weight all have their place), and "Save backup" hides while automatic backup is on ("Back up now" does it)
+
+## Smoothness pass (branch `declutter`, after Declutter)
+Measured with Perfetto system traces and frame stats on the emulator (release build, profile compiled), not by feel.
+- [x] Debug vs release, same scroll on the workout screen: the app's own work per frame p90 19.5 → 4.7 ms, worst 114 → 25 ms; drawing p90 16.1 → 3.6 ms. The debug build (what Run installs) is most of the "clunky" feel; the owner is advised to run the release variant
+- [x] Fixed Inter weights instead of the variable font (`res/font/inter_*.ttf`, made with fontTools; see `licenses/Inter-files.txt`): measuring a text 0.79 → 0.58 ms, a screen's recomposition 1.6 → 1.0 ms, drawing a frame 10.3 → 6.7 ms on tab switches. The share images use the same files
+- [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
+- The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
+
+## Planned: Training types (owner's request, 2026-10-29)
+The app should also serve runners and people who train with bodyweight (calisthenics, outdoors, at home), not only gym lifters.
+- [ ] First screen on startup (onboarding): "What kind of training do you do?" Pick one: e.g. Gym, Running, Bodyweight / calisthenics, Outdoors (exact list to agree with the owner)
+- [ ] The next screen depends on the choice: each type gets its own setup (gym: split and units, as now; running: running-specific setup; bodyweight: its own programs/exercises), and the app afterwards fits that type
+- Open questions for the owner before building: can someone pick more than one type, or switch later in Profile? What does Today look like for a runner (runs, distance, pace, weekly mileage)? Which bodyweight programs/progressions (skills like pull-ups, push-up progressions)? GPS for runs, or log distance/time by hand (the app already has "Distance & time" and "Bodyweight" exercise types)?
+
+## Search sheet twitch (branch `search-and-duplicates`)
+- [x] Swiping a list in a bottom sheet past its end moved the whole sheet a few pixels and sprang it back every frame (seen in frames: the title jumped 6 px and back). `AppBottomSheet` now keeps a list's leftover scroll toward the end inside the sheet (`SheetScrollGuard`); pulling down still closes it. Covers every sheet: exercise picker, split search, finish sheet, share sheet
+
+## Tab transitions (branch `tab-transitions`)
+- [x] Switching tabs flashed: the new tab was drawn fully for one frame (its fade value still at 1 from last time), then vanished and faded in; the old tab vanished at once. Screen recording, content brightness per frame: Today 40 → Progress 32 → 15 → 20 → 31 → 32. Now Material's fade through (`TabHost`): old tab fades out over the first 30%, new one fades in and grows 96% → 100% over 300 ms, timed from the new tab's first frame. Recorded after: 40 → 35 → 18 → 29 → 32
+
+## Workout notification, collapsed (branch `tab-transitions`)
+- [x] The collapsed lock-screen / shade notification reused the whole widget card, which Android 12+ cuts to ~48dp, hiding half of it. Android doesn't let an app open its notification expanded, so it now has its own collapsed layout (`notification_workout_compact.xml`, system notification text styles): "Exercise · Set N" and either "weight × reps · N sets left" with a ✓ button (logs the set like the widget's) or the rest countdown with the next set. Expanded view (with +/−) unchanged. Checked on the emulator, including ✓ from the collapsed card
+
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
-- [ ] Auto-backup to a user-chosen folder (SAF), with rotation
-- [ ] Merge duplicate exercises ("Back Squat" into "Barbell Back Squat": history, records, notes)
+- [x] Auto-backup (`AutoBackup.kt`): Profile → Your data → "Choose a folder" (system folder picker, so Google Drive, OneDrive and local folders all work; access kept across restarts). Writes the same file as "Save backup" (`gymtracker-backup-YYYY-MM-DD-HHmm.json`) after a workout is saved, edited or deleted (also when finished from the watch with the app closed) and when the app goes to the background, but not while a workout runs, and only if anything changed (SHA-256 of the backup). Keeps the newest file of each of the last 7 days that have one, then one per week for 4 weeks; other files in the folder are never touched. Profile shows the folder, the last backup, or what went wrong ("Can't reach the folder any more. Choose it again."), with Back up now, Change folder, and Turn off (asks first). The folder is kept in its own SharedPreferences, not the JSON store, so it isn't inside backups. Tests: `AutoBackupTest` (same bytes as Save backup, skip when unchanged, errors shown and cleared, rotation); checked on the emulator with a real folder (choose, write, same-day replace, restart, finish a workout)
+- [x] Merge duplicate exercises (branch `search-and-duplicates`): `RoomStore.mergeExercise` / `LocalStorage.mergeExercise` move a name's sessions, day-list places, note, rest, training max and "skipped" mentions onto the kept name and delete the other (no schema change). A workout that logged both keeps one entry, the kept one's sets first; a day that lists both keeps one; the running workout follows. A copy of the data is kept first (`before-import-*`). Progress shows a "Same exercise?" card for names that only differ by case, hyphens, plurals, "barbell" or a library nickname (`likelyDuplicates`; "Comp Bench Press" vs "Barbell Bench Press" is left to the owner), with Merge them / Not the same (remembered in `notDuplicates`). Every exercise page has "Merge them" with a searchable picker, likely duplicates first; the dialog asks which name to keep, showing each one's session count. Tests: `MergeExercisesTest`
 - [ ] CSV export
-- [ ] Import from Strong and Hevy CSV (map exercise names to the library)
+- [x] Combine backups (branch `backups-import`): Restore asks "Add to my data" or "Replace everything". Adding (`combineData`) keeps everything here and adds the backup's workouts and weigh-ins that aren't here (same start time = same workout, so adding a file twice changes nothing); notes, rest, types, day lists, programs, targets and training maxes only fill gaps. A copy is kept first
+- [x] Import from Strong and Hevy CSV (`DataImport.kt`): detects the app from the header; Strong (comma or old ';' format, "W"/"D" set orders, rest-timer rows skipped, "2h 38m" durations; asks kg or lb since Strong's file doesn't say, unless an old export has a unit column) and Hevy (weight_kg or weight_lbs, distance_km or _miles, warmup/dropset types, "15 Jul 2026, 09:52" or ISO dates, duration from start/end). Exercise types from the numbers (distance, time, bodyweight). Names matched to what's logged here, then to the library ("Squat (Barbell)" → your "Back Squat"); unmatched names stay and can be merged later. Volume and new bests recomputed in date order. A preview sheet shows workouts, sets, dates, renamed exercises and how many are already here before anything is added. Tests: `DataImportTest`; checked on the emulator with a 24-workout Strong file
 
 ## Phase 8 — Gym tools 2
 - [ ] Warm-up set generator
@@ -161,6 +214,8 @@ Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an im
 ---
 
 ## Decisions log
+- 2026-10-29: Inter ships as eight fixed instances (~1.3 MB) instead of one variable file (~0.86 MB): text layout with the variable font cost ~40% more per text, and every new screen lays out dozens of texts in its first frame. Tabs are kept alive rather than recreated, trading a little memory for instant switches.
+- 2026-10-29: Auto-backup uses the system folder picker (Storage Access Framework) rather than Google Drive's API: no account sign-in, no Google Play services dependency on the phone side, and it works with any folder a cloud app exposes (Google Drive, OneDrive). No WorkManager either: backups only need to happen when data changed, and every change goes through a save or the app leaving the screen, which is where it hooks in.
 - 2026-10-29: A forgotten workout is saved as ending at its last change, not when someone notices: "last change" is any edit (set ticked, number typed, exercise added), because some people fill sets in without ticking them. An hour without one is the cut-off; rests are never that long. The question is in the app only (no notification yet), which is enough to keep History and Health Connect right, since both are written at save time.
 - 2026-10-29: Watch v2 keeps the phone as the only copy of the workout: starting, finishing and undo are commands the phone carries out, like the set buttons, so there is still nothing to sync or merge. Finishing on the watch skips the photo and the finish sheet's celebration; the watch shows its own summary instead.
 - 2026-10-29: Performance pass 2 (release build, Pixel 7 emulator, profile compiled with `cmd package compile -m speed-profile` before every run, builds alternated). The UI thread was already cheap (≈2–4 ms a frame) and scrolling/month swipes are bound by the emulator's GPU (full-screen fades), so the fixes target the main thread: `pressable` and `enterAnimation` are Modifier.Nodes now (press scale drawn by the click's indication, no per-item state or graphics layer at composition), the widget/lock-screen/watch refresh runs on its own background thread (it took 13–60 ms on the main thread after every edit), tutorial spotlight positions are only tracked while the tips show (they were state writes on every scroll frame), History/finish/workout records use the per-exercise index, calendar keys skip `String.format`, and History photos decode off the main thread. Ticking sets: UI p50 3.0–4.4 → ~2.2 ms, worst frame up to 50 → ≤ 11 ms, worst late frame start 42 → ≤ 7.5 ms. Cold start unchanged (~1 s, including the 550 ms splash hold).

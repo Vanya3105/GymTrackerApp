@@ -1,7 +1,6 @@
 package com.example.gymtracker
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -11,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -87,15 +85,6 @@ fun HomeScreen(
                         )
                         Text(greeting(), style = AppType.display, color = P.textPrimary)
                     }
-                    Pill(
-                        text = formatWeightKg(userProfile.currentWeightKg),
-                        color = P.textPrimary,
-                        container = P.bgCard,
-                        modifier = Modifier
-                            .border(1.dp, P.borderSubtle, RoundedCornerShape(50))
-                            .clip(RoundedCornerShape(50))
-                            .pressable(onClick = onOpenProgress)
-                    )
                 }
             }
 
@@ -116,8 +105,6 @@ fun HomeScreen(
                 WeekCard(
                     week = week,
                     programName = programName,
-                    history = history,
-                    bodyWeightKg = userProfile.currentWeightKg,
                     onOpenHistory = onOpenHistory,
                     modifier = Modifier
                         .enterAnimation(2)
@@ -250,13 +237,10 @@ private fun UpNextCard(
 private fun WeekCard(
     week: WeekSummaryData,
     programName: String,
-    history: List<CompletedWorkout>,
-    bodyWeightKg: Float,
     onOpenHistory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val P = LocalPalette.current
-    val context = LocalContext.current
     val done = week.completedCoreSplits.size
     val goal = week.weeklyGoal
     val trainedDays = remember(week) {
@@ -284,21 +268,6 @@ private fun WeekCard(
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("$done", style = AppType.bigNumber, color = if (done > 0) P.textPrimary else P.textTertiary)
                 Text("/$goal", style = AppType.number, color = P.textTertiary, modifier = Modifier.padding(bottom = 3.dp))
-            }
-            if (week.workouts.isNotEmpty()) {
-                Spacer(Modifier.width(10.dp))
-                CircleIconButton(
-                    icon = Icons.Rounded.IosShare,
-                    contentDescription = "Share last workout",
-                    onClick = {
-                        val latest = week.workouts.first()
-                        shareWorkoutCardImage(
-                            context, latest.splitTitle, latest.durationSeconds, latest.exercises,
-                            history.filter { it.id < latest.id }, bodyWeightKg, latest.photoPath
-                        )
-                    },
-                    size = 36.dp
-                )
             }
         }
         Spacer(Modifier.height(14.dp))
