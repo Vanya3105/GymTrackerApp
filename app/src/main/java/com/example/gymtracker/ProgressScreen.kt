@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -119,8 +120,8 @@ fun ProgressScreen(
             }
         }
 
-        item { SectionHeader("Recovery") }
-        item { RecoveryDetailCard(recovery, Modifier.enterAnimation(1)) }
+        item { SectionHeader("Sets per muscle") }
+        item { WeeklySetsCard(recovery, Modifier.enterAnimation(1)) }
 
         duplicate?.let { (a, b) ->
             item(key = "duplicate") {
@@ -315,25 +316,27 @@ private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: (
 }
 
 /**
- * Every muscle as a plain row, least rested first: no boxes inside the card. When nothing needs
- * rest the header says so in one sentence and the rows only carry this week's sets.
+ * Hard sets each muscle got in the last 7 days, against the range most people grow well with
+ * ([WEEKLY_SET_TARGET], shaded on every bar). Helping muscles count half, as recovery counts them.
+ * Muscles with none are one line at the end rather than empty bars.
  */
 @Composable
-private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifier = Modifier) {
+private fun WeeklySetsCard(items: List<MuscleRecoveryItem>, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     var explain by rememberSaveable { mutableStateOf(false) }
-    val sorted = remember(items) { items.sortedBy { it.recoveryPercent } }
-    val ready = items.count { it.status == RecoveryStatus.READY }
-    AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)), contentPadding = PaddingValues(vertical = 6.dp)) {
-        Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    val trained = remember(items) { items.filter { it.weeklyWorkingSets > 0 }.sortedByDescending { it.weeklyWorkingSets } }
+    val none = remember(items) { items.filter { it.weeklyWorkingSets == 0 }.map { it.muscleGroup } }
+    val scale = maxOf(WEEKLY_SET_TARGET.last + 4, trained.maxOfOrNull { it.weeklyWorkingSets } ?: 0).toFloat()
+    AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (ready == items.size) "Everything's recovered" else "${items.size - ready} of ${items.size} still recovering",
-                style = AppType.bodyStrong,
-                color = P.textPrimary,
+                "Last 7 days · aim for ${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last}",
+                style = AppType.caption,
+                color = P.textSecondary,
                 modifier = Modifier.weight(1f)
             )
             Text(
-                if (explain) "Hide" else "How it works",
+                if (explain) "Hide" else "Why",
                 style = AppType.label,
                 color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
@@ -341,49 +344,52 @@ private fun RecoveryDetailCard(items: List<MuscleRecoveryItem>, modifier: Modifi
         }
         if (explain) {
             Text(
-                "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
-                    "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
-                    "half a set, like biceps on rows or triceps on bench. Most people do well with " +
-                    "${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle each week; " +
-                    "the count of the last 7 days turns green inside that range.",
+                "Most people build muscle well with ${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle " +
+                    "each week. Muscles that help in a lift count half a set, like biceps on rows or triceps on bench. " +
+                    "The shaded part of each bar is that range.",
                 style = AppType.caption,
                 color = P.textSecondary,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
             )
         }
-        sorted.forEachIndexed { i, item ->
-            if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-            RecoveryRow(item)
+        if (trained.isEmpty()) {
+            Text("No sets in the last 7 days yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 8.dp))
         }
-    }
-}
-
-@Composable
-private fun RecoveryRow(item: MuscleRecoveryItem) {
-    val P = LocalPalette.current
-    val color = recoveryColor(item.status, P)
-    val rested = item.status == RecoveryStatus.READY
-    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
-            // A rolling 7 days, not the calendar week Today counts workouts in.
-            val sets = if (item.weeklyWorkingSets == 1) "1 set in 7 days" else "${item.weeklyWorkingSets} sets in 7 days"
-            val last = item.hoursSinceTrained?.let { h -> when { h < 1 -> "just now"; h < 48 -> "${h}h ago"; else -> "${h / 24} days ago" } } ?: "not trained yet"
-            Text(
-                "$sets · $last",
-                style = AppType.caption.copy(fontFeatureSettings = "tnum"),
-                color = if (item.weeklyWorkingSets in WEEKLY_SET_TARGET) P.successText else P.textSecondary,
-                maxLines = 1
-            )
-        }
-        if (rested) {
-            Text("Ready", style = AppType.caption, color = P.textTertiary)
-        } else {
-            Column(Modifier.width(72.dp), horizontalAlignment = Alignment.End) {
-                Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)
-                Spacer(Modifier.height(4.dp))
-                AnimatedProgressBar(item.recoveryPercent / 100f, color = color, height = 4.dp)
+        trained.forEach { item ->
+            val inRange = item.weeklyWorkingSets in WEEKLY_SET_TARGET
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, modifier = Modifier.width(96.dp), maxLines = 1)
+                Box(Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(P.bgControl)) {
+                    // The target range, shaded behind the bar.
+                    Box(
+                        Modifier.fillMaxHeight()
+                            .fillMaxWidth(WEEKLY_SET_TARGET.last / scale)
+                            .padding(start = 0.dp)
+                            .background(P.successSurface)
+                    )
+                    Box(Modifier.fillMaxHeight().fillMaxWidth((WEEKLY_SET_TARGET.first - 0.5f) / scale).background(P.bgControl))
+                    Box(
+                        Modifier.fillMaxHeight().fillMaxWidth((item.weeklyWorkingSets / scale).coerceIn(0.02f, 1f))
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (inRange) P.successText else P.textSecondary)
+                    )
+                }
+                Text(
+                    "${item.weeklyWorkingSets}",
+                    style = AppType.label.copy(fontFeatureSettings = "tnum"),
+                    color = if (inRange) P.successText else P.textPrimary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(32.dp)
+                )
             }
+        }
+        if (none.isNotEmpty()) {
+            Text(
+                "Not trained: " + none.joinToString(", "),
+                style = AppType.caption,
+                color = P.textTertiary,
+                modifier = Modifier.padding(top = 12.dp)
+            )
         }
     }
 }

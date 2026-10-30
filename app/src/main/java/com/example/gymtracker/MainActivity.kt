@@ -447,7 +447,6 @@ fun GymTrackerApp(
                         activeExerciseCount = currentExercises.count { !it.isSkipped },
                         onStartWorkout = { startWorkout(it) },
                         onStartQuickWorkout = { startQuickWorkout() },
-                        onOpenProgress = { selectedTab = AppTab.PROGRESS },
                         onOpenHistory = { selectedTab = AppTab.HISTORY },
                         tipsAllowed = !showOnboarding && !(activeSplit != null && workoutExpanded) && editingPastWorkout == null
                     )
