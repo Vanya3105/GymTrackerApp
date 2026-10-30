@@ -94,14 +94,18 @@ object DriveBackup {
 
     private fun completeSignIn(context: Context, result: AuthorizationResult, onStep: (SignInStep) -> Unit) {
         val token = result.accessToken ?: return onStep(SignInStep.Failed("Google didn't allow access to Drive."))
+        // The account comes with the sign-in; asking Google for it separately could fail on its own.
+        val signedInAs = runCatching { result.toGoogleSignInAccount()?.email }.getOrNull()
         executor.execute {
             val step = try {
-                val email = fetchEmail(token)
+                // What matters is that Drive answers: check now rather than at the first backup.
+                DriveFolder(token).list()
+                val email = signedInAs ?: runCatching { fetchEmail(token) }.getOrNull() ?: "Google account"
                 prefs(context).edit().putString(KEY_EMAIL, email).remove(AutoBackup.KEY_LAST_HASH).remove(AutoBackup.KEY_ERROR).apply()
                 SignInStep.Done(email)
             } catch (e: Exception) {
                 Log.e(TAG, "Sign-in finished but Drive didn't answer", e)
-                SignInStep.Failed("Signed in, but Google Drive didn't answer. Check the connection and try again.")
+                SignInStep.Failed(driveError(e))
             }
             main.post { refreshStatus(context); onStep(step) }
         }
@@ -117,6 +121,19 @@ object DriveBackup {
             "10:" in text || "DEVELOPER_ERROR" in text -> "Google sign-in isn't set up for this version of the app yet."
             "7:" in text || "NETWORK" in text.uppercase(Locale.US) -> "No connection. Try again when you're online."
             else -> "Couldn't sign in with Google."
+        }
+    }
+
+    /** Why Drive refused, in words that point at the fix. */
+    private fun driveError(e: Exception): String {
+        val detail = (e as? DriveException)?.message.orEmpty()
+        return when {
+            e is DriveException && e.code == 403 && ("accessNotConfigured" in detail || "has not been used" in detail || "disabled" in detail) ->
+                "Signed in, but the Google Drive API isn't turned on in the Google Cloud project."
+            e is DriveException && e.code == 403 -> "Signed in, but Google didn't give access to Drive (403). Check the drive.appdata scope."
+            e is DriveException && e.code == 401 -> "Signed in, but Google turned down the access (401). Try signing in again."
+            e is DriveException -> "Signed in, but Google Drive answered with an error (${e.code})."
+            else -> "Signed in, but Google Drive didn't answer. Check the connection and try again."
         }
     }
 
