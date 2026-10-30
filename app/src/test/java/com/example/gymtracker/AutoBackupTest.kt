@@ -37,6 +37,7 @@ class AutoBackupTest {
         context.deleteDatabase("gymtracker.db")
         context.filesDir.listFiles()?.forEach { it.delete() }
         context.getSharedPreferences("gym_tracker_auto_backup", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(DriveBackup.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
         LocalStorage.saveUserProfile(context, UserProfile(hasCompletedOnboarding = true, currentWeightKg = 80f))
     }
 
@@ -97,5 +98,29 @@ class AutoBackupTest {
         // Then the newest of each of the 4 weeks before: Oct 24 (Sat, week of Oct 19), Oct 18, Oct 11, Oct 4.
         listOf("2026-10-24", "2026-10-18", "2026-10-11", "2026-10-04").forEach { assertTrue(it, name(it) in kept) }
         assertEquals(7 + 4 + 2, kept.size)
+    }
+
+    @Test
+    fun driveAndFolderBackups_keepTheirOwnState() {
+        val folder = FakeFolder()
+        val drive = FakeFolder()
+        assertTrue(AutoBackup.run(context, folder, force = false, nowMillis = at("2026-10-30 08:00")))
+        // The Drive destination hasn't backed this data up yet, so it isn't skipped as "unchanged".
+        assertTrue(AutoBackup.run(context, drive, force = false, nowMillis = at("2026-10-30 08:01"), prefsName = DriveBackup.PREFS))
+        drive.failing = true
+        assertFalse(AutoBackup.run(context, drive, force = true, nowMillis = at("2026-10-30 08:02"), prefsName = DriveBackup.PREFS) { "drive error" })
+        DriveBackup.refreshStatus(context)
+        AutoBackup.refreshStatus(context)
+        assertEquals("drive error", DriveBackup.status.error)
+        assertNull(AutoBackup.status.error)
+    }
+
+    @Test
+    fun driveDates() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val expected = java.util.Calendar.getInstance(utc).apply { clear(); set(2026, 9, 30, 9, 15, 2) }.timeInMillis
+        assertEquals(expected, parseRfc3339("2026-10-30T09:15:02.123Z"))
+        assertEquals(expected, parseRfc3339("2026-10-30T09:15:02Z"))
+        assertEquals(0L, parseRfc3339("soon"))
     }
 }

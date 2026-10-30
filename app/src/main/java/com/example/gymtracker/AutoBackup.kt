@@ -43,9 +43,9 @@ object AutoBackup {
     private const val PREFS = "gym_tracker_auto_backup"
     private const val KEY_TREE = "tree_uri"
     private const val KEY_FOLDER_NAME = "folder_name"
-    private const val KEY_LAST_SUCCESS = "last_success_millis"
-    private const val KEY_LAST_HASH = "last_hash"
-    private const val KEY_ERROR = "error"
+    internal const val KEY_LAST_SUCCESS = "last_success_millis"
+    internal const val KEY_LAST_HASH = "last_hash"
+    internal const val KEY_ERROR = "error"
     internal const val FILE_PREFIX = "gymtracker-backup-"
     private const val KEEP_DAYS = 7
     private const val KEEP_WEEKS = 4
@@ -109,6 +109,7 @@ object AutoBackup {
      */
     fun request(context: Context) {
         val app = context.applicationContext
+        DriveBackup.request(app)
         if (prefs(app).getString(KEY_TREE, null) == null) return
         if (LocalStorage.loadActiveSession(app) != null) return
         executor.execute { runWithFolder(app, force = false) }
@@ -128,9 +129,19 @@ object AutoBackup {
         main.post { refreshStatus(context) }
     }
 
-    /** One backup into [folder]. Returns true if a file was written. */
-    internal fun run(context: Context, folder: BackupFolder, force: Boolean, nowMillis: Long): Boolean {
-        val p = prefs(context)
+    /**
+     * One backup into [folder]. Returns true if a file was written. [prefsName] keeps this
+     * destination's last backup, change check and error apart from others (the Drive backup).
+     */
+    internal fun run(
+        context: Context,
+        folder: BackupFolder,
+        force: Boolean,
+        nowMillis: Long,
+        prefsName: String = PREFS,
+        errorFor: (Exception) -> String = ::folderError
+    ): Boolean {
+        val p = context.applicationContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         return try {
             val json = LocalStorage.exportJsonBackupString(context)
             val hash = sha256(json)
@@ -146,13 +157,14 @@ object AutoBackup {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Backup failed", e)
-            val message = if (e is SecurityException || e is IllegalArgumentException) {
-                "Can't reach the folder any more. Choose it again."
-            } else "The last backup didn't work. Check the folder still exists."
-            p.edit().putString(KEY_ERROR, message).apply()
+            p.edit().putString(KEY_ERROR, errorFor(e)).apply()
             false
         }
     }
+
+    private fun folderError(e: Exception): String =
+        if (e is SecurityException || e is IllegalArgumentException) "Can't reach the folder any more. Choose it again."
+        else "The last backup didn't work. Check the folder still exists."
 
     internal fun fileName(nowMillis: Long): String =
         FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date(nowMillis)) + ".json"

@@ -16,6 +16,7 @@ testCore = "1.6.1"
 coreSplashscreen = "1.0.1"
 healthConnect = "1.1.0"
 playServicesWearable = "19.0.0"
+playServicesAuth = "21.3.0"
 wearCompose = "1.7.1"
 wearOngoing = "1.1.0"
 wearTiles = "1.6.2"
@@ -47,6 +48,7 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-health-connect = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 androidx-wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
 androidx-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
 androidx-wear-ongoing = { group = "androidx.wear", name = "wear-ongoing", version.ref = "wearOngoing" }
