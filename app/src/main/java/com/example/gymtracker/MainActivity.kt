@@ -410,6 +410,21 @@ fun GymTrackerApp(
         currentExercises = currentExercises.map { if (exerciseKey(it.name) == exerciseKey(name)) it.copy(type = type) else it }
     }
 
+    /** Joins two names for one exercise; returns whether it worked. */
+    fun mergeExercises(from: String, into: String): Boolean {
+        val ok = LocalStorage.mergeExercise(context, from, into)
+        if (ok) {
+            haptics.confirm()
+            history = LocalStorage.loadHistory(context)
+            if (activeSplit != null) currentExercises = LocalStorage.loadActiveSession(context)?.second ?: currentExercises
+            exerciseInfoVersion++
+            Toast.makeText(context, "Merged into $into", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Couldn't merge those exercises", Toast.LENGTH_SHORT).show()
+        }
+        return ok
+    }
+
     fun deletePastWorkout(id: Long) {
         haptics.tick()
         LocalStorage.deleteWorkoutFromHistory(context, id)
@@ -448,7 +463,8 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                         },
                         onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) },
-                        onOpenExercise = { haptics.tick(); openExercise = it }
+                        onOpenExercise = { haptics.tick(); openExercise = it },
+                        onMergeExercises = { from, into -> mergeExercises(from, into) }
                     )
                     AppTab.PROFILE -> SettingsScreen(
                         settings = settings,
@@ -676,6 +692,10 @@ fun GymTrackerApp(
                     },
                     onChangeType = { type -> changeExerciseType(name, type) },
                     onBack = { openExercise = null },
+                    onMerge = { from, into ->
+                        // The page follows the kept name if its own exercise was merged away.
+                        if (mergeExercises(from, into) && exerciseKey(from) == exerciseKey(name)) openExercise = into
+                    },
                     onInfoChanged = {
                         exerciseInfoVersion++
                         // A new training max lays the exercise out again, if none of today's sets are done.

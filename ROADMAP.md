@@ -13,9 +13,10 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 - Auto-backup (`phase-7-data`): Profile → Your data → Choose a folder; finish a workout, then look in the folder; restart the app and check it's still on.
 - Share sheet (`share-design`): Share on the finish sheet or History's ⋮ menu.
 - Declutter (`declutter`): see its section below. The smoothness pass is on the same branch.
+- Search sheets and duplicate exercises (`search-and-duplicates`, on top of `declutter`): swipe a search list past its end (no more twitch); Progress → "Same exercise?" card, or an exercise's page → "Merge them".
 - For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
 
-Next: the owner has widget changes to describe; then Phase 7 step 2, merge duplicate exercises.
+Next: the owner has widget changes to describe; then Phase 7 step 3, CSV export.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -176,10 +177,13 @@ The app should also serve runners and people who train with bodyweight (calisthe
 - [ ] The next screen depends on the choice: each type gets its own setup (gym: split and units, as now; running: running-specific setup; bodyweight: its own programs/exercises), and the app afterwards fits that type
 - Open questions for the owner before building: can someone pick more than one type, or switch later in Profile? What does Today look like for a runner (runs, distance, pace, weekly mileage)? Which bodyweight programs/progressions (skills like pull-ups, push-up progressions)? GPS for runs, or log distance/time by hand (the app already has "Distance & time" and "Bodyweight" exercise types)?
 
+## Search sheet twitch (branch `search-and-duplicates`)
+- [x] Swiping a list in a bottom sheet past its end moved the whole sheet a few pixels and sprang it back every frame (seen in frames: the title jumped 6 px and back). `AppBottomSheet` now keeps a list's leftover scroll toward the end inside the sheet (`SheetScrollGuard`); pulling down still closes it. Covers every sheet: exercise picker, split search, finish sheet, share sheet
+
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.
 - [x] Auto-backup (`AutoBackup.kt`): Profile → Your data → "Choose a folder" (system folder picker, so Google Drive, OneDrive and local folders all work; access kept across restarts). Writes the same file as "Save backup" (`gymtracker-backup-YYYY-MM-DD-HHmm.json`) after a workout is saved, edited or deleted (also when finished from the watch with the app closed) and when the app goes to the background, but not while a workout runs, and only if anything changed (SHA-256 of the backup). Keeps the newest file of each of the last 7 days that have one, then one per week for 4 weeks; other files in the folder are never touched. Profile shows the folder, the last backup, or what went wrong ("Can't reach the folder any more. Choose it again."), with Back up now, Change folder, and Turn off (asks first). The folder is kept in its own SharedPreferences, not the JSON store, so it isn't inside backups. Tests: `AutoBackupTest` (same bytes as Save backup, skip when unchanged, errors shown and cleared, rotation); checked on the emulator with a real folder (choose, write, same-day replace, restart, finish a workout)
-- [ ] Merge duplicate exercises ("Back Squat" into "Barbell Back Squat": history, records, notes)
+- [x] Merge duplicate exercises (branch `search-and-duplicates`): `RoomStore.mergeExercise` / `LocalStorage.mergeExercise` move a name's sessions, day-list places, note, rest, training max and "skipped" mentions onto the kept name and delete the other (no schema change). A workout that logged both keeps one entry, the kept one's sets first; a day that lists both keeps one; the running workout follows. A copy of the data is kept first (`before-import-*`). Progress shows a "Same exercise?" card for names that only differ by case, hyphens, plurals, "barbell" or a library nickname (`likelyDuplicates`; "Comp Bench Press" vs "Barbell Bench Press" is left to the owner), with Merge them / Not the same (remembered in `notDuplicates`). Every exercise page has "Merge them" with a searchable picker, likely duplicates first; the dialog asks which name to keep, showing each one's session count. Tests: `MergeExercisesTest`
 - [ ] CSV export
 - [ ] Import from Strong and Hevy CSV (map exercise names to the library)
 

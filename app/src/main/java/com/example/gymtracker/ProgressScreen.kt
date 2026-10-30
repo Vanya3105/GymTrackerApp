@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -39,9 +40,16 @@ fun ProgressScreen(
     haptics: Haptics,
     onLogWeight: (Float) -> Unit,
     onDeleteWeight: (Long) -> Unit,
-    onOpenExercise: (String) -> Unit
+    onOpenExercise: (String) -> Unit,
+    onMergeExercises: (from: String, into: String) -> Unit
 ) {
     val P = LocalPalette.current
+    val context = LocalContext.current
+    var notSame by remember { mutableStateOf(LocalStorage.notDuplicates(context)) }
+    val duplicate = remember(history, notSame) {
+        likelyDuplicates(loggedExerciseNames(history)).firstOrNull { (a, b) -> duplicatePairKey(a, b) !in notSame }
+    }
+    var merging by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showLogSheet by remember { mutableStateOf(false) }
     var showAllWeighIns by rememberSaveable { mutableStateOf(false) }
     var showAllLifts by rememberSaveable { mutableStateOf(false) }
@@ -103,6 +111,21 @@ fun ProgressScreen(
         item { SectionHeader("Recovery") }
         item { RecoveryDetailCard(recovery, Modifier.enterAnimation(1)) }
 
+        duplicate?.let { (a, b) ->
+            item(key = "duplicate") {
+                DuplicateCard(
+                    a, b,
+                    onMerge = { haptics.tick(); merging = a to b },
+                    onNotSame = {
+                        haptics.tick()
+                        LocalStorage.markNotDuplicates(context, a, b)
+                        notSame = LocalStorage.notDuplicates(context)
+                    },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+
         item {
             SectionHeader(
                 "Best lifts",
@@ -139,6 +162,14 @@ fun ProgressScreen(
                 }
             }
         }
+    }
+
+    merging?.let { (a, b) ->
+        MergeExercisesDialog(
+            a = a, b = b, history = history,
+            onMerge = { from, into -> merging = null; onMergeExercises(from, into) },
+            onDismiss = { merging = null }
+        )
     }
 
     if (showLogSheet) {
@@ -376,6 +407,26 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
                 enabled = (input.toFloatOrNull() ?: 0f) > 0f,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+/** One exercise logged under two names splits its history and records; offer to join them. */
+@Composable
+private fun DuplicateCard(a: String, b: String, onMerge: () -> Unit, onNotSame: () -> Unit, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    AppCard(modifier.fillMaxWidth()) {
+        Text("Same exercise?", style = AppType.bodyStrong, color = P.textPrimary)
+        Text(
+            "“$a” and “$b” look like one exercise logged under two names, so their history and records are split.",
+            style = AppType.caption,
+            color = P.textSecondary,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SecondaryButton("Merge them", onMerge, Modifier.weight(1f), height = 40.dp)
+            SecondaryButton("Not the same", onNotSame, Modifier.weight(1f), height = 40.dp, contentColor = P.textSecondary)
         }
     }
 }

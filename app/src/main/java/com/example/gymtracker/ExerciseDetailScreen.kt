@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.CallMerge
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.FitnessCenter
@@ -62,7 +64,9 @@ fun ExerciseDetailScreen(
     onChangeType: (ExerciseType) -> Unit,
     onBack: () -> Unit,
     /** The note or training max changed, so a running workout can reread them. */
-    onInfoChanged: () -> Unit = {}
+    onInfoChanged: () -> Unit = {},
+    /** Merges two exercises (history, day lists, settings); null hides "Merge". */
+    onMerge: ((from: String, into: String) -> Unit)? = null
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -75,6 +79,11 @@ fun ExerciseDetailScreen(
     }
     var note by remember(exerciseName) { mutableStateOf(LocalStorage.getExerciseNote(context, exerciseName)) }
     var editingNote by remember { mutableStateOf(false) }
+    var choosingMerge by remember { mutableStateOf(false) }
+    var mergeWith by remember { mutableStateOf<String?>(null) }
+    val others = remember(exerciseName, history) {
+        loggedExerciseNames(history).filter { exerciseKey(it) != exerciseKey(exerciseName) }
+    }
     var showRename by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -109,6 +118,9 @@ fun ExerciseDetailScreen(
             item { TrainingMaxRow(exerciseName, history, stats.best1RmKg, onChanged = onInfoChanged) }
         }
         item { NoteRow(note) { editingNote = true } }
+        if (onMerge != null && canRename && others.isNotEmpty()) {
+            item { MergeRow { haptics.tick(); choosingMerge = true } }
+        }
 
         if (stats.sessions.isEmpty()) {
             item { EmptyState(Icons.Rounded.FitnessCenter, "Nothing logged yet", "Finish a workout with this exercise to see your progress.") }
@@ -159,6 +171,24 @@ fun ExerciseDetailScreen(
 
         item { SectionHeader("History") }
         items(stats.sessions, key = { it.workoutId }) { session -> SessionCard(session) }
+    }
+
+    if (choosingMerge) {
+        MergePickerSheet(
+            exerciseName = exerciseName,
+            others = others,
+            onPick = { choosingMerge = false; mergeWith = it },
+            onDismiss = { choosingMerge = false }
+        )
+    }
+    mergeWith?.let { other ->
+        MergeExercisesDialog(
+            a = exerciseName,
+            b = other,
+            history = history,
+            onMerge = { from, into -> mergeWith = null; onMerge?.invoke(from, into) },
+            onDismiss = { mergeWith = null }
+        )
     }
 
     if (editingNote) {
@@ -587,6 +617,103 @@ private fun NoteDialog(current: String, onDismiss: () -> Unit, onSave: (String) 
             )
         },
         confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save", color = P.accentPrimary, style = AppType.label) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+    )
+}
+
+@Composable
+private fun MergeRow(onClick: () -> Unit) {
+    val P = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).pressable(pressedScale = 0.99f, onClick = onClick).padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Rounded.CallMerge, null, tint = P.textSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text("Same exercise under another name? Merge them", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** Picks the exercise to merge with: likely duplicates first, then everything else, searchable. */
+@Composable
+private fun MergePickerSheet(exerciseName: String, others: List<String>, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    var query by remember { mutableStateOf("") }
+    val likely = remember(exerciseName, others) {
+        likelyDuplicates(listOf(exerciseName) + others).flatMap { listOf(it.first, it.second) }
+            .filter { exerciseKey(it) != exerciseKey(exerciseName) }.toSet()
+    }
+    val shown = remember(query, others, likely) {
+        others.filter { it.contains(query.trim(), ignoreCase = true) }.sortedWith(compareByDescending<String> { it in likely }.thenBy { it })
+    }
+    AppBottomSheet(onDismiss = onDismiss) {
+        Column(Modifier.fillMaxHeight(0.8f).navigationBarsPadding().imePadding()) {
+            Text("Merge $exerciseName with…", style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 20.dp))
+            Text("Pick the exercise it's the same as. Next you choose which name to keep.", style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("Search your exercises") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = P.accentPrimary, unfocusedBorderColor = P.borderStrong),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                items(shown, key = { it }) { name ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.98f) { onPick(name) }.padding(horizontal = 8.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(name, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+                        if (name in likely) Text("Looks the same", style = AppType.caption, color = P.accentPrimary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Asks which of two names to keep, with how much each holds. The other one's sessions, records,
+ * note and place in day lists move into the kept one.
+ */
+@Composable
+fun MergeExercisesDialog(a: String, b: String, history: List<CompletedWorkout>, onMerge: (from: String, into: String) -> Unit, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    fun sessions(name: String) = history.count { w -> w.exercises.any { !it.isSkipped && exerciseKey(it.name) == exerciseKey(name) } }
+    val options = remember(a, b, history) { listOf(a to sessions(a), b to sessions(b)).sortedByDescending { it.second } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = P.bgElevated,
+        title = { Text("Merge into one exercise?", style = AppType.headline, color = P.textPrimary) },
+        text = {
+            Column {
+                Text(
+                    "Choose the name to keep. The other one's sessions, records and notes move into it. A copy of your data is kept first.",
+                    style = AppType.body,
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(12.dp))
+                options.forEach { (name, count) ->
+                    val other = if (name == a) b else a
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(P.bgControl)
+                            .pressable(pressedScale = 0.98f) { onMerge(other, name) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Keep “$name”", style = AppType.bodyStrong, color = P.textPrimary)
+                            Text(if (count == 1) "1 session" else "$count sessions", style = AppType.caption, color = P.textSecondary)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
     )
 }

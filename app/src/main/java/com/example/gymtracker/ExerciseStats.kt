@@ -1,5 +1,7 @@
 package com.example.gymtracker
 
+import java.util.Locale
+
 import androidx.compose.runtime.Immutable
 import kotlin.math.roundToInt
 
@@ -267,4 +269,29 @@ fun historyByExercise(history: List<CompletedWorkout>): Map<String, List<Complet
  */
 fun ignoreCaseKey(name: String): String = buildString(name.length) {
     name.forEach { append(Character.toLowerCase(Character.toUpperCase(it))) }
+}
+
+/** Words that don't make a different exercise: "Barbell Back Squat" is "Back Squat". */
+private val NAME_NOISE = setOf("barbell", "bb", "the")
+
+/** A name reduced to what identifies the exercise: case, hyphens, plurals and "barbell" don't count. */
+internal fun sameExerciseKey(name: String): String =
+    name.lowercase(Locale.US).replace('-', ' ').replace("'", "")
+        .split(' ').filter { it.isNotBlank() && it !in NAME_NOISE }
+        .joinToString(" ") { w -> if (w.length >= 3 && w.endsWith('s') && !w.endsWith("ss")) w.dropLast(1) else w }
+
+/**
+ * Logged names that look like one exercise under two names ("Back Squat" / "Barbell Back Squat",
+ * "Tricep Pushdown" / "Triceps Pushdown", or a library nickname like "RDL"), as pairs. Only
+ * suggestions: merging is the user's call, since "Comp Bench Press" may really be its own lift.
+ */
+fun likelyDuplicates(names: List<String>): List<Pair<String, String>> {
+    fun canonical(name: String): String {
+        val key = sameExerciseKey(name)
+        val library = ExerciseDatabase.all.firstOrNull { e -> sameExerciseKey(e.name) == key || e.aliases.any { sameExerciseKey(it) == key } }
+        return library?.let { sameExerciseKey(it.name) } ?: key
+    }
+    return names.distinctBy(::exerciseKey).groupBy(::canonical).values
+        .filter { it.size > 1 }
+        .flatMap { group -> group.drop(1).map { group.first() to it } }
 }

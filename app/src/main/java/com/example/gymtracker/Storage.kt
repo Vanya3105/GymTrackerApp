@@ -564,6 +564,49 @@ object LocalStorage {
         return true
     }
 
+    /**
+     * Makes [fromName] part of [intoName] everywhere (history, day lists, settings, the running
+     * workout) and removes [fromName]. A copy of the data is kept first, as a restore does.
+     * Returns false if either exercise doesn't exist or they're the same one.
+     */
+    fun mergeExercise(context: Context, fromName: String, intoName: String): Boolean {
+        synchronized(lock) {
+            data(context)
+            try {
+                savePreImportCopy(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "Couldn't save a copy before merging", e)
+                return false
+            }
+            val merged = onIoThread(context) { db -> RoomStore.mergeExercise(db, fromName, intoName) }
+            if (!merged) return false
+            cachedData = onIoThread(context, RoomStore::load)
+            // The kept exercise's spelling, as logged.
+            val into = data(context).history.firstNotNullOfOrNull { w ->
+                w.exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(intoName) }?.name
+            } ?: intoName.trim()
+            loadActiveSession(context)?.let { (split, exercises) ->
+                if (exercises.any { exerciseKey(it.name) == exerciseKey(fromName) }) {
+                    saveActiveSession(context, split, mergeEntries(exercises, fromName, into))
+                }
+            }
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = true)
+        AutoBackup.request(context)
+        return true
+    }
+
+    /** Pairs the user said aren't the same exercise, as sorted [exerciseKey]s joined by "|". */
+    fun notDuplicates(context: Context): Set<String> {
+        val arr = root(context).optJSONArray("notDuplicates") ?: return emptySet()
+        return (0 until arr.length()).map { arr.optString(it) }.toSet()
+    }
+
+    fun markNotDuplicates(context: Context, a: String, b: String) = edit(context) { root ->
+        val arr = root.optJSONArray("notDuplicates") ?: JSONArray().also { root.put("notDuplicates", it) }
+        arr.put(duplicatePairKey(a, b))
+    }
+
     // --- Programs ---
 
     /** The user's own programs (built-in ones are in [SPLIT_PROGRAMS]). */
@@ -1010,3 +1053,17 @@ internal object StoreCodec {
         }.sortedByDescending { it.id }
     }
 }
+
+/**
+ * A list of today's exercises after merging [fromName] into [intoName]: [fromName]'s entry takes
+ * the name, or, when both are in the list, [intoName]'s entry gets [fromName]'s sets after its own.
+ */
+internal fun mergeEntries(exercises: List<ExerciseEntry>, fromName: String, intoName: String): List<ExerciseEntry> {
+    val from = exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(fromName) } ?: return exercises
+    val into = exercises.firstOrNull { exerciseKey(it.name) == exerciseKey(intoName) }
+        ?: return exercises.map { if (it === from) it.copy(name = intoName) else it }
+    val combined = into.copy(sets = (into.sets + from.sets).mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+    return exercises.filter { it !== from }.map { if (it === into) combined else it }
+}
+
+internal fun duplicatePairKey(a: String, b: String): String = listOf(exerciseKey(a), exerciseKey(b)).sorted().joinToString("|")
