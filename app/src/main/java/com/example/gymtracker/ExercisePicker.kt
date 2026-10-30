@@ -1,6 +1,12 @@
 package com.example.gymtracker
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.scaleIn
@@ -39,7 +45,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Bottom sheet for adding exercises: search the built-in library (name, muscle, equipment or
- * nickname like "rdl"), filter by muscle, tap to add. Several can be added before closing.
+ * nickname like "rdl"), filter by muscle. The + adds straight away; tapping a row opens it to show
+ * how the exercise is done, with its own Add. Several can be added before closing.
  */
 @Composable
 fun ExercisePickerSheet(
@@ -54,6 +61,7 @@ fun ExercisePickerSheet(
     val focus = LocalFocusManager.current
     var query by remember { mutableStateOf("") }
     var muscle by remember { mutableStateOf<String?>(null) }
+    var open by remember { mutableStateOf<String?>(null) }
     val results = remember(query, muscle) { ExerciseDatabase.search(query, muscle) }
     val lowerExisting = remember(existingNames) { existingNames.map { it.lowercase() }.toSet() }
     val trimmed = query.trim()
@@ -134,14 +142,33 @@ fun ExercisePickerSheet(
             ) {
                 items(results, key = { it.name }) { info ->
                     val added = info.name.lowercase() in lowerExisting
+                    val isOpen = open == info.name
                     PickerRow(
                         title = info.name,
                         addedLabel = addedLabel,
                         subtitle = listOfNotNull(info.muscle, info.equipment, info.type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label).joinToString(" · "),
                         added = added,
                         onClick = { if (!added) onPick(info) },
+                        onRowClick = { focus.clearFocus(); open = if (isOpen) null else info.name },
+                        thumbName = info.name,
                         modifier = Modifier.animateItem()
-                    )
+                    ) {
+                        AnimatedVisibility(
+                            isOpen,
+                            enter = expandVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                            exit = shrinkVertically(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)) + fadeOut()
+                        ) {
+                            Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 16.dp)) {
+                                ExerciseGuideBody(info.name, info.muscle)
+                                Spacer(Modifier.height(16.dp))
+                                if (added) {
+                                    SecondaryButton(addedLabel, {}, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check, enabled = false)
+                                } else {
+                                    PrimaryButton("Add", { onPick(info); open = null }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add, height = 48.dp)
+                                }
+                            }
+                        }
+                    }
                 }
                 if (canCreate) {
                     item(key = "create") {
@@ -258,46 +285,66 @@ private fun PickerRow(
     added: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Tapping the row itself; without it, the whole row is the + . */
+    onRowClick: (() -> Unit)? = null,
+    thumbName: String? = null,
     leadingAccent: Boolean = false,
-    addedLabel: String = ""
+    addedLabel: String = "",
+    expanded: @Composable () -> Unit = {}
 ) {
     val P = LocalPalette.current
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .pressable(enabled = !added, pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f).padding(start = 8.dp)) {
-            Text(
-                title,
-                style = AppType.bodyStrong,
-                color = when {
-                    added -> P.textSecondary
-                    leadingAccent -> P.accentPrimary
-                    else -> P.textPrimary
-                }
-            )
-            Text(if (added) addedLabel else subtitle, style = AppType.caption, color = P.textSecondary)
-        }
-        AnimatedContent(
-            targetState = added,
-            transitionSpec = { scaleIn(spring(dampingRatio = 0.5f)).togetherWith(scaleOut()) },
-            label = "picker_check"
-        ) { isAdded ->
-            Box(
-                Modifier.size(30.dp).clip(CircleShape).background(if (isAdded) P.successSurface else P.accentSoft),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (isAdded) Icons.Rounded.Check else Icons.Rounded.Add,
-                    contentDescription = if (isAdded) "Added" else "Add",
-                    tint = if (isAdded) P.successText else P.accentPrimary,
-                    modifier = Modifier.size(18.dp)
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .pressable(enabled = onRowClick != null || !added, pressedScale = 0.98f, onClick = onRowClick ?: onClick)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (thumbName != null) {
+                ExerciseThumb(thumbName, size = 48.dp)
+                Spacer(Modifier.width(4.dp))
+            }
+            Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                Text(
+                    title,
+                    style = AppType.bodyStrong,
+                    color = when {
+                        added -> P.textSecondary
+                        leadingAccent -> P.accentPrimary
+                        else -> P.textPrimary
+                    }
                 )
+                Text(if (added) addedLabel else subtitle, style = AppType.caption, color = P.textSecondary)
+            }
+            AnimatedContent(
+                targetState = added,
+                transitionSpec = { scaleIn(spring(dampingRatio = 0.5f)).togetherWith(scaleOut()) },
+                label = "picker_check"
+            ) { isAdded ->
+                // A 44dp target around the 30dp circle, so the + is easy to hit apart from the row.
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .then(if (onRowClick != null) Modifier.pressable(enabled = !isAdded, pressedScale = 0.9f, onClick = onClick) else Modifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        Modifier.size(30.dp).clip(CircleShape).background(if (isAdded) P.successSurface else P.accentSoft),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isAdded) Icons.Rounded.Check else Icons.Rounded.Add,
+                            contentDescription = if (isAdded) "Added" else "Add",
+                            tint = if (isAdded) P.successText else P.accentPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
+        expanded()
     }
 }
