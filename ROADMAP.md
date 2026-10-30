@@ -11,7 +11,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
 
-Next: Google sign-in + Drive backup on branch `google-backup` waits for the owner's Google Cloud setup (see its section) and a phone test. Then getting ready for the first Google Play release (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). Next: getting ready for the first Google Play release (add Android OAuth clients for the release and Play signing keys; consent screen to In production) (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -189,7 +189,7 @@ The app should also serve runners and people who train with bodyweight (calisthe
 ## Google sign-in + Drive backup (branch `google-backup`)
 - [x] `DriveBackup.kt`: "Sign in with Google" (Identity AuthorizationClient, scopes drive.appdata + userinfo.email) → backups to the hidden appDataFolder of the user's own Drive through the Drive REST API (no server, no Google API client library). Same file, triggers (`AutoBackup.request`), change check and rotation as the folder backup; its own state (`AutoBackup.run(..., prefsName)`). Background backups get a token silently; if Google needs the user again, Profile says "Sign in again"
 - [x] Profile → Your data: sign in, account and last backup, Back up now, Restore (Drive backups, newest first → the existing Add / Replace choice), Sign out (asks; Drive copies stay). Signing in on a phone with nothing logged offers the restore straight away. A phone with nothing logged never uploads (it could rotate away that day's real backup). Cancelled sign-in is quiet
-- [ ] **Owner: Google Cloud setup** (sign-in fails with "isn't set up" until then). See "Google sign-in setup" below
+- [x] Owner's Google Cloud setup done; sign-in and backup tested on the owner's phone (2026-10-30). The app needed the INTERNET permission (it had been fully offline). Release key and Play signing key each need their own Android client before launch
 - [ ] Onboarding: "Restore from Google" on the first screen for new phones
 
 ### Google sign-in setup
