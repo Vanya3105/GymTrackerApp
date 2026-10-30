@@ -15,6 +15,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 - Declutter (`declutter`): see its section below. The smoothness pass is on the same branch.
 - Search sheets and duplicate exercises (`search-and-duplicates`, on top of `declutter`): swipe a search list past its end (no more twitch); Progress → "Same exercise?" card, or an exercise's page → "Merge them".
 - Combining backups and importing from Strong/Hevy (`backups-import`, on top of `search-and-duplicates`): Profile → Your data → Restore (now asks: Add to my data / Replace everything) and "Import from Strong or Hevy".
+- Tab switching (`tab-transitions`, on top of `backups-import`): tap between the bottom tabs; pages should fade through without a flash.
 - For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
 
 Next: the owner has widget changes to describe; then Phase 7 step 3, CSV export.
@@ -180,6 +181,9 @@ The app should also serve runners and people who train with bodyweight (calisthe
 
 ## Search sheet twitch (branch `search-and-duplicates`)
 - [x] Swiping a list in a bottom sheet past its end moved the whole sheet a few pixels and sprang it back every frame (seen in frames: the title jumped 6 px and back). `AppBottomSheet` now keeps a list's leftover scroll toward the end inside the sheet (`SheetScrollGuard`); pulling down still closes it. Covers every sheet: exercise picker, split search, finish sheet, share sheet
+
+## Tab transitions (branch `tab-transitions`)
+- [x] Switching tabs flashed: the new tab was drawn fully for one frame (its fade value still at 1 from last time), then vanished and faded in; the old tab vanished at once. Screen recording, content brightness per frame: Today 40 → Progress 32 → 15 → 20 → 31 → 32. Now Material's fade through (`TabHost`): old tab fades out over the first 30%, new one fades in and grows 96% → 100% over 300 ms, timed from the new tab's first frame. Recorded after: 40 → 35 → 18 → 29 → 32
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.

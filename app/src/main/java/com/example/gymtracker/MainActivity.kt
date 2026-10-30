@@ -25,7 +25,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -52,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1094,39 +1097,59 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
 /**
  * Keeps each tab composed after its first visit: switching back is instant (no rebuilding the
  * screen and measuring its text again) and returns to where it was scrolled. Hidden tabs aren't
- * measured, placed or drawn, so they take no touches and cost nothing per frame. The tab that
- * comes in fades and slides a little from the side it's on.
+ * measured, placed or drawn, so they take no touches and cost nothing per frame.
+ *
+ * Switching is Material's "fade through": the old tab fades out over the first 30%, then the new
+ * one fades in while growing from 96%. Both are driven by one progress value that is reset in the
+ * same frame the tab changes, so the new tab is never drawn at full opacity before its fade (it
+ * used to flash in for a frame, vanish and fade back: the "twitch"). Timing starts after the new
+ * tab's first frame, so a slow first visit doesn't swallow the animation.
  */
 @Composable
 private fun TabHost(selected: AppTab, modifier: Modifier, content: @Composable (AppTab) -> Unit) {
     val visited = remember { mutableStateListOf(selected) }
     if (selected !in visited) visited += selected
-    val startTab = remember { selected }
-    var lastShown by remember { mutableStateOf(selected) }
-    val fromRight = remember(selected) { selected.ordinal > lastShown.ordinal }
-    SideEffect { lastShown = selected }
+    // Which tab was showing before [selected]; a plain holder, worked out during composition.
+    val order = remember { object { var current = selected; var previous: AppTab? = null } }
+    if (order.current != selected) {
+        order.previous = order.current
+        order.current = selected
+    }
+    val from = order.previous
+    // A new value per switch, created at 0 in the same composition the tab changes.
+    val progress = remember(selected) { Animatable(if (from == null) 1f else 0f) }
+    var settled by remember(selected) { mutableStateOf(from == null) }
+    LaunchedEffect(selected) {
+        if (settled) return@LaunchedEffect
+        withFrameNanos { }
+        progress.animateTo(1f, tween(300, easing = LinearEasing))
+        settled = true
+    }
+    val shown = selected
+    val leaving = if (settled) null else from
 
     Box(modifier) {
         for (tab in AppTab.entries) {
             if (tab !in visited) continue
             key(tab) {
-                val shown = tab == selected
-                val enter = remember { Animatable(1f) }
-                var opened by remember { mutableStateOf(false) }
-                LaunchedEffect(shown) {
-                    if (!shown) return@LaunchedEffect
-                    // The tab the app opens on just appears.
-                    if (!opened && tab == startTab) { opened = true; return@LaunchedEffect }
-                    opened = true
-                    enter.snapTo(0f)
-                    enter.animateTo(1f, tween(240, easing = FastOutSlowInEasing))
-                }
+                val incoming = tab == shown
+                val outgoing = tab == leaving
                 Box(
                     Modifier.fillMaxSize().then(
-                        if (shown) Modifier.graphicsLayer {
-                            alpha = enter.value
-                            translationX = (1f - enter.value) * size.width * 0.06f * (if (fromRight) 1f else -1f)
-                        } else Modifier.layout { _, constraints -> layout(constraints.maxWidth, constraints.maxHeight) {} }
+                        when {
+                            incoming -> Modifier.zIndex(1f).graphicsLayer {
+                                val t = ((progress.value - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                val eased = FastOutSlowInEasing.transform(t)
+                                alpha = eased
+                                val scale = 0.96f + 0.04f * eased
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            outgoing -> Modifier.graphicsLayer {
+                                alpha = 1f - FastOutLinearInEasing.transform((progress.value / 0.3f).coerceIn(0f, 1f))
+                            }
+                            else -> Modifier.layout { _, constraints -> layout(constraints.maxWidth, constraints.maxHeight) {} }
+                        }
                     )
                 ) { content(tab) }
             }
