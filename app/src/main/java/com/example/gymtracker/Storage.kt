@@ -492,6 +492,48 @@ object LocalStorage {
         return true
     }
 
+    /**
+     * Adds a GymTracker backup to what's here instead of replacing it ([combineData]); settings,
+     * profile and the running workout stay as they are. Null if [jsonContent] isn't a backup.
+     */
+    fun addBackupJsonString(context: Context, jsonContent: String): CombineResult? {
+        val parsed = try {
+            JSONObject(jsonContent.removePrefix("﻿").trim())
+        } catch (e: Exception) {
+            return null
+        }
+        if (!StoreCodec.looksLikeBackup(parsed)) return null
+        return addData(context, StoreCodec.readData(parsed))
+    }
+
+    /** Adds [incoming] (a backup or another app's export) to what's here; a copy is kept first. */
+    fun addData(context: Context, incoming: StoreData): CombineResult? {
+        try {
+            savePreImportCopy(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Couldn't save a copy before adding data", e)
+            return null
+        }
+        val result: CombineResult
+        synchronized(lock) {
+            val (combined, summary) = combineData(data(context), incoming)
+            try {
+                cachedData = onIoThread(context) { db ->
+                    RoomStore.replaceAll(db, combined)
+                    RoomStore.load(db)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Adding data failed", e)
+                cachedData = null
+                return null
+            }
+            result = summary
+        }
+        scheduleSurfaceRefresh(context, notifyInApp = false)
+        AutoBackup.request(context)
+        return result
+    }
+
     private fun savePreImportCopy(context: Context) {
         val dir = context.applicationContext.filesDir
         File(dir, "$PRE_IMPORT_PREFIX${System.currentTimeMillis()}.json").writeText(exportJsonBackupString(context))
