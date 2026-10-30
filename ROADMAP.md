@@ -16,6 +16,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 - Search sheets and duplicate exercises (`search-and-duplicates`, on top of `declutter`): swipe a search list past its end (no more twitch); Progress → "Same exercise?" card, or an exercise's page → "Merge them".
 - Combining backups and importing from Strong/Hevy (`backups-import`, on top of `search-and-duplicates`): Profile → Your data → Restore (now asks: Add to my data / Replace everything) and "Import from Strong or Hevy".
 - Tab switching (`tab-transitions`, on top of `backups-import`): tap between the bottom tabs; pages should fade through without a flash.
+- Workout notification (same branch): pull down the shade or look at the lock screen during a workout; the collapsed card should read fully, with a ✓ button.
 - For a real feel of speed, install the **release** build (Android Studio: Build → Select Build Variant → `app` and `wear` to `release`); the debug build that Run installs by default does ~4× more work per frame.
 
 Next: the owner has widget changes to describe; then Phase 7 step 3, CSV export.
@@ -184,6 +185,9 @@ The app should also serve runners and people who train with bodyweight (calisthe
 
 ## Tab transitions (branch `tab-transitions`)
 - [x] Switching tabs flashed: the new tab was drawn fully for one frame (its fade value still at 1 from last time), then vanished and faded in; the old tab vanished at once. Screen recording, content brightness per frame: Today 40 → Progress 32 → 15 → 20 → 31 → 32. Now Material's fade through (`TabHost`): old tab fades out over the first 30%, new one fades in and grows 96% → 100% over 300 ms, timed from the new tab's first frame. Recorded after: 40 → 35 → 18 → 29 → 32
+
+## Workout notification, collapsed (branch `tab-transitions`)
+- [x] The collapsed lock-screen / shade notification reused the whole widget card, which Android 12+ cuts to ~48dp, hiding half of it. Android doesn't let an app open its notification expanded, so it now has its own collapsed layout (`notification_workout_compact.xml`, system notification text styles): "Exercise · Set N" and either "weight × reps · N sets left" with a ✓ button (logs the set like the widget's) or the rest countdown with the next set. Expanded view (with +/−) unchanged. Checked on the emulator, including ✓ from the collapsed card
 
 ## Phase 7 — Data in/out
 Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an import will make duplicate exercises.

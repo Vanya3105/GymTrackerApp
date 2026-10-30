@@ -401,7 +401,7 @@ object LockScreenWorkoutController {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setCategory(Notification.CATEGORY_WORKOUT)
                 .setContentIntent(openAppPendingIntent(context, 0))
-                .setCustomContentView(buildWorkoutWidgetViews(context, settings, compact = true, requestCodeBase = 20, forLockScreen = true))
+                .setCustomContentView(buildCompactWorkoutNotificationViews(context, live))
                 .setCustomBigContentView(expanded)
                 .setCustomHeadsUpContentView(expanded)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -410,6 +410,41 @@ object LockScreenWorkoutController {
             manager.notify(LIVE_NOTIFICATION_ID, builder.build())
         } catch (_: Exception) {}
     }
+}
+
+/**
+ * The collapsed notification: Android 12+ gives it ~48dp, which cut the full widget card in half.
+ * Two lines (exercise and set; the numbers or the rest countdown) and a "Set done" button.
+ */
+private fun buildCompactWorkoutNotificationViews(context: Context, live: LiveSession): RemoteViews {
+    val views = RemoteViews(context.packageName, R.layout.notification_workout_compact)
+    val accent = appPalette(context).accentPrimary.toArgb()
+    val next = live.nextSet
+    if (next == null) {
+        views.setTextViewText(R.id.notif_title, "All sets done")
+        views.setTextViewText(R.id.notif_text, "Open the app to save ${live.splitName}")
+        views.setViewVisibility(R.id.notif_done, View.GONE)
+        views.setViewVisibility(R.id.notif_rest, View.GONE)
+        return views
+    }
+    views.setTextViewText(R.id.notif_title, "${next.exerciseName} · ${next.label}")
+    if (live.isResting) {
+        views.setViewVisibility(R.id.notif_rest, View.VISIBLE)
+        views.setChronometerCountDown(R.id.notif_rest, true)
+        views.setChronometer(R.id.notif_rest, SystemClock.elapsedRealtime() + live.restRemainingMillis, "%s", true)
+        views.setTextColor(R.id.notif_rest, accent)
+        views.setTextViewText(R.id.notif_text, "rest · next ${next.summary}")
+        views.setViewVisibility(R.id.notif_done, View.GONE)
+    } else {
+        views.setViewVisibility(R.id.notif_rest, View.GONE)
+        val numbers = listOfNotNull(next.primary, next.secondary?.let { if (it.all(Char::isDigit)) "$it reps" else it }).joinToString(" × ")
+        views.setTextViewText(R.id.notif_text, "$numbers · ${live.totalSetsLeft} sets left")
+        views.setViewVisibility(R.id.notif_done, View.VISIBLE)
+        views.setInt(R.id.notif_done_bg, "setColorFilter", accent)
+        views.setInt(R.id.notif_done_icon, "setColorFilter", appPalette(context).onAccentPrimary.toArgb())
+        views.setOnClickPendingIntent(R.id.notif_done, widgetActionPendingIntent(context, GymWidgetProvider.ACTION_COMPLETE_SET, 40))
+    }
+    return views
 }
 
 // ============================================================================
