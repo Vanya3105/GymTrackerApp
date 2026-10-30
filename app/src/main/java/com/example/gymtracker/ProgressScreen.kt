@@ -159,6 +159,7 @@ fun ProgressScreen(
                             Modifier.fillMaxWidth().pressable { onOpenExercise(lift.name) }.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
                                 Text("Best set ${lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"}", style = AppType.caption, color = P.textSecondary)

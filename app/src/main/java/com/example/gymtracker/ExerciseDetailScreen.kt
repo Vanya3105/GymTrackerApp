@@ -112,10 +112,13 @@ fun ExerciseDetailScreen(
         }
 
         item {
-            Column {
-                Text(exerciseName, style = AppType.display, color = P.textPrimary)
-                val sub = listOfNotNull(muscle?.ifBlank { null }, info?.equipment).joinToString(" · ")
-                if (sub.isNotEmpty()) Text(sub, style = AppType.body, color = P.textSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExerciseThumb(exerciseName, Modifier.padding(end = 14.dp), size = 64.dp, showEmpty = false)
+                Column {
+                    Text(exerciseName, style = AppType.display, color = P.textPrimary)
+                    val sub = listOfNotNull(muscle?.ifBlank { null }, info?.equipment).joinToString(" · ")
+                    if (sub.isNotEmpty()) Text(sub, style = AppType.body, color = P.textSecondary)
+                }
             }
         }
 
@@ -760,34 +763,51 @@ private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) 
                 tint = P.textTertiary
             )
         }
-        if (open) {
-            if (main.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                MuscleMap(loads, Modifier.fillMaxWidth())
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Legend(P.accentPrimary, "Main")
-                    if (helping.isNotEmpty()) Legend(P.accentPrimary.copy(alpha = 0.5f), "Helping")
+        if (open) ExerciseGuideBody(exerciseName, muscle, Modifier.padding(top = 14.dp))
+    }
+}
+
+/**
+ * Everything about how an exercise is done: the start and end photos, which muscles it works,
+ * the steps and a tip. On the exercise's page and when a row is opened in "Add exercise".
+ */
+@Composable
+fun ExerciseGuideBody(exerciseName: String, muscle: String, modifier: Modifier = Modifier) {
+    val P = LocalPalette.current
+    val guide = remember(exerciseName) { ExerciseGuides.find(exerciseName) }
+    val loads = remember(exerciseName, muscle) { muscleLoads("", exerciseName, muscle) }
+    val main = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] >= 1f }
+    val helping = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] > 0f && loads[i] < 1f }
+    Column(modifier) {
+        if (ExercisePhotos.has(exerciseName)) {
+            ExercisePhotoClip(exerciseName, Modifier.fillMaxWidth().aspectRatio(1.5f))
+            Spacer(Modifier.height(14.dp))
+        }
+        if (main.isNotEmpty()) {
+            MuscleMap(loads, Modifier.fillMaxWidth())
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Legend(P.accentPrimary, "Main")
+                if (helping.isNotEmpty()) Legend(P.accentPrimary.copy(alpha = 0.5f), "Helping")
+            }
+        }
+        if (guide != null) {
+            Spacer(Modifier.height(16.dp))
+            guide.steps.forEachIndexed { i, step ->
+                Row(Modifier.padding(bottom = 10.dp)) {
+                    Box(Modifier.size(22.dp).clip(CircleShape).background(P.bgControl), contentAlignment = Alignment.Center) {
+                        Text("${i + 1}", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(step, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
                 }
             }
-            if (guide != null) {
-                Spacer(Modifier.height(16.dp))
-                guide.steps.forEachIndexed { i, step ->
-                    Row(Modifier.padding(bottom = 10.dp)) {
-                        Box(Modifier.size(22.dp).clip(CircleShape).background(P.bgControl), contentAlignment = Alignment.Center) {
-                            Text("${i + 1}", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(step, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(P.bgControl).padding(12.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(Icons.Rounded.Lightbulb, null, tint = P.warningText, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(guide.tip, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
-                }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(12.dp)).background(P.bgControl).padding(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(Icons.Rounded.Lightbulb, null, tint = P.warningText, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(guide.tip, style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
             }
         }
     }

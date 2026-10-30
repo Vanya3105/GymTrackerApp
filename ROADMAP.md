@@ -11,6 +11,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
 
+**Exercise photos** (branch `exercise-photos`, 2026-10-30) is waiting for the owner to test it on the phone; see Phase 9.
+
 Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). Next: getting ready for the first Google Play release (add Android OAuth clients for the release and Play signing keys; consent screen to In production) (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
@@ -227,6 +229,7 @@ Reordered 2026-10-29: losing the phone shouldn't mean losing the logs, and an im
 - [ ] Yearly calendar heat map, streaks
 - [ ] Body measurements; progress-photo side-by-side
 - [x] Exercise instructions (branch `exercise-guides`): every built-in exercise has 3–5 steps and a tip written for the app (`ExerciseGuides.kt`); the exercise page's "How to do it" card shows them with a front/back muscle figure drawn in code (`MuscleMap.kt`, main muscle in accent, helpers lighter, from `muscleLoads`). Open until an exercise has 3 sessions. Chose own drawings over the free-exercise-db photos, whose origin is undocumented. Test: `ExerciseGuidesTest`
+- [ ] Exercise photos (branch `exercise-photos`, owner's request: for personal use for now): start and end photos from free-exercise-db (github.com/yuhonas/free-exercise-db), 134 of 144 library exercises mapped in `ExercisePhotos.kt`, downloaded on first view into `noBackupFilesDir/exercise_photos` and kept. A thumbnail sits next to the name in Add exercise, on workout cards, in Best lifts and on the exercise page. In Add exercise, tapping a row opens it (photos switching start/end, muscle figure, steps, tip, Add button); the corner + still adds straight away. `ExercisePhotos.ENABLED` turns them all off: the photos' origin is undocumented, so decide before a public release. Test: `ExercisePhotosTest`
 - [ ] PR celebration on finish; per-workout notes
 
 ## Phase 10 — Reach

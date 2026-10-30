@@ -806,6 +806,12 @@ private fun ExerciseCard(
             ) {
                 Icon(Icons.Rounded.DragIndicator, "Drag to reorder", tint = if (isDragging) P.accentPrimary else P.textTertiary)
             }
+            ExerciseThumb(
+                exercise.name,
+                Modifier.padding(end = 10.dp).clip(RoundedCornerShape(10.dp)).pressable(pressedScale = 0.95f, onClick = onOpenDetails),
+                size = if (collapsed) 32.dp else 40.dp,
+                showEmpty = false
+            )
             Column(
                 Modifier
                     .weight(1f)
