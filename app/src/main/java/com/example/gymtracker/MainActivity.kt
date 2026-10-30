@@ -251,6 +251,8 @@ fun GymTrackerApp(
     var buildingSplit by rememberSaveable { mutableStateOf<String?>(null) }
     // Bumped when an exercise's page changes its note or training max.
     var exerciseInfoVersion by remember { mutableIntStateOf(0) }
+    // The congratulations screen after Save.
+    var celebration by remember { mutableStateOf<ShareData?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -626,6 +628,9 @@ fun GymTrackerApp(
                                     currentExercises,
                                     history
                                 )
+                                // What the workout meant, judged against the workouts before it.
+                                celebration = buildShareData(split.title, durationSecs, currentExercises, history, now.time, photoPath)
+                                WorkoutChime.play(context)
                                 LocalStorage.saveCompletedWorkout(context, completed)
                                 history = LocalStorage.loadHistory(context)
                                 workoutExpanded = false
@@ -767,6 +772,14 @@ fun GymTrackerApp(
             }
         }
 
+        celebration?.let { c ->
+            WorkoutCelebration(
+                data = c,
+                haptics = haptics,
+                onShare = { ShareRequests.pending = c },
+                onDone = { celebration = null }
+            )
+        }
         ShareSheetHost()
 
         val forgotten = activeSplit
