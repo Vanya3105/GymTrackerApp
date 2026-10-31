@@ -13,7 +13,7 @@ Everything through **tab-transitions** is merged into `master` (2026-10-30, at t
 
 **Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30). **Drawn exercise figures** : all 294 exercises drawn in the app's style, replacing the photos; tested and merged (2026-10-31). **Photo code removed**: `ExercisePhotos` and its test are gone, `ExerciseThumb` now lives with the figures, and the app deletes the old downloaded photos once on start; tested and merged (2026-10-31).
 
-Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Next: privacy policy (needed to publish the consent screen), consent screen to In production, store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Privacy policy written (`docs/`). Next: publish it with GitHub Pages, consent screen to In production, store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -195,7 +195,8 @@ The app should also serve runners and people who train with bodyweight (calisthe
   - An app signed with one key can't update an install signed with another: moving the phone from a debug-signed install to a release one means back up, uninstall, install, restore.
 - [x] Android OAuth client for the upload key's SHA-1: Google sign-in works in self-signed release builds (owner, 2026-10-31)
 - [ ] Android OAuth client for the Play App Signing key once the app exists in Play Console (Test and release → App integrity); Play installs are signed with that key, not the upload key
-- [ ] Privacy policy (what's stored on the phone, Health Connect, Google Drive backup) at a public URL
+- [x] Privacy policy and a small home page in `docs/` (`privacy.html`, `index.html`) for GitHub Pages: data stays on the phone, no servers/ads/analytics; Drive backup (drive.appdata + email, how to delete the hidden data), folder/file backups and imports, Android device backup, Health Connect (what it writes and reads, the not-for-advertising statement), watch sync, camera, sharing, deletion, contact (2026-10-31)
+- [ ] Publish them: GitHub Pages from `master` /docs → `https://vanya3105.github.io/GymTrackerApp/privacy.html`; put that and the home page on the consent screen (Branding)
 - [ ] Store listing: name, short and full description, icon, feature graphic, screenshots, content rating, data safety form
 - [ ] OAuth consent screen to In production
 - [ ] Internal testing track, then production
