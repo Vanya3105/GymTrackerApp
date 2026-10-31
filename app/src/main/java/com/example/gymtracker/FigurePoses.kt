@@ -43,8 +43,9 @@ private fun backPad(hip: Offset, torso: Float, from: Float = -3f, to: Float = 34
 private fun chestPad(hip: Offset, torso: Float): List<Part> {
     val up = dir(torso)
     val front = Offset(up.y, -up.x)
-    val a = hip + up * 6f + front * 8.5f
-    val z = hip + up * 27f + front * 8.5f
+    // Far enough out to show beside the chest rather than hidden behind it.
+    val a = hip + up * 3f + front * 10f
+    val z = hip + up * 31f + front * 10f
     val mid = (a + z) / 2f
     return listOf(pad(a, z), strut(mid, p(mid.x, 0.8f), 2.4f))
 }
@@ -62,7 +63,7 @@ private fun shinRoller(l: Limb, behind: Boolean = false): Offset {
     return l.end - d * 3f + front * 5f
 }
 
-private fun bar(at: Offset) = listOf(strut(at, at + p(0f, 6f), 1.6f), knob(at, 2.3f, front = true))
+private fun bar(at: Offset) = listOf(strut(at, at + p(0f, 8f), 1.8f), knob(at, 3f, front = true))
 
 /** A straight body from the ankles at [feet] to shoulders at [shoulderY]; [length] 48 pivots on the knees. */
 private fun straightBody(feet: Offset, shoulderY: Float, length: Float = 68f, hipAt: Float = 41f): Pair<Offset, Offset> {
@@ -77,18 +78,33 @@ private fun plankTop(feet: Offset = p(-40f, 7f), handY: Float = 2f): Pose {
 }
 
 private fun pushUp(
-    feet: Offset = p(-40f, 7f), handY: Float = 2f, farHand: Target? = null,
+    feet: Offset = p(-40f, 7f), handY: Float = 2f, farHand: Target? = null, farOut: Float = 0f,
     parts: (Float) -> List<Part> = { emptyList() }
 ): Figure {
     val (h1, s1) = straightBody(feet, handY + 29f)
     val (h2, s2) = straightBody(feet, handY + 10f)
     val hands = room(s1.x + 1.5f, handY)
+    // Archer: the far hand set wide (here, further forward) on a straight arm.
+    @Suppress("NAME_SHADOWING") val farHand = farHand ?: if (farOut > 0f) room(s1.x + 1.5f + farOut, handY) else null
     val foot = room(feet.x, feet.y)
     val ground = parts(s1.x + 1.5f)
     return Figure(
         Pose(h1, aim(h1, s1), 10f, hand = hands, foot = foot, farHand = farHand, toe = 160f),
         Pose(h2, aim(h2, s2), 5f, hand = hands, foot = foot, farHand = farHand, toe = 160f),
         elbow = p(-0.6f, 1f), parts = { ground }
+    )
+}
+
+/** From the bottom, an explosive push that lifts the hands off the floor to clap under the chest. */
+private fun clapPushUp(): Figure {
+    val feet = p(-40f, 7f)
+    val (h1, s1) = straightBody(feet, 12f)
+    val (h2, s2) = straightBody(feet, 40f)
+    val foot = room(feet.x, feet.y)
+    return Figure(
+        Pose(h1, aim(h1, s1), 5f, hand = room(s1.x - 0.5f, 2f), foot = foot, toe = 160f),
+        Pose(h2, aim(h2, s2), 10f, hand = room(s2.x + 4f, s2.y - 16f), foot = foot, toe = 160f, elbow = p(0.3f, -1f)),
+        elbow = p(-0.6f, 1f)
     )
 }
 
@@ -151,7 +167,7 @@ private fun lyingFly(held: Held) = Figure(
 /** Standing cable flyes, seen from the front. */
 private fun fly(start: Target, end: Target, anchor: Offset) = Figure(
     Pose(hand = start, foot = room(6f, 3f)),
-    Pose(hand = end, foot = room(6f, 3f), reach = 0.4f),
+    Pose(hand = close(end.x, end.y), foot = room(6f, 3f), reach = 0.4f),
     Held.Handle, front = true, elbow = p(0.3f, -1f), cable = anchor
 )
 
@@ -211,21 +227,21 @@ private fun chest() = listOf(
         Pose(p(-3f, 42f), 8f, hand = onBody(28f, -3f), foot = room(10f, 3f), farFoot = room(-18f, 4f), farToe = 120f),
         Held.Handle, elbow = p(-0.5f, -1f), cable = p(-26f, 66f)
     ),
-    "Pec Deck" to frontSeated(onBody(15f, 13f), onBody(-7f, 5f), endReach = 0.4f),
+    "Pec Deck" to frontSeated(onBody(15f, 13f), close(2f, 12f), endReach = 0.4f),
     "Cable Fly" to fly(onBody(25f, 4f), onBody(-7f, -4f), p(42f, 74f)),
-    "Low-to-High Cable Fly" to fly(onBody(20f, -18f), onBody(-7f, 8f), p(42f, 8f)),
+    "Low-to-High Cable Fly" to fly(onBody(20f, -18f), onBody(-4f, 3f), p(42f, 8f)),
     "High-to-Low Cable Fly" to fly(onBody(20f, 16f), onBody(-7f, -14f), p(42f, 98f)),
     "Dumbbell Fly" to lyingFly(Held.Dumbbell),
     "Incline Dumbbell Fly" to lyingFly(Held.Dumbbell),
     "Incline Cable Fly" to lyingFly(Held.Handle),
     "Push-Up" to pushUp(),
     "Wide Push-Up" to pushUp(),
-    "Archer Push-Up" to pushUp(),
-    "Clap Push-Up" to pushUp(),
+    "Archer Push-Up" to pushUp(farOut = 16f),
+    "Clap Push-Up" to clapPushUp(),
     "Incline Push-Up" to pushUp(handY = 20f) { x -> bench(x - 10f, x + 12f, 18f) },
     "Decline Push-Up" to pushUp(feet = p(-40f, 22f)) { bench(-48f, -30f, 18f) },
     "Knee Push-Up" to kneePushUp(),
-    "Single-Arm Push-Up" to pushUp(farHand = onBody(-8f, -18f)),
+    "Single-Arm Push-Up" to pushUp(farHand = onBody(-15f, 4f)),
     "Ring Push-Up" to pushUp(handY = 9f) { x -> listOf(strut(p(x, 9f), p(x, 55f), 1.1f, Role.Cable), knob(p(x, 9f), 2.6f, front = true)) },
     "Dips" to dips(),
     "Weighted Dips" to dips(extra = beltWeight),
@@ -256,13 +272,17 @@ private fun legsUp(end: Target, torso: Float = -5f) = hanging(
     HANG_FROM_BAR.copy(foot = onBody(1f, -40.5f), toe = 150f), elbow = p(0.6f, -1f)
 )
 
-private fun pulldown(end: Target = onBody(8f, 2f), oneHand: Boolean = false): Figure {
+/** Arms straight up, then the bar to the upper chest, leaning back a little with the chest up and elbows driving down. */
+private fun pulldown(end: Target = onBody(9f, -6f), oneHand: Boolean = false): Figure {
     val rest = if (oneHand) onBody(4f, -26f) else null
     return Figure(
-        Pose(SEAT, -6f, hand = onBody(3f, 27f), foot = SEAT_FEET, farHand = rest),
-        Pose(SEAT, -10f, hand = end, foot = SEAT_FEET, farHand = rest),
-        Held.Handle, oneHand, thumb = 1f, elbow = p(0.2f, -1f), cable = p(4f, 106f),
-        parts = { b -> seat + pad(b.leg.joint + p(-4f, 6f), b.leg.joint + p(5f, 6f)) }
+        Pose(SEAT, -3f, -4f, hand = onBody(4f, 28f), foot = SEAT_FEET, farHand = rest),
+        Pose(SEAT, -17f, 10f, hand = end, foot = SEAT_FEET, farHand = rest, elbow = p(-0.5f, -1f)),
+        Held.Handle, oneHand, thumb = 1f, elbow = p(0.2f, -1f), cable = p(6f, 106f),
+        parts = { b ->
+            seat + pad(b.leg.joint + p(-4f, 6f), b.leg.joint + p(5f, 6f)) +
+                (if (oneHand) emptyList() else listOf(knob(b.arm.end, 3f, front = true)))
+        }
     )
 }
 
@@ -284,7 +304,7 @@ private fun row(
 private fun chestSupported(held: Held?) = row(held, 50f, p(-4f, 40f), parts = { chestPad(p(-4f, 40f), 50f) })
 
 private fun shrug(held: Held, cable: Offset? = null) = Figure(
-    Pose(hand = HANG), Pose(hand = HANG, squash = 1.08f), held, thumb = 1f, cable = cable
+    Pose(hand = HANG), Pose(hand = HANG, squash = 1.16f), held, thumb = 1f, cable = cable
 )
 
 private fun deadlift(lift: Float = 0f, hand: Offset = p(4f, 11f), hip: Offset = p(-12f, 24f), torso: Float = 62f, parts: List<Part> = emptyList()) = Figure(
@@ -311,7 +331,14 @@ private fun back() = listOf(
     "Weighted Pull-Up" to hanging(extra = beltWeight),
     "Assisted Pull-Up" to hanging(extra = kneePad),
     "Scapular Pull-Up" to hanging(HANG_FROM_BAR.copy(hip = p(6.5f, 46f))),
-    "Muscle-Up" to hanging(Pose(p(1f, 99f), 8f, hand = room(6f, 98f), foot = onBody(-4f, -38f), toe = 160f), elbow = p(-1f, 0.2f)),
+    // Pull high, roll the chest over the bar with the elbows up behind, then press out to straight arms.
+    "Muscle-Up" to Figure(
+        HANG_FROM_BAR,
+        Pose(p(1f, 99f), 8f, hand = room(6f, 98f), foot = onBody(-4f, -38f), toe = 160f, elbow = p(-1f, 0.2f)),
+        thumb = 1f, elbow = p(0.6f, -1f), knee = p(1f, 0f), floor = false,
+        mid = Pose(p(3f, 74f), 28f, -10f, hand = room(6f, 98f), foot = onBody(-8f, -36f), toe = 160f, elbow = p(-1f, 0.6f)),
+        parts = { bar(p(6f, 100f)) }
+    ),
     "Rope Climb" to Figure(
         Pose(p(2f, 45f), -8f, hand = room(8f, 92f), farHand = room(8f, 80f), foot = room(6f, 22f), toe = 150f),
         Pose(p(2f, 56f), -8f, hand = room(8f, 106f), farHand = room(8f, 94f), foot = room(6f, 36f), toe = 150f),
@@ -371,11 +398,12 @@ private fun back() = listOf(
     "Machine Row" to Figure(
         Pose(SEAT, 0f, hand = onBody(24f, -4f), foot = SEAT_FEET),
         Pose(SEAT, 0f, hand = onBody(2f, -10f), foot = SEAT_FEET),
-        Held.Handle, thumb = 1f, elbow = p(-1f, 0f), parts = { seat + pad(8.75f, 30f, 8.75f, 46f) }
+        Held.Handle, thumb = 1f, elbow = p(-1f, 0f), parts = { seat + pad(10.5f, 30f, 10.5f, 46f) + strut(10.5f, 30f, 10.5f, 0.8f) }
     ),
     "Deadlift" to deadlift(),
     "Deficit Deadlift" to deadlift(lift = 4f, hip = p(-13f, 22f), torso = 64f, hand = p(4f, 7f), parts = listOf(pad(-14f, 2.25f, 14f, 2.25f))),
-    "Trap Bar Deadlift" to deadlift(hip = p(-10f, 24f), torso = 55f, hand = p(4f, 12f)),
+    // The handles are at the sides, so the weight sits over mid-foot: more knee bend, a more upright back.
+    "Trap Bar Deadlift" to deadlift(hip = p(-9f, 25f), torso = 45f, hand = p(0.5f, 14f)),
     "Rack Pull" to Figure(
         Pose(p(-6f, 38f), 35f, -15f, hand = room(6f, 32f), foot = room(0f, 3f)),
         Pose(p(-1f, 43.5f), -3f, hand = room(-1.5f, 43f), foot = room(0f, 3f)),
@@ -398,17 +426,19 @@ private fun back() = listOf(
     "Cable Shrug" to shrug(Held.Handle, p(12f, 5f)),
     "Kettlebell High Pull" to Figure(
         Pose(p(-12f, 34f), 55f, -30f, hand = onBody(0f, -28f), foot = room(0f, 3f)),
-        Pose(hand = onBody(5f, -4f), foot = room(0f, 3f)),
+        Pose(hand = close(5f, -4f), foot = room(0f, 3f)),
         Held.Kettlebell, thumb = 1f, elbow = p(-0.3f, 1f)
     )
 )
 
 // --- Shoulders ---
 
-private fun standPress(held: Held?, start: Target = RACK, dip: Boolean = false, farHand: Target? = null) = Figure(
-    Pose(if (dip) p(0f, 39f) else STAND, -2f, hand = start, farHand = farHand),
+/** From the shoulders to overhead, the head back to let the weight past the face. [dip]: knees bend and drive first. */
+private fun standPress(held: Held?, start: Target = RACK, dip: Boolean = false, farHand: Target? = null, mid: Pose? = null) = Figure(
+    Pose(STAND, -2f, -8f, hand = start, farHand = farHand),
     Pose(STAND, -4f, hand = OVERHEAD, farHand = farHand),
-    held, thumb = 1f, elbow = p(1f, -1f)
+    held, thumb = 1f, elbow = p(1f, -1f),
+    mid = mid ?: if (dip) Pose(p(0f, 38.5f), -2f, -8f, hand = start, farHand = farHand, knee = p(1f, 0f)) else null
 )
 
 private fun seatPress(held: Held?, start: Target = onBody(7f, 0f), smith: Boolean = false) = Figure(
@@ -429,7 +459,7 @@ private fun frontRaise(held: Held, cable: Offset? = null, oneHand: Boolean = fal
 )
 
 private fun uprightRow(held: Held, cable: Offset? = null) = Figure(
-    Pose(hand = onBody(2f, -27f)), Pose(hand = onBody(7f, -2f)), held, thumb = 1f, elbow = p(-0.3f, 1f), cable = cable
+    Pose(hand = onBody(2f, -27f)), Pose(hand = close(7f, -2f)), held, thumb = 1f, elbow = p(-0.3f, 1f), cable = cable
 )
 
 private fun rotation(held: Held, cable: Offset? = null) = Figure(
@@ -443,8 +473,10 @@ private fun shoulders() = listOf(
     "Push Press" to standPress(Held.Barbell, dip = true),
     "Standing Dumbbell Press" to standPress(Held.Dumbbell, onBody(7f, 0f)),
     "Kettlebell Press" to standPress(Held.Kettlebell, farHand = HANG),
-    "Clean and Press" to standPress(Held.Barbell, onBody(3f, -27f)),
-    "Cuban Press" to standPress(Held.Dumbbell, HANG),
+    // From the hang, cleaned to the shoulders (catching with the knees bent), then pressed.
+    "Clean and Press" to standPress(Held.Barbell, onBody(3f, -27f), mid = Pose(p(0f, 39f), -2f, -8f, hand = close(6f, 1f), knee = p(1f, 0f))),
+    // Up into an upright row, the forearms turn up, then pressed.
+    "Cuban Press" to standPress(Held.Dumbbell, HANG, mid = Pose(STAND, 0f, hand = close(7f, -1f), elbow = p(-0.3f, 1f))),
     "Seated Dumbbell Shoulder Press" to seatPress(Held.Dumbbell),
     "Machine Shoulder Press" to seatPress(Held.Handle),
     "Smith Machine Shoulder Press" to seatPress(Held.Barbell, RACK, smith = true),
@@ -466,8 +498,8 @@ private fun shoulders() = listOf(
     "Machine Lateral Raise" to frontSeated(onBody(3f, -22f), onBody(25f, -3f)),
     "Cable Y-Raise" to raise(Held.Handle, onBody(-5f, -26f), onBody(15f, 25f), p(-18f, 6f)),
     "Rear Delt Fly" to raise(Held.Dumbbell, onBody(-2f, -27f), onBody(27f, -4f), hip = p(0f, 40f), squash = 0.55f),
-    "Reverse Pec Deck" to frontSeated(onBody(-7f, 4f), onBody(28f, 1f), startReach = 0.4f),
-    "Cable Rear Delt Fly" to raise(Held.Handle, onBody(-14f, 1f), onBody(28f, 1f), p(-34f, 74f), reach = 0.7f),
+    "Reverse Pec Deck" to frontSeated(onBody(4f, 1f), onBody(28f, 1f), startReach = 0.4f),
+    "Cable Rear Delt Fly" to raise(Held.Handle, onBody(4f, 1f), onBody(28f, 1f), p(-34f, 74f), reach = 0.4f),
     "Front Raise" to frontRaise(Held.Dumbbell),
     "Cable Front Raise" to frontRaise(Held.Handle, p(-8f, 4f)),
     "Plate Front Raise" to frontRaise(Held.Plate, oneHand = true),
@@ -501,9 +533,11 @@ private fun shoulders() = listOf(
         held = Held.Kettlebell, front = true, loop = 2400, thumb = 0.25f, elbow = p(1f, -0.5f)
     ),
     "Turkish Get-Up" to Figure(
+        // Lying with the bell pressed up, up onto the far hand, then the far leg sweeps under to a half-kneel.
         Pose(p(0f, 6.5f), -90f, hand = onBody(0f, 28.5f), farHand = room(-14f, 2f), foot = room(16f, 3f), farFoot = room(40f, 3f), farToe = 10f, knee = p(0.3f, 1f)),
-        Pose(p(0f, 6.5f), -25f, hand = onBody(0f, 28.5f), farHand = room(-22f, 2f), foot = room(16f, 3f), farFoot = room(40f, 3f), farToe = 10f, knee = p(0.3f, 1f)),
-        Held.Kettlebell, thumb = 1f, elbow = p(0f, 1f)
+        Pose(p(-2f, 23.5f), 0f, -4f, hand = onBody(0f, 28.5f), farHand = room(-1f, 24.5f), foot = room(16f, 3f), farFoot = room(-20f, 4f), farToe = 260f, knee = p(0.3f, 1f), farKnee = p(0.3f, -1f)),
+        Held.Kettlebell, thumb = 1f, elbow = p(0f, 1f),
+        mid = Pose(p(0f, 6.5f), -25f, hand = onBody(0f, 28.5f), farHand = room(-22f, 2f), foot = room(16f, 3f), farFoot = room(40f, 3f), farToe = 10f, knee = p(0.3f, 1f))
     ),
     "Kettlebell Snatch" to Figure(
         Pose(p(-13f, 33f), 62f, -30f, hand = onBody(-12f, -26.5f, way = 1), farHand = HANG, foot = room(0f, 3f)),
@@ -527,7 +561,8 @@ private fun curl(
 
 private fun preacher(held: Held, cable: Offset? = null) = curl(
     held, onBody(24f, -16f), onBody(9f, 5f), SEAT, 8f, SEAT_FEET, elbow = p(1f, -1f), cable = cable,
-    parts = { seat + pad(1f, 45f, 11f, 35f) + strut(9f, 33f, 9f, 17f) }
+    // The slanted pad in front of the chest, under the back of the upper arm down to the elbow.
+    parts = { seat + strut(5.5f, 43f, 15f, 33f, 5.5f) + strut(11f, 36f, 11f, 17f) }
 )
 
 private fun inclineCurl() = curl(
@@ -679,10 +714,12 @@ private fun legMachine(start: Target, end: Target, rollerBehind: Boolean, farFoo
     parts = { b -> legSeat + knob(shinRoller(b.leg, rollerBehind), 3f, Role.Frame, front = true) }
 )
 
+/** The balls of the feet on a step: heels sink below it, then up high on the toes. */
 private fun calfRaise(held: Held? = null, hand: Target = HANG, oneLeg: Boolean = false, parts: (Body) -> List<Part> = { emptyList() }) = Figure(
-    Pose(hand = hand, farFoot = if (oneLeg) room(-6f, 14f) else null, farToe = if (oneLeg) 150f else null),
-    Pose(STAND + p(0f, 5f), hand = hand, foot = room(1f, 8f), toe = 135f, farFoot = if (oneLeg) room(-6f, 19f) else null, farToe = if (oneLeg) 150f else null),
-    held, thumb = 1f, elbow = if (hand == BACK_BAR) p(-1f, -1f) else p(-0.4f, -1f), parts = parts
+    Pose(STAND + p(0f, 1f), hand = hand, foot = room(1f, 4f), toe = 65f, farFoot = if (oneLeg) room(-6f, 15f) else null, farToe = if (oneLeg) 150f else null),
+    Pose(STAND + p(1.5f, 7f), hand = hand, foot = room(2.5f, 9.5f), toe = 150f, farFoot = if (oneLeg) room(-4.5f, 21f) else null, farToe = if (oneLeg) 150f else null),
+    held, thumb = 1f, elbow = if (hand == BACK_BAR) p(-1f, -1f) else p(-0.4f, -1f),
+    parts = { b -> listOf(block(3f, 0f, 18f, 5.5f)) + parts(b) }
 )
 
 private fun quads() = listOf(
@@ -700,7 +737,8 @@ private fun quads() = listOf(
     }),
     "Jump Squat" to Figure(
         Pose(p(-15f, 21f), 42f, -25f, hand = onBody(-6f, -27f), foot = room(2f, 3f)),
-        Pose(p(0f, 53f), 2f, hand = onBody(4f, -27f), foot = room(1f, 12f), toe = 140f),
+        // Clear of the floor, arms swung up.
+        Pose(p(0f, 60f), 2f, hand = onBody(12f, 20f), foot = room(1f, 18f), toe = 145f),
         thumb = 1f, elbow = p(-0.4f, -1f)
     ),
     "Pistol Squat" to Figure(
@@ -775,25 +813,35 @@ private fun quads() = listOf(
     ),
     "Power Clean" to Figure(
         Pose(p(-12f, 24f), 62f, -30f, hand = room(4f, 11f), foot = room(0f, 3f), elbow = p(-1f, 0f)),
-        Pose(p(0f, 40f), -2f, hand = room(5f, 68f), foot = room(0f, 3f), elbow = p(1f, -0.2f)),
-        Held.Barbell, thumb = 1f
+        CLEAN_CATCH,
+        Held.Barbell, thumb = 1f, mid = SECOND_PULL
     ),
     "Hang Clean" to Figure(
         Pose(p(-6f, 40f), 35f, -15f, hand = room(9f, 34f), foot = room(0f, 3f), elbow = p(-1f, 0f)),
-        Pose(p(0f, 40f), -2f, hand = room(5f, 68f), foot = room(0f, 3f), elbow = p(1f, -0.2f)),
-        Held.Barbell, thumb = 1f
+        CLEAN_CATCH,
+        Held.Barbell, thumb = 1f, mid = SECOND_PULL
     ),
+    // Cleaned from the floor to the shoulders, then jerked overhead into a split.
     "Clean and Jerk" to Figure(
-        Pose(STAND, -2f, hand = RACK, foot = room(1f, 3f), farFoot = room(-1.5f, 3f)),
-        Pose(p(-4f, 37f), -2f, hand = OVERHEAD, foot = room(14f, 3f), farFoot = room(-22f, 6f), farToe = 120f),
-        Held.Barbell, thumb = 1f, elbow = p(1f, -1f)
+        Pose(p(-12f, 24f), 62f, -30f, hand = room(4f, 11f), foot = room(0f, 3f), farFoot = room(-1.5f, 3f), elbow = p(-1f, 0f)),
+        // Overhead in room terms, like the catch it comes from (a room and a body target don't mix).
+        Pose(p(-4f, 37f), -2f, hand = room(-4.5f, 92f), foot = room(14f, 3f), farFoot = room(-22f, 6f), farToe = 120f, elbow = p(1f, -1f)),
+        Held.Barbell, thumb = 1f,
+        mid = CLEAN_CATCH.copy(farFoot = room(-1.5f, 3f))
     ),
     "Snatch" to Figure(
         Pose(p(-13f, 25f), 60f, -30f, hand = room(6f, 11f), foot = room(0f, 3f)),
         Pose(p(-10f, 28f), 18f, -5f, hand = room(-1f, 82f), foot = room(0f, 3f)),
-        Held.Barbell, thumb = 1f, elbow = p(-1f, 0f)
+        Held.Barbell, thumb = 1f, elbow = p(-1f, 0f),
+        mid = SECOND_PULL.copy(hand = room(3f, 44f))
     )
 )
+
+/** Up on the toes with the hips through and the shoulders shrugged, the bar at the hips. */
+private val SECOND_PULL = Pose(p(1f, 46f), -6f, hand = room(4f, 41f), foot = room(0f, 4f), toe = 140f, elbow = p(-1f, 0f), squash = 1.06f)
+
+/** The bar on the front of the shoulders, elbows high, caught in a quarter squat. */
+private val CLEAN_CATCH = Pose(p(-2f, 38f), 2f, -6f, hand = room(6f, 66f), foot = room(0f, 3f), elbow = p(1f, -0.2f), knee = p(1f, 0f))
 
 private fun hinge(held: Held?, hip: Offset = p(-11f, 41f), torso: Float = 75f, hand: Target = HANG) = Figure(
     Pose(hand = hand), Pose(hip, torso, -35f, hand = hand),
@@ -912,7 +960,7 @@ private fun hamstringsAndGlutes() = listOf(
 
 private fun calves() = listOf(
     "Standing Calf Raise" to calfRaise(hand = onBody(4f, 6f), parts = { b ->
-        listOf(pad(b.shoulder + p(-6f, 7f), b.shoulder + p(6f, 7f)), strut(b.shoulder + p(6f, 7f), p(b.shoulder.x + 6f, 0.8f)), pad(-2f, 1.5f, 12f, 1.5f))
+        listOf(pad(b.shoulder + p(-6f, 7f), b.shoulder + p(6f, 7f)), strut(b.shoulder + p(6f, 7f), p(b.shoulder.x + 6f, 0.8f)))
     }),
     "Smith Machine Calf Raise" to calfRaise(Held.Barbell, BACK_BAR, parts = { rails(-5f) }),
     "Barbell Calf Raise" to calfRaise(Held.Barbell, BACK_BAR),
@@ -1083,8 +1131,9 @@ private fun core() = listOf(
         Held.Handle, oneHand = true, front = true, thumb = 1f, elbow = p(0f, -1f), cable = p(-40f, 8f)
     ),
     "Dumbbell Side Bend" to Figure(
-        Pose(hand = HANG, foot = room(6f, 3f), farFoot = room(-6f, 3f)),
-        Pose(STAND, 14f, hand = HANG, foot = room(6f, 3f), farFoot = room(-6f, 3f)),
+        // Down towards the weight, then up and over past straight.
+        Pose(STAND, -16f, hand = HANG, foot = room(6f, 3f), farFoot = room(-6f, 3f)),
+        Pose(STAND, 12f, hand = HANG, foot = room(6f, 3f), farFoot = room(-6f, 3f)),
         Held.Dumbbell, oneHand = true, front = true, thumb = 1f
     ),
     "Landmine Rotation" to Figure(
