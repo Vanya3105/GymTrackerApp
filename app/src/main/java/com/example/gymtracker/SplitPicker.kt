@@ -158,7 +158,6 @@ fun SplitPickerSheet(
     onDismiss: () -> Unit
 ) {
     val P = LocalPalette.current
-    val focus = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
     var query by remember { mutableStateOf("") }
     var days by remember { mutableStateOf<Int?>(null) }
@@ -169,10 +168,11 @@ fun SplitPickerSheet(
     val trimmed = query.trim()
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    // Scrolling the suggestions puts the keyboard away so more of them show.
-    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) focus.clearFocus() }
 
     AppBottomSheet(onDismiss = onDismiss) {
+        // The sheet is its own window: only its focus manager can put the keyboard away.
+        val focus = LocalFocusManager.current
+        // Not put away on scroll: the list jumps when the keyboard closes under a moving finger.
         Column(Modifier.fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("Choose a split"), style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))

@@ -112,7 +112,7 @@ fun buildShareData(
     whenMillis: Long,
     photoPath: String?
 ): ShareData {
-    val done = exercises.filter { !it.isSkipped }
+    val done = performedExercises(exercises)
     val stats = computeWorkoutStats(done, historyBefore)
     val byExercise = historyByExercise(historyBefore)
     val lifts = ArrayList<ShareLift>()

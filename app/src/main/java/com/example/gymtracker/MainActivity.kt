@@ -191,10 +191,12 @@ private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
     toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
 
 /** Builds the logbook entry; PRs are judged only against workouts logged before this one. */
-internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): CompletedWorkout {
-    val performed = exercises.filter { !it.isSkipped }
+internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>, editing: Boolean = false): CompletedWorkout {
+    // An edit keeps what is there: a set added to an old workout is rarely ticked.
+    val performed = if (editing) exercises.filter { !it.isSkipped } else performedExercises(exercises)
+    val untouched = exercises.filter { ex -> !ex.isSkipped && performed.none { it.name == ex.name } }.map { it.name }
     val stats = computeWorkoutStats(performed, history.filter { it.id < base.id })
-    return base.copy(exercises = performed, totalVolumeKg = stats.volumeKg, prsHit = stats.prCount)
+    return base.copy(exercises = performed, skippedExercises = base.skippedExercises + untouched, totalVolumeKg = stats.volumeKg, prsHit = stats.prCount)
 }
 
 /**
@@ -571,7 +573,8 @@ fun GymTrackerApp(
                                 val updated = buildCompletedWorkout(
                                     editing.copy(photoPath = photoPath, skippedExercises = skipped),
                                     currentExercises,
-                                    history
+                                    history,
+                                    editing = true
                                 )
                                 LocalStorage.updateCompletedWorkout(context, updated)
                                 history = LocalStorage.loadHistory(context)

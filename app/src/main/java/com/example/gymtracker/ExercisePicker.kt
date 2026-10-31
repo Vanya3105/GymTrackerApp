@@ -58,7 +58,6 @@ fun ExercisePickerSheet(
     addedLabel: String = tr("In this workout")
 ) {
     val P = LocalPalette.current
-    val focus = LocalFocusManager.current
     var query by remember { mutableStateOf("") }
     var muscle by remember { mutableStateOf<String?>(null) }
     var open by remember { mutableStateOf<String?>(null) }
@@ -72,6 +71,8 @@ fun ExercisePickerSheet(
         trimmed.lowercase() !in lowerExisting
 
     AppBottomSheet(onDismiss = onDismiss) {
+        // The sheet is its own window: only its focus manager can put the keyboard away.
+        val focus = LocalFocusManager.current
         Column(Modifier.fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(tr("Add exercise"), style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))

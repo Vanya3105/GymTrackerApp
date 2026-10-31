@@ -888,14 +888,24 @@ private class EnterAnimationNode(private val index: Int) : Modifier.Node(), Layo
 /**
  * Scrolling content in a sheet hands what it can't use to the sheet. At the end of a list that
  * leftover moved the whole sheet up a few pixels and it sprang back every frame: a twitch while
- * the finger kept going. Keep it in the content; pulling down (to close the sheet) still reaches it.
+ * the finger kept going. Scrolling back up, the leftover once the list reached the top dragged the
+ * sheet down mid-swipe, so it jerked and sometimes closed. Keep both in the content: only a swipe
+ * that starts with the list already at the top pulls the sheet down.
  */
-private val SheetScrollGuard = object : NestedScrollConnection {
-    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
-        if (available.y < 0f) Offset(0f, available.y) else Offset.Zero
+private class SheetScrollGuard : NestedScrollConnection {
+    /** The content moved during this swipe, so the swipe belongs to it. */
+    private var contentScrolled = false
 
-    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
-        if (available.y < 0f) Velocity(0f, available.y) else Velocity.Zero
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (consumed.y != 0f) contentScrolled = true
+        return if (available.y < 0f || contentScrolled) Offset(0f, available.y) else Offset.Zero
+    }
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        val keep = available.y < 0f || contentScrolled || consumed.y != 0f
+        contentScrolled = false
+        return if (keep) Velocity(0f, available.y) else Velocity.Zero
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -922,7 +932,10 @@ fun AppBottomSheet(
                     .background(P.borderStrong)
             )
         },
-        content = { Column(Modifier.nestedScroll(SheetScrollGuard), content = content) }
+        content = {
+            val guard = remember { SheetScrollGuard() }
+            Column(Modifier.nestedScroll(guard), content = content)
+        }
     )
 }
 

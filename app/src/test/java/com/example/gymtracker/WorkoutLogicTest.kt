@@ -59,6 +59,32 @@ class WorkoutLogicTest {
     }
 
     @Test
+    fun finishedWorkout_keepsOnlyTickedSets() {
+        val exercises = listOf(
+            ExerciseEntry("Bench", sets = listOf(set("60", "8"), set("60", "8", done = false), set("60", "8", done = false))),
+            ExerciseEntry("Row", sets = listOf(set("50", "10", done = false), set("50", "10", done = false)))
+        )
+        assertEquals(1, computeWorkoutStats(performedExercises(exercises), emptyList()).workSets)
+        val saved = buildCompletedWorkout(workout(5, "Push"), exercises, emptyList())
+        assertEquals(listOf("Bench"), saved.exercises.map { it.name })
+        assertEquals(1, saved.exercises.single().sets.size)
+        assertEquals(listOf("Row"), saved.skippedExercises) // nothing ticked: not done
+        assertEquals(60 * 8, saved.totalVolumeKg)
+    }
+
+    @Test
+    fun finishedWorkout_withNothingTickedKeepsEverything() {
+        val exercises = listOf(ExerciseEntry("Bench", sets = listOf(set("60", "8", done = false), set("60", "8", done = false))))
+        assertEquals(2, buildCompletedWorkout(workout(5, "Push"), exercises, emptyList()).exercises.single().sets.size)
+    }
+
+    @Test
+    fun editedWorkout_keepsUntickedSets() {
+        val exercises = listOf(ExerciseEntry("Bench", sets = listOf(set("60", "8"), set("60", "8", done = false))))
+        assertEquals(2, buildCompletedWorkout(workout(5, "Push"), exercises, emptyList(), editing = true).exercises.single().sets.size)
+    }
+
+    @Test
     fun computeWorkoutStats_detectsPrAgainstHistory() {
         val history = listOf(workout(1, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "9")))))
         val today = listOf(ExerciseEntry("Bench", sets = listOf(set("62.5", "8"), set("55", "8"))))

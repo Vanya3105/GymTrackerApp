@@ -1363,11 +1363,13 @@ private fun FinishSheet(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val stats = remember(exercises, history) { computeWorkoutStats(exercises, history) }
+    // Counted like the saved workout will be: the ticked sets only (an edit keeps every set).
+    val counted = remember(exercises, isEditing) { if (isEditing) exercises.filter { !it.isSkipped } else performedExercises(exercises) }
+    val stats = remember(counted, history) { computeWorkoutStats(counted, history) }
     // Each exercise's best new record, judged like the "New bests" count.
     val byExercise = remember(history) { historyByExercise(history) }
-    val bests = remember(exercises, history) {
-        exercises.filter { !it.isSkipped }.mapNotNull { ex ->
+    val bests = remember(counted, history) {
+        counted.mapNotNull { ex ->
             val records = computeExerciseRecords(ex.name, byExercise[ignoreCaseKey(ex.name)].orEmpty())
             bestSetOf(ex.sets.filter { isSetPersonalRecord(it, records, ex.type) }, ex.type)?.let { ex to it }
         }

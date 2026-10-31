@@ -165,6 +165,20 @@ data class WorkoutStats(
     val prCount: Int
 )
 
+/**
+ * What a finished workout keeps: the ticked sets of each exercise that wasn't skipped. Sets come
+ * pre-filled with suggestions, so an unticked one wasn't done. With nothing ticked at all every set
+ * is kept, so a workout logged without ticking still saves.
+ */
+fun performedExercises(exercises: List<ExerciseEntry>): List<ExerciseEntry> {
+    val kept = exercises.filter { !it.isSkipped }
+    if (kept.none { ex -> ex.sets.any { it.isCompleted } }) return kept
+    return kept.mapNotNull { ex ->
+        val done = ex.sets.filter { it.isCompleted }
+        if (done.isEmpty()) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+    }
+}
+
 fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): WorkoutStats {
     var workSets = 0
     var volume = 0f
