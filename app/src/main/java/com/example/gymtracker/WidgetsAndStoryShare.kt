@@ -24,6 +24,8 @@ import com.example.gymtracker.watchlink.WatchExercise
 import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.ContextCompat
+import java.util.Calendar
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -250,35 +252,60 @@ fun buildWorkoutWidgetViews(
     val primary = p.textPrimary.toArgb()
     val secondary = p.textSecondary.toArgb()
     val accent = p.accentPrimary.toArgb()
+    val onAccent = p.onAccentPrimary.toArgb()
     val info = p.accentSecondary.toArgb()
-    val control = (if (settings.style == WIDGET_STYLE_TINTED) p.bgCard else p.bgControl).toArgb()
+    val tinted = settings.style == WIDGET_STYLE_TINTED
+    val control = (if (tinted) p.bgCard else p.bgControl).toArgb()
 
     views.setInt(R.id.widget_bg_image, "setColorFilter", widgetBackground(p, settings))
     views.setInt(R.id.widget_bg_image, "setImageAlpha", if (forLockScreen) 255 else alpha255(settings.opacityPercent))
-    listOf(R.id.widget_weight_pill_bg, R.id.widget_reps_pill_bg, R.id.widget_badge_bg).forEach {
-        views.setInt(it, "setColorFilter", control)
-    }
+    views.setInt(R.id.widget_tile_bg, "setColorFilter", (if (tinted) p.bgCard else p.accentSoft).toArgb())
+    views.setInt(R.id.widget_tile_icon, "setColorFilter", accent)
+    listOf(R.id.widget_weight_pill_bg, R.id.widget_reps_pill_bg).forEach { views.setInt(it, "setColorFilter", control) }
     views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accent)
-    views.setInt(R.id.widget_done_icon, "setColorFilter", p.onAccentPrimary.toArgb())
+    views.setInt(R.id.widget_done_icon, "setColorFilter", onAccent)
+    views.setInt(R.id.widget_action_bg, "setColorFilter", accent)
+    views.setInt(R.id.widget_action_icon, "setColorFilter", onAccent)
+    views.setTextColor(R.id.widget_action_text, onAccent)
     views.setInt(R.id.widget_btn_weight_minus, "setColorFilter", secondary)
     views.setInt(R.id.widget_btn_reps_minus, "setColorFilter", secondary)
     views.setInt(R.id.widget_btn_weight_plus, "setColorFilter", accent)
     views.setInt(R.id.widget_btn_reps_plus, "setColorFilter", accent)
     views.setTextColor(R.id.widget_split_title, primary)
     views.setTextColor(R.id.widget_subtitle, secondary)
+    views.setTextColor(R.id.widget_header_value, secondary)
     views.setTextColor(R.id.widget_weight_value, primary)
     views.setTextColor(R.id.widget_reps_value, primary)
-    views.setTextColor(R.id.widget_action_badge, accent)
     views.setTextColor(R.id.widget_rest_chronometer, info)
+    // A narrow widget has room for a two-line title but not for the +/- boxes.
+    views.setInt(R.id.widget_split_title, "setMaxLines", if (compact) 2 else 1)
 
-    val showControls = WIDGET_OPTION_CONTROLS in settings.options || forLockScreen
+    val showControls = (WIDGET_OPTION_CONTROLS in settings.options || forLockScreen) && !compact
     val live = readLiveSession(context)
+    val openApp = openAppPendingIntent(context, 0)
 
     fun status(text: String, color: Int) {
         views.setTextViewText(R.id.widget_status_label, text)
         views.setTextColor(R.id.widget_status_label, color)
-        views.setInt(R.id.widget_status_dot, "setColorFilter", color)
     }
+    fun subtitle(text: String?) {
+        views.setTextViewText(R.id.widget_subtitle, text.orEmpty())
+        views.setViewVisibility(R.id.widget_subtitle, if (text.isNullOrBlank()) View.GONE else View.VISIBLE)
+    }
+    fun headerValue(text: String?) {
+        views.setTextViewText(R.id.widget_header_value, text.orEmpty())
+        views.setViewVisibility(R.id.widget_header_value, if (text.isNullOrBlank()) View.GONE else View.VISIBLE)
+    }
+    /** The one button at the bottom; a null [text] hides it. */
+    fun action(text: String?, icon: Int = R.drawable.ic_widget_play, onTap: PendingIntent = openApp) {
+        views.setViewVisibility(R.id.widget_action_button, if (text == null) View.GONE else View.VISIBLE)
+        if (text == null) return
+        views.setTextViewText(R.id.widget_action_text, text)
+        views.setImageViewResource(R.id.widget_action_icon, icon)
+        views.setOnClickPendingIntent(R.id.widget_action_button, onTap)
+    }
+    views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
+    views.setViewVisibility(R.id.widget_controls_row, View.GONE)
 
     if (live != null) {
         val next = live.nextSet
@@ -292,16 +319,18 @@ fun buildWorkoutWidgetViews(
                 if (live.isResting) info else accent
             )
             views.setTextViewText(R.id.widget_split_title, shown(next.exerciseName))
-            views.setTextViewText(
-                R.id.widget_subtitle,
-                if (live.isResting) tr("Next: {0}", next.summary)
-                else tr("{0} sets left today", live.totalSetsLeft)
-            )
-            views.setViewVisibility(R.id.widget_subtitle, if (compact && !live.isResting && showControls) View.GONE else View.VISIBLE)
-
-            val controlsVisible = showControls && !live.isResting
-            views.setViewVisibility(R.id.widget_controls_row, if (controlsVisible) View.VISIBLE else View.GONE)
-            if (controlsVisible) {
+            if (live.isResting) {
+                headerValue(null)
+                views.setViewVisibility(R.id.widget_rest_chronometer, View.VISIBLE)
+                views.setChronometerCountDown(R.id.widget_rest_chronometer, true)
+                views.setChronometer(R.id.widget_rest_chronometer, SystemClock.elapsedRealtime() + live.restRemainingMillis, "%s", true)
+                subtitle(tr("Next: {0}", next.summary))
+                action(null)
+            } else if (showControls) {
+                headerValue(tr("{0} left", live.totalSetsLeft))
+                subtitle(null)
+                action(null)
+                views.setViewVisibility(R.id.widget_controls_row, View.VISIBLE)
                 views.setTextViewText(R.id.widget_weight_value, next.primary)
                 views.setViewVisibility(R.id.widget_reps_group, if (next.secondary != null) View.VISIBLE else View.GONE)
                 next.secondary?.let { views.setTextViewText(R.id.widget_reps_value, it) }
@@ -314,43 +343,30 @@ fun buildWorkoutWidgetViews(
                 ).forEachIndexed { i, (viewId, action) ->
                     views.setOnClickPendingIntent(viewId, widgetActionPendingIntent(context, action, requestCodeBase + i))
                 }
+            } else {
+                // No room (or no wish) for the +/- boxes: the set as text and one big Done.
+                headerValue(if (compact) null else tr("{0} left", live.totalSetsLeft))
+                subtitle(next.summary)
+                action(tr("Done"), R.drawable.ic_widget_check, widgetActionPendingIntent(context, GymWidgetProvider.ACTION_COMPLETE_SET, requestCodeBase + 4))
             }
         } else {
             status(tr("{0} · done", shown(live.splitName)), p.successText.toArgb())
+            headerValue(null)
             views.setTextViewText(R.id.widget_split_title, tr("All sets done"))
-            views.setTextViewText(R.id.widget_subtitle, tr("Open the app to save your workout"))
-            views.setViewVisibility(R.id.widget_controls_row, View.GONE)
-        }
-
-        if (live.isResting) {
-            views.setViewVisibility(R.id.widget_rest_chronometer, View.VISIBLE)
-            views.setViewVisibility(R.id.widget_badge_container, View.GONE)
-            views.setChronometerCountDown(R.id.widget_rest_chronometer, true)
-            views.setChronometer(R.id.widget_rest_chronometer, SystemClock.elapsedRealtime() + live.restRemainingMillis, "%s", true)
-        } else {
-            views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
-            views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
-            views.setTextViewText(R.id.widget_action_badge, tr("Open"))
+            subtitle(tr("Open the app to save your workout"))
+            action(tr("Open"))
         }
     } else {
         val profile = LocalStorage.loadUserProfile(context)
         val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
         val split = programFor(profile.splitProgram).splits.find { it.title == week.recommendedSplit }
         status(tr("Up next"), accent)
+        headerValue(if (WIDGET_OPTION_WEEKLY in settings.options) "${week.completedCoreSplits.size}/${week.weeklyGoal}" else null)
         views.setTextViewText(R.id.widget_split_title, shown(week.recommendedSplit))
-        views.setTextViewText(
-            R.id.widget_subtitle,
-            if (WIDGET_OPTION_WEEKLY in settings.options) tr("{0} of {1} done this week", week.completedCoreSplits.size, week.weeklyGoal)
-            else split?.subtitle.orEmpty()
-        )
-        views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
-        views.setViewVisibility(R.id.widget_controls_row, View.GONE)
-        views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
-        views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
-        views.setTextViewText(R.id.widget_action_badge, tr("Start"))
+        subtitle(split?.subtitle?.let(::shown))
+        action(tr("Start workout"))
     }
 
-    val openApp = openAppPendingIntent(context, 0)
     views.setOnClickPendingIntent(R.id.widget_header_click_area, openApp)
     if (live == null) views.setOnClickPendingIntent(R.id.widget_root, openApp)
     return views
@@ -599,6 +615,40 @@ private fun drawWidgetCard(canvas: Canvas, context: Context, settings: WidgetSet
     return p
 }
 
+/** Left-to-right positions turned around for Hebrew, so the canvas widgets read right to left too. */
+private class Sides(val w: Float) {
+    val rtl = hebrewOn()
+    fun x(fromStart: Float) = if (rtl) w - fromStart else fromStart
+    fun start(paint: Paint) = paint.apply { textAlign = if (rtl) Paint.Align.RIGHT else Paint.Align.LEFT }
+    fun end(paint: Paint) = paint.apply { textAlign = if (rtl) Paint.Align.LEFT else Paint.Align.RIGHT }
+}
+
+/**
+ * The header every widget shares (same as the workout widget's): an icon on a small accent tile,
+ * a label in the accent, and an optional value at the far end. Returns where the body starts.
+ */
+private fun drawWidgetHeader(canvas: Canvas, context: Context, p: GymPalette, settings: WidgetSettings, sides: Sides, pad: Float, s: Float, label: String, value: String?): Float {
+    val tile = 20 * s
+    val tileStart = sides.x(pad)
+    val left = if (sides.rtl) tileStart - tile else tileStart
+    val tinted = settings.style == WIDGET_STYLE_TINTED
+    canvas.drawRoundRect(RectF(left, pad, left + tile, pad + tile), 6 * s, 6 * s, fillPaint((if (tinted) p.bgCard else p.accentSoft).toArgb()))
+    ContextCompat.getDrawable(context, R.drawable.ic_stat_workout)?.mutate()?.let { icon ->
+        val inset = (4 * s).roundToInt()
+        icon.setBounds(left.roundToInt() + inset, pad.roundToInt() + inset, (left + tile).roundToInt() - inset, (pad + tile).roundToInt() - inset)
+        icon.setTint(p.accentPrimary.toArgb())
+        icon.draw(canvas)
+    }
+    val baseline = pad + tile / 2 + 4.3f * s
+    val valueWidth = value?.let { textPaint(0, 12 * s).measureText(it) + 10 * s } ?: 0f
+    val labelPaint = sides.start(textPaint(p.accentPrimary.toArgb(), 12 * s))
+    canvas.drawText(labelPaint.ellipsize(label, sides.w - pad * 2 - tile - 8 * s - valueWidth), sides.x(pad + tile + 8 * s), baseline, labelPaint)
+    if (value != null) {
+        canvas.drawText(value, sides.x(sides.w - pad), baseline, sides.end(textPaint(p.textSecondary.toArgb(), 12 * s)))
+    }
+    return pad + tile
+}
+
 class MuscleFatigueWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -621,6 +671,10 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
             pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 301)
         }
 
+        /**
+         * The least rested muscles first, as rows of name, percent and a bar, in as many columns
+         * and rows as the widget's size allows.
+         */
         fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
             val s = bitmapScale(context, wDp, hDp)
             val w = wDp * s
@@ -628,58 +682,63 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
             val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             val p = drawWidgetCard(canvas, context, settings, w, h, s)
+            val sides = Sides(w)
+            val pad = 16 * s
 
             val all = computeMuscleRecoveryStatus(LocalStorage.loadHistory(context))
             val ready = all.count { it.status == RecoveryStatus.READY }
-            val pad = 16 * s
-            // As many of the least rested groups as fit at ~56 dp a column.
-            val fit = ((w - pad * 2) / (56 * s)).toInt().coerceIn(3, all.size)
-            val items = all.sortedBy { it.recoveryPercent }.take(fit)
-
-            canvas.drawText(tr("Recovery"), pad, pad + 14 * s, textPaint(p.textPrimary.toArgb(), 15 * s))
-            canvas.drawText(
-                if (ready == all.size) tr("All rested") else tr("{0} of {1} rested", ready, all.size),
-                w - pad, pad + 14 * s,
-                textPaint(p.textSecondary.toArgb(), 12 * s, REGULAR, Paint.Align.RIGHT)
-            )
+            val bodyTop = drawWidgetHeader(
+                canvas, context, p, settings, sides, pad, s, tr("Recovery"),
+                when {
+                    ready == all.size -> tr("All rested")
+                    wDp < 230 -> "$ready/${all.size}"
+                    else -> tr("{0} of {1} rested", ready, all.size)
+                }
+            ) + 12 * s
 
             val showSets = "sets" in settings.options
             val showHours = "hours" in settings.options
-            val colW = (w - pad * 2) / items.size
-            val textRows = (if (showSets) 1 else 0) + (if (showHours) 1 else 0)
-            val textBlock = (18 + textRows * 15) * s
-            val areaTop = pad + 30 * s
-            val ringD = min(colW - 10 * s, h - areaTop - pad - textBlock).coerceAtLeast(16 * s)
-            // Center the rings + labels in the space under the header.
-            val top = areaTop + ((h - areaTop - pad) - (ringD + textBlock)).coerceAtLeast(0f) / 2
-            val stroke = (ringD * 0.11f).coerceIn(3 * s, 6 * s)
+            val cols = when {
+                wDp >= 380 -> 3
+                wDp >= 230 -> 2
+                else -> 1
+            }
+            val gap = 20 * s
+            val cellW = (w - pad * 2 - gap * (cols - 1)) / cols
+            val cellH = (if (showSets || showHours) 40 else 29) * s
+            val rows = ((h - bodyTop - pad + 6 * s) / cellH).toInt().coerceAtLeast(1)
+            val items = all.sortedBy { it.recoveryPercent }.take(rows * cols)
 
             items.forEachIndexed { i, item ->
-                val cx = pad + colW * i + colW / 2
-                val cy = top + ringD / 2
+                val start = pad + (i % cols) * (cellW + gap)
+                val top = bodyTop + (i / cols) * cellH
                 val color = when (item.status) {
                     RecoveryStatus.TIRED -> p.dangerText
                     RecoveryStatus.RECOVERING -> p.warningText
                     RecoveryStatus.READY -> p.successText
                 }.toArgb()
-                val r = ringD / 2 - stroke / 2
-                val arc = RectF(cx - r, cy - r, cx + r, cy + r)
-                canvas.drawArc(arc, 0f, 360f, false, strokePaint(p.bgControl.toArgb(), stroke))
-                canvas.drawArc(arc, -90f, 360f * item.recoveryPercent / 100f, false, strokePaint(color, stroke))
-                val pctPaint = textPaint(p.textPrimary.toArgb(), (ringD * 0.26f).coerceAtMost(15 * s), MEDIUM, Paint.Align.CENTER)
-                canvas.drawText("${item.recoveryPercent}", cx, cy + pctPaint.textSize * 0.35f, pctPaint)
+                val baseline = top + 11 * s
+                val pct = "${item.recoveryPercent}%"
+                val pctPaint = sides.end(textPaint(color, 12 * s, BOLD))
+                canvas.drawText(pct, sides.x(start + cellW), baseline, pctPaint)
+                val namePaint = sides.start(textPaint(p.textPrimary.toArgb(), 12 * s))
+                canvas.drawText(namePaint.ellipsize(recoveryLabel(item.muscleGroup), cellW - pctPaint.measureText(pct) - 6 * s), sides.x(start), baseline, namePaint)
 
-                var y = top + ringD + 16 * s
-                canvas.drawText(recoveryLabel(item.muscleGroup), cx, y, textPaint(p.textPrimary.toArgb(), 11.5f * s, MEDIUM, Paint.Align.CENTER))
-                if (showSets) {
-                    y += 15 * s
-                    val inTarget = item.weeklyWorkingSets in WEEKLY_SET_TARGET
-                    canvas.drawText(tr("{0} sets", item.weeklyWorkingSets), cx, y, textPaint((if (inTarget) p.successText else p.textSecondary).toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
-                }
-                if (showHours) {
-                    y += 15 * s
-                    val label = item.hoursSinceTrained?.let { if (it < 1) tr("Just now") else if (it < 48) tr("{0}h ago", it) else tr("{0}d ago", it / 24) } ?: tr("Not yet")
-                    canvas.drawText(label, cx, y, textPaint(p.textTertiary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
+                val barTop = baseline + 6 * s
+                val barH = 5 * s
+                val track = RectF(sides.x(start).let { if (sides.rtl) it - cellW else it }, barTop, 0f, barTop + barH).apply { right = left + cellW }
+                canvas.drawRoundRect(track, barH / 2, barH / 2, fillPaint(p.bgControl.toArgb()))
+                val filled = (cellW * item.recoveryPercent / 100f).coerceAtLeast(barH)
+                val fill = if (sides.rtl) RectF(track.right - filled, track.top, track.right, track.bottom) else RectF(track.left, track.top, track.left + filled, track.bottom)
+                canvas.drawRoundRect(fill, barH / 2, barH / 2, fillPaint(color))
+
+                if (showSets || showHours) {
+                    val details = listOfNotNull(
+                        if (showSets) tr("{0} sets", item.weeklyWorkingSets) else null,
+                        if (showHours) item.hoursSinceTrained?.let { if (it < 1) tr("Just now") else if (it < 48) tr("{0}h ago", it) else tr("{0}d ago", it / 24) } ?: tr("Not yet") else null
+                    ).joinToString(" · ")
+                    val detailPaint = sides.start(textPaint(p.textTertiary.toArgb(), 10.5f * s, REGULAR))
+                    canvas.drawText(detailPaint.ellipsize(details, cellW), sides.x(start), barTop + barH + 13 * s, detailPaint)
                 }
             }
             return bmp
@@ -709,6 +768,10 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 302)
         }
 
+        /**
+         * This week's workouts against the goal as a ring, the days trained as a strip (as on
+         * Today), and what's next. Square sizes stack them; wide sizes put the ring beside the rest.
+         */
         fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
             val s = bitmapScale(context, wDp, hDp)
             val w = wDp * s
@@ -716,42 +779,84 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             val p = drawWidgetCard(canvas, context, settings, w, h, s)
+            val sides = Sides(w)
+            val pad = 16 * s
 
             val profile = LocalStorage.loadUserProfile(context)
             val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
             val done = week.completedCoreSplits.size
             val goal = week.weeklyGoal.coerceAtLeast(1)
-            val showVolume = "volume" in settings.options
-            val showNext = "next" in settings.options
-            val pad = 14 * s
+            val volume = if ("volume" in settings.options) formatVolume(week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }) else null
+            val next = if ("next" in settings.options && done < goal) tr("Next: {0}", shown(week.recommendedSplit)) else null
+            // A narrow widget has no room for the volume next to the label; it goes under the ring.
+            val narrow = wDp < 230
+            val bodyTop = drawWidgetHeader(canvas, context, p, settings, sides, pad, s, tr("This week"), volume.takeIf { !narrow }) + 10 * s
 
-            canvas.drawText(tr("This week"), pad, pad + 13 * s, textPaint(p.textPrimary.toArgb(), 14 * s))
+            val trainedDays = week.workouts.map { Calendar.getInstance().apply { timeInMillis = it.id }.get(Calendar.DAY_OF_WEEK) }.toSet()
+            val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+            val stripH = 28 * s
 
-            val footerLines = (if (showNext) 1 else 0) + (if (showVolume) 1 else 0)
-            val footerH = footerLines * 16 * s + if (footerLines > 0) 6 * s else 0f
-            val areaTop = pad + 24 * s
-            val areaBottom = h - pad - footerH
-            val d = min(w - pad * 2, areaBottom - areaTop).coerceAtLeast(24 * s)
-            val cx = w / 2
-            val cy = areaTop + (areaBottom - areaTop) / 2
-            val stroke = (d * 0.1f).coerceIn(5 * s, 12 * s)
-            val r = d / 2 - stroke / 2
-            val arc = RectF(cx - r, cy - r, cx + r, cy + r)
-            canvas.drawArc(arc, 0f, 360f, false, strokePaint(p.bgControl.toArgb(), stroke))
-            if (done > 0) canvas.drawArc(arc, -90f, 360f * (done.toFloat() / goal).coerceAtMost(1f), false, strokePaint(p.accentPrimary.toArgb(), stroke))
-            val big = textPaint(p.textPrimary.toArgb(), d * 0.26f, BOLD, Paint.Align.CENTER)
-            canvas.drawText("$done/$goal", cx, cy + big.textSize * 0.2f, big)
-            canvas.drawText(tr("workouts"), cx, cy + big.textSize * 0.2f + 13 * s, textPaint(p.textSecondary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
-
-            var y = h - pad - footerH + 16 * s
-            if (showNext) {
-                val nextText = tr("Next: {0}", shown(week.recommendedSplit))
-                canvas.drawText(nextText, cx, y, textPaint(p.accentPrimary.toArgb(), 12 * s, MEDIUM, Paint.Align.CENTER).fitTo(nextText, w - pad * 2))
-                y += 16 * s
+            fun ring(cx: Float, cy: Float, d: Float) {
+                val stroke = (d * 0.11f).coerceIn(5 * s, 11 * s)
+                val r = d / 2 - stroke / 2
+                val arc = RectF(cx - r, cy - r, cx + r, cy + r)
+                canvas.drawArc(arc, 0f, 360f, false, strokePaint(p.bgControl.toArgb(), stroke))
+                val sweep = 360f * (done.toFloat() / goal).coerceAtMost(1f)
+                if (done > 0) canvas.drawArc(arc, -90f, if (sides.rtl) -sweep else sweep, false, strokePaint(p.accentPrimary.toArgb(), stroke))
+                // The count large and the goal small, as on Today.
+                val big = textPaint(p.textPrimary.toArgb(), d * 0.34f, BOLD)
+                val small = textPaint(p.textTertiary.toArgb(), d * 0.17f, MEDIUM)
+                val goalText = "/$goal"
+                val total = big.measureText("$done") + small.measureText(goalText)
+                val x0 = cx - total / 2
+                val y = cy + big.textSize * 0.35f
+                canvas.drawText("$done", x0, y, big)
+                canvas.drawText(goalText, x0 + big.measureText("$done"), y, small)
             }
-            if (showVolume) {
-                val vol = week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }
-                canvas.drawText(formatVolume(vol) + tr(" lifted"), cx, y, textPaint(p.textSecondary.toArgb(), 11 * s, REGULAR, Paint.Align.CENTER))
+
+            fun strip(start: Float, width: Float, top: Float) {
+                val col = width / 7
+                weekdayLetters().forEachIndexed { i, letter ->
+                    val day = i + 1 // Calendar.SUNDAY == 1
+                    val cx = sides.x(start + col * i + col / 2)
+                    val isToday = day == today
+                    val letterPaint = textPaint((if (isToday) p.textPrimary else p.textTertiary).toArgb(), 10 * s, if (isToday) BOLD else REGULAR, Paint.Align.CENTER)
+                    canvas.drawText(letter, cx, top + 10 * s, letterPaint)
+                    val cy = top + 20 * s
+                    when {
+                        day in trainedDays -> canvas.drawCircle(cx, cy, 4.5f * s, fillPaint(p.accentPrimary.toArgb()))
+                        isToday -> canvas.drawCircle(cx, cy, 4f * s, strokePaint(p.accentPrimary.toArgb(), 1.5f * s))
+                        else -> canvas.drawCircle(cx, cy, 2.5f * s, fillPaint(p.borderStrong.toArgb()))
+                    }
+                }
+            }
+
+            if (wDp >= hDp * 1.4f) {
+                // Wide: the ring at the start, next workout and the days beside it.
+                val d = (h - bodyTop - pad).coerceAtLeast(30 * s)
+                ring(sides.x(pad + d / 2), bodyTop + d / 2, d)
+                val restStart = pad + d + 18 * s
+                val restW = w - restStart - pad
+                strip(restStart, restW, h - pad - stripH)
+                next?.let {
+                    val paint = sides.start(textPaint(p.textPrimary.toArgb(), 15 * s, BOLD))
+                    canvas.drawText(paint.ellipsize(it, restW), sides.x(restStart), bodyTop + 18 * s, paint)
+                }
+            } else {
+                var lines = listOfNotNull(
+                    next?.let { it to p.accentPrimary },
+                    volume.takeIf { narrow }?.let { tr("{0} lifted", it) to p.textSecondary }
+                )
+                fun ringSize() = min(w - pad * 2, h - bodyTop - pad - stripH - lines.size * 16 * s - 6 * s)
+                // The ring matters most: drop the volume line before the ring gets small.
+                if (ringSize() < 64 * s && lines.size > 1) lines = lines.take(1)
+                val d = ringSize().coerceAtLeast(24 * s)
+                ring(w / 2, bodyTop + d / 2, d)
+                lines.forEachIndexed { i, (text, color) ->
+                    val paint = textPaint(color.toArgb(), 12 * s, if (i == 0 && next != null) MEDIUM else REGULAR, Paint.Align.CENTER)
+                    canvas.drawText(paint.ellipsize(text, w - pad * 2), w / 2, bodyTop + d + 16 * s + i * 16 * s, paint)
+                }
+                strip(pad, w - pad * 2, h - pad - stripH + 4 * s)
             }
             return bmp
         }

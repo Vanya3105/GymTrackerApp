@@ -9,7 +9,7 @@ package com.example.gymtracker
  */
 internal object HebrewText {
     private val ui: Map<String, String> by lazy {
-        HashMap<String, String>(1426).apply { ui1(this); ui2(this); ui3(this) }
+        HashMap<String, String>(1430).apply { ui1(this); ui2(this); ui3(this) }
     }
     private val names: Map<String, String> by lazy {
         HashMap<String, String>(854).apply { names1(this); names2(this) }
@@ -698,6 +698,8 @@ internal object HebrewText {
         m["{0} for {1} {2}. Stay there and add a rep; move up once every set hits {3}."] = "{0} ל-{1} {2}. הישארו שם והוסיפו חזרה; עלו כשכל סט מגיע ל-{3}."
         m["{0} in progress"] = "{0} בתהליך"
         m["{0} in total"] = "{0} בסך הכול"
+        m["{0} left"] = "נשארו {0}"
+        m["{0} lifted"] = "{0} הורמו"
         m["{0} min"] = "{0} דק׳"
         m["{0} new bests!"] = "{0} שיאים חדשים!"
         m["{0} of them are already here and stay as they are."] = "{0} מהם כבר כאן ונשארים כמו שהם."
@@ -724,11 +726,11 @@ internal object HebrewText {
         m["{0} workouts planned · {1}"] = "{0} אימונים מתוכננים · {1}"
         m["{0} workouts · {1} sets · "] = "{0} אימונים · {1} סטים · "
         m["{0} {1}% vs last {2}"] = "{0} {1}% לעומת {2} הקודם"
-        m["{0} · done"] = "{0} · הושלם"
-        m["{0} · your {1} workout"] = "{0} · האימון ה-{1} שלכם"
     }
 
     private fun ui3(m: HashMap<String, String>) {
+        m["{0} · done"] = "{0} · הושלם"
+        m["{0} · your {1} workout"] = "{0} · האימון ה-{1} שלכם"
         m["{0} · {1} of {2} sets"] = "{0} · {1} מתוך {2} סטים"
         m["{0} · {1} sets left"] = "{0} · נשארו {1} סטים"
         m["{0}% less volume than your last {1}"] = "{0}% פחות נפח מאשר ב-{1} הקודם"
