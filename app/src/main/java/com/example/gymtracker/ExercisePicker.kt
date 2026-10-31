@@ -55,7 +55,7 @@ fun ExercisePickerSheet(
     onCreateCustom: (String, ExerciseType) -> Unit,
     onDismiss: () -> Unit,
     /** Shown under exercises that are already in the list being edited. */
-    addedLabel: String = "In this workout"
+    addedLabel: String = tr("In this workout")
 ) {
     val P = LocalPalette.current
     val focus = LocalFocusManager.current
@@ -74,9 +74,9 @@ fun ExercisePickerSheet(
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Add exercise", style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))
+                Text(tr("Add exercise"), style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))
                 Text(
-                    "Done",
+                    tr("Done"),
                     style = AppType.label,
                     color = P.accentPrimary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onDismiss).padding(8.dp)
@@ -98,7 +98,7 @@ fun ExercisePickerSheet(
                 Icon(Icons.Rounded.Search, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text("Search exercises", style = AppType.body, color = P.textTertiary)
+                    if (query.isEmpty()) Text(tr("Search exercises"), style = AppType.body, color = P.textTertiary)
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -111,7 +111,7 @@ fun ExercisePickerSheet(
                     )
                 }
                 if (query.isNotEmpty()) {
-                    CircleIconButton(Icons.Rounded.Close, "Clear search", { query = "" }, size = 28.dp, container = Color.Transparent, tint = P.textSecondary)
+                    CircleIconButton(Icons.Rounded.Close, tr("Clear search"), { query = "" }, size = 28.dp, container = Color.Transparent, tint = P.textSecondary)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -123,7 +123,7 @@ fun ExercisePickerSheet(
                     val bg by animateColorAsState(if (selected) P.textPrimary else P.bgControl, label = "filter_bg")
                     val fg by animateColorAsState(if (selected) P.bgPrimary else P.textSecondary, label = "filter_fg")
                     Text(
-                        group ?: "All",
+                        group ?: tr("All"),
                         style = AppType.label,
                         color = fg,
                         modifier = Modifier
@@ -164,7 +164,7 @@ fun ExercisePickerSheet(
                                 if (added) {
                                     SecondaryButton(addedLabel, {}, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check, enabled = false)
                                 } else {
-                                    PrimaryButton("Add", { onPick(info); open = null }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add, height = 48.dp)
+                                    PrimaryButton(tr("Add"), { onPick(info); open = null }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add, height = 48.dp)
                                 }
                             }
                         }
@@ -173,8 +173,8 @@ fun ExercisePickerSheet(
                 if (canCreate) {
                     item(key = "create") {
                         PickerRow(
-                            title = "Create \"$trimmed\"",
-                            subtitle = "Add your own exercise",
+                            title = tr("Create \"{0}\"", trimmed),
+                            subtitle = tr("Add your own exercise"),
                             added = false,
                             leadingAccent = true,
                             onClick = { pendingCustom = trimmed }
@@ -182,7 +182,7 @@ fun ExercisePickerSheet(
                     }
                 }
                 if (results.isEmpty() && !canCreate) {
-                    item { EmptyState(Icons.Rounded.Search, "No matches", "Try a different word, like \"row\" or \"cable\".") }
+                    item { EmptyState(Icons.Rounded.Search, tr("No matches"), tr("Try a different word, like \"row\" or \"cable\".")) }
                 }
             }
         }
@@ -192,7 +192,7 @@ fun ExercisePickerSheet(
         AlertDialog(
             onDismissRequest = { pendingCustom = null },
             containerColor = P.bgElevated,
-            title = { Text("How do you log $name?", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("How do you log {0}?", name), style = AppType.headline, color = P.textPrimary) },
             text = {
                 ExerciseTypeOptions(selected = null) { type ->
                     onCreateCustom(name, type)
@@ -201,7 +201,7 @@ fun ExercisePickerSheet(
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { pendingCustom = null }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+            dismissButton = { TextButton(onClick = { pendingCustom = null }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 }
@@ -224,7 +224,7 @@ fun ExerciseTypeOptions(selected: ExerciseType?, onPick: (ExerciseType) -> Unit)
                     Text(type.label, style = AppType.bodyStrong, color = if (type == selected) P.accentPrimary else P.textPrimary)
                     Text(type.example, style = AppType.caption, color = P.textSecondary)
                 }
-                if (type == selected) Icon(Icons.Rounded.Check, "Current", tint = P.accentPrimary, modifier = Modifier.size(20.dp))
+                if (type == selected) Icon(Icons.Rounded.Check, tr("Current"), tint = P.accentPrimary, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -248,16 +248,16 @@ fun ExerciseTypeRow(current: ExerciseType, onChange: (ExerciseType) -> Unit, mod
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Logged as", style = AppType.caption, color = P.textSecondary)
+            Text(tr("Logged as"), style = AppType.caption, color = P.textSecondary)
             Text(current.label, style = AppType.bodyStrong, color = P.textPrimary)
         }
-        Icon(Icons.Rounded.UnfoldMore, "Change", tint = P.textSecondary, modifier = Modifier.size(20.dp))
+        Icon(Icons.Rounded.UnfoldMore, tr("Change"), tint = P.textSecondary, modifier = Modifier.size(20.dp))
     }
     if (choosing) {
         AlertDialog(
             onDismissRequest = { choosing = false },
             containerColor = P.bgElevated,
-            title = { Text("Log this exercise as", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Log this exercise as"), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Column {
                     ExerciseTypeOptions(selected = current) { type ->
@@ -266,14 +266,14 @@ fun ExerciseTypeRow(current: ExerciseType, onChange: (ExerciseType) -> Unit, mod
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Numbers you've already logged are kept. Switch back any time to see them again.",
+                        tr("Numbers you've already logged are kept. Switch back any time to see them again."),
                         style = AppType.caption,
                         color = P.textTertiary
                     )
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { choosing = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+            dismissButton = { TextButton(onClick = { choosing = false }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 }
@@ -337,7 +337,7 @@ private fun PickerRow(
                     ) {
                         Icon(
                             if (isAdded) Icons.Rounded.Check else Icons.Rounded.Add,
-                            contentDescription = if (isAdded) "Added" else "Add",
+                            contentDescription = if (isAdded) tr("Added") else tr("Add"),
                             tint = if (isAdded) P.successText else P.accentPrimary,
                             modifier = Modifier.size(18.dp)
                         )

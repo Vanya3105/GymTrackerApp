@@ -45,7 +45,7 @@ fun MuscleMap(loads: FloatArray, modifier: Modifier = Modifier) {
                     val s = size.width / 100f
                     drawFigure(front, s, ::fill, bone)
                 }
-                Text(if (front) "Front" else "Back", style = AppType.caption, color = P.textTertiary)
+                Text(if (front) tr("Front") else tr("Back"), style = AppType.caption, color = P.textTertiary)
             }
         }
     }

@@ -181,10 +181,10 @@ class Haptics(private val enabled: Boolean, private val view: android.view.View)
 
 /** [icon] is shown when selected, [idleIcon] (outlined) otherwise. */
 enum class AppTab(val label: String, val icon: ImageVector, val idleIcon: ImageVector) {
-    TODAY("Today", AppIcons.TodayFilled, AppIcons.Today),
-    HISTORY("History", AppIcons.HistoryFilled, AppIcons.History),
-    PROGRESS("Progress", AppIcons.ProgressFilled, AppIcons.Progress),
-    PROFILE("Profile", AppIcons.ProfileFilled, AppIcons.Profile)
+    TODAY(tr("Today"), AppIcons.TodayFilled, AppIcons.Today),
+    HISTORY(tr("History"), AppIcons.HistoryFilled, AppIcons.History),
+    PROGRESS(tr("Progress"), AppIcons.ProgressFilled, AppIcons.Progress),
+    PROFILE(tr("Profile"), AppIcons.ProfileFilled, AppIcons.Profile)
 }
 
 private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
@@ -356,7 +356,7 @@ fun GymTrackerApp(
             if (now - lastBackPress < 2000L) activity.finish()
             else {
                 lastBackPress = now
-                Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Press back again to exit"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -406,7 +406,7 @@ fun GymTrackerApp(
         activeSplit = null
         currentExercises = emptyList()
         if (saved != null) {
-            Toast.makeText(context, "${saved.splitTitle} saved: ${formatDuration(saved.durationSeconds)}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("{0} saved: {1}", saved.splitTitle, formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -431,9 +431,9 @@ fun GymTrackerApp(
             history = LocalStorage.loadHistory(context)
             if (activeSplit != null) currentExercises = LocalStorage.loadActiveSession(context)?.second ?: currentExercises
             exerciseInfoVersion++
-            Toast.makeText(context, "Merged into $into", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Merged into {0}", into), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Couldn't merge those exercises", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Couldn't merge those exercises"), Toast.LENGTH_SHORT).show()
         }
         return ok
     }
@@ -862,32 +862,32 @@ private fun ForgottenWorkoutSheet(
     val lastText = whenText(lastChangeMillis)
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-            Text("Still training?", style = AppType.title, color = P.textPrimary)
+            Text(tr("Still training?"), style = AppType.title, color = P.textPrimary)
             Spacer(Modifier.height(6.dp))
             Text(
-                (if (lastChangeMillis - startMillis < 60_000L) "$splitTitle started at ${whenText(startMillis)} and nothing has changed since."
-                else "$splitTitle started at ${whenText(startMillis)} and nothing has changed since $lastText.") +
-                    if (doneSets == 0) " No sets are ticked yet." else "",
+                (if (lastChangeMillis - startMillis < 60_000L) tr("{0} started at {1} and nothing has changed since.", splitTitle, whenText(startMillis))
+                else tr("{0} started at {1} and nothing has changed since {2}.", splitTitle, whenText(startMillis), lastText)) +
+                    if (doneSets == 0) tr(" No sets are ticked yet.") else "",
                 style = AppType.body,
                 color = P.textSecondary
             )
             Spacer(Modifier.height(20.dp))
             if (doneSets > 0) {
-                PrimaryButton("Finish at $lastText", onFinish, Modifier.fillMaxWidth())
+                PrimaryButton(tr("Finish at {0}", lastText), onFinish, Modifier.fillMaxWidth())
                 Text(
-                    "Saves ${if (doneSets == 1) "1 set" else "$doneSets sets"}, ${formatDuration(((lastChangeMillis - startMillis) / 1000L).coerceAtLeast(0L))}.",
+                    tr("Saves {0}, {1}.", if (doneSets == 1) tr("1 set") else tr("{0} sets", doneSets), formatDuration(((lastChangeMillis - startMillis) / 1000L).coerceAtLeast(0L))),
                     style = AppType.caption,
                     color = P.textTertiary,
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(12.dp))
-                SecondaryButton("Keep going", onKeepGoing, Modifier.fillMaxWidth())
+                SecondaryButton(tr("Keep going"), onKeepGoing, Modifier.fillMaxWidth())
             } else {
-                PrimaryButton("Keep going", onKeepGoing, Modifier.fillMaxWidth())
+                PrimaryButton(tr("Keep going"), onKeepGoing, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(8.dp))
-            SecondaryButton("Discard workout", onDiscard, Modifier.fillMaxWidth(), contentColor = P.dangerText)
+            SecondaryButton(tr("Discard workout"), onDiscard, Modifier.fillMaxWidth(), contentColor = P.dangerText)
         }
     }
 }
@@ -908,16 +908,16 @@ fun newExerciseEntry(
     // nSuns' secondary lifts).
     val tm = LocalStorage.getTrainingMax(context, plan.trainingMaxOf)
     if (tm == null) {
-        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) "a training max (tap the name)" else "a ${plan.trainingMaxOf} training max"
+        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) tr("a training max (tap the name)") else tr("a {0} training max", plan.trainingMaxOf)
         return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
-            .copy(planNote = "Set $whose to get your ${plan.scheme.label} weights")
+            .copy(planNote = tr("Set {0} to get your {1} weights", whose, plan.scheme.label))
     }
     val type = LocalStorage.exerciseType(context, name)
     val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
     val day = planLiftDay(plan, tm, history)
     val note = buildList {
         add(day.title)
-        if (day.weightKg == null) add("TM ${formatWeightKg(day.trainingMaxKg)}")
+        if (day.weightKg == null) add(tr("TM {0}", formatWeightKg(day.trainingMaxKg)))
         day.amrapText()?.let(::add)
     }.joinToString(" · ")
     return ExerciseEntry(
@@ -1121,9 +1121,9 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("$splitTitle in progress", style = AppType.bodyStrong, color = P.textPrimary)
+                Text(tr("{0} in progress", splitTitle), style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
-                    "${formatClock((now - startTime) / 1000L)} · $done of $total sets",
+                    tr("{0} · {1} of {2} sets", formatClock((now - startTime) / 1000L), done, total),
                     style = AppType.caption.copy(fontFeatureSettings = "tnum"),
                     color = P.textSecondary
                 )
@@ -1132,7 +1132,7 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
                 Pill(formatClock(restLeft), color = P.accentPrimary, container = P.accentSoft, icon = Icons.Rounded.Timer)
                 Spacer(Modifier.width(8.dp))
             }
-            Text("Resume", style = AppType.label, color = P.accentPrimary)
+            Text(tr("Resume"), style = AppType.label, color = P.accentPrimary)
         }
     }
 }

@@ -86,9 +86,9 @@ fun SettingsScreen(
             try {
                 val json = LocalStorage.exportJsonBackupString(context)
                 context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                Toast.makeText(context, "Backup saved", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Backup saved"), Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
-                Toast.makeText(context, "Couldn't save the backup", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Couldn't save the backup"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -100,9 +100,9 @@ fun SettingsScreen(
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(content.removePrefix("\uFEFF").trim()) }.getOrNull()
                 if (json != null && StoreCodec.looksLikeBackup(json)) pendingBackup = content
-                else Toast.makeText(context, "That file isn't a GymTracker backup", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
-                Toast.makeText(context, "Couldn't read that file", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -112,7 +112,7 @@ fun SettingsScreen(
             try {
                 otherAppFile = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             } catch (_: Exception) {
-                Toast.makeText(context, "Couldn't read that file", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -122,18 +122,18 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Profile", style = AppType.display, color = P.textPrimary, modifier = Modifier.statusBarsPadding().padding(top = 20.dp))
+            Text(tr("Profile"), style = AppType.display, color = P.textPrimary, modifier = Modifier.statusBarsPadding().padding(top = 20.dp))
         }
 
         item {
-            SettingsGroup("Training split") {
+            SettingsGroup(tr("Training split")) {
                 val current = programFor(userProfile.splitProgram)
                 SplitPicker(
                     selectedId = current.id,
                     onSelect = { onUpdateProfile(userProfile.copy(splitProgram = it.id)) },
                     onBuild = onBuildSplit,
                     onEdit = { onEditProgram(it.id) },
-                    cardActionLabel = if (current.isBuiltIn) "Customize" else "Edit",
+                    cardActionLabel = if (current.isBuiltIn) tr("Customize") else tr("Edit"),
                     contained = false,
                     onCardAction = {
                         if (current.isBuiltIn) {
@@ -149,9 +149,9 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup("Appearance") {
+            SettingsGroup(tr("Appearance")) {
                 SegmentedControl(
-                    options = listOf(THEME_SYSTEM to "System", THEME_LIGHT to "Light", THEME_DARK to "Dark"),
+                    options = listOf(THEME_SYSTEM to tr("System"), THEME_LIGHT to tr("Light"), THEME_DARK to tr("Dark")),
                     selected = settings.themeChoice,
                     onSelect = { onUpdateSettings(settings.copy(themeChoice = it)) }
                 )
@@ -167,17 +167,17 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup("Workouts") {
-                Text("Units", style = AppType.label, color = P.textSecondary)
+            SettingsGroup(tr("Workouts")) {
+                Text(tr("Units"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 SegmentedControl(
-                    options = listOf(WeightUnit.KG to "Kilograms (kg)", WeightUnit.LB to "Pounds (lb)"),
+                    options = listOf(WeightUnit.KG to tr("Kilograms (kg)"), WeightUnit.LB to tr("Pounds (lb)")),
                     selected = settings.weightUnit,
                     // Switching only changes how weights are shown; the step resets to the new unit's default.
                     onSelect = { if (it != settings.weightUnit) onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) }
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Weight step", style = AppType.label, color = P.textSecondary)
+                Text(tr("Weight step"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 ChoiceChips(
                     options = settings.weightUnit.stepPresets.map { it to "${formatKgClean(it)} ${settings.weightUnit.label}" },
@@ -185,23 +185,23 @@ fun SettingsScreen(
                     onSelect = { onUpdateSettings(settings.copy(weightStep = it)) }
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Default rest between sets", style = AppType.label, color = P.textSecondary)
+                Text(tr("Default rest between sets"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 ChoiceChips(
-                    options = listOf(0 to "Off", 60 to "1 min", 90 to "1:30", 120 to "2 min", 180 to "3 min", 240 to "4 min"),
+                    options = listOf(0 to tr("Off"), 60 to tr("1 min"), 90 to "1:30", 120 to tr("2 min"), 180 to tr("3 min"), 240 to tr("4 min")),
                     selected = settings.restTimerSeconds,
                     onSelect = { onUpdateSettings(settings.copy(restTimerSeconds = it)) }
                 )
                 Spacer(Modifier.height(8.dp))
                 ToggleRow(
-                    "Sound when rest ends",
-                    "A short beep that lowers your music instead of stopping it",
+                    tr("Sound when rest ends"),
+                    tr("A short beep that lowers your music instead of stopping it"),
                     settings.restSoundEnabled
                 ) { onUpdateSettings(settings.copy(restSoundEnabled = it)) }
-                ToggleRow("Keep screen on", "While a workout is open", settings.keepScreenAwake) {
+                ToggleRow(tr("Keep screen on"), tr("While a workout is open"), settings.keepScreenAwake) {
                     onUpdateSettings(settings.copy(keepScreenAwake = it))
                 }
-                ToggleRow("Vibration", "Light feedback when you tap", settings.hapticsEnabled) {
+                ToggleRow(tr("Vibration"), tr("Light feedback when you tap"), settings.hapticsEnabled) {
                     onUpdateSettings(settings.copy(hapticsEnabled = it))
                 }
             }
@@ -210,7 +210,7 @@ fun SettingsScreen(
         item { HealthConnectGroup(onImported = onDataRestored) }
 
         item {
-            SettingsGroup("Backups") {
+            SettingsGroup(tr("Backups")) {
                 BackupsSection(
                     onRestoreContent = { pendingBackup = it },
                     onRestoreFile = { importLauncher.launch(arrayOf("application/json", "*/*")) },
@@ -220,12 +220,12 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup("Bring in data") {
-                LinkRow(Icons.Rounded.MoveToInbox, "Import from Strong or Hevy") {
+            SettingsGroup(tr("Bring in data")) {
+                LinkRow(Icons.Rounded.MoveToInbox, tr("Import from Strong or Hevy")) {
                     otherAppLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*"))
                 }
                 Text(
-                    "Workouts from their export file are added to your history. A copy of your data is kept first.",
+                    tr("Workouts from their export file are added to your history. A copy of your data is kept first."),
                     style = AppType.caption,
                     color = P.textTertiary
                 )
@@ -233,8 +233,8 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup("Help") {
-                LinkRow(Icons.Rounded.Lightbulb, "Show tips again") {
+            SettingsGroup(tr("Help")) {
+                LinkRow(Icons.Rounded.Lightbulb, tr("Show tips again")) {
                     TutorialPrefs.resetAllTutorials(context)
                     onReplayTips()
                 }
@@ -242,7 +242,7 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.Widgets, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "Widgets: add them from your home screen. Long-press a widget and choose its settings to change the theme, transparency and what it shows.",
+                        tr("Widgets: add them from your home screen. Long-press a widget and choose its settings to change the theme, transparency and what it shows."),
                         style = AppType.caption,
                         color = P.textSecondary
                     )
@@ -252,10 +252,10 @@ fun SettingsScreen(
 
         // Technical options last: most people never need them.
         item {
-            SettingsGroup("Advanced") {
+            SettingsGroup(tr("Advanced")) {
                 ToggleRow(
-                    title = "Smooth scrolling",
-                    subtitle = "Uses your screen's highest refresh rate (120 Hz). Turn off to save battery.",
+                    title = tr("Smooth scrolling"),
+                    subtitle = tr("Uses your screen's highest refresh rate (120 Hz). Turn off to save battery."),
                     checked = settings.targetFps >= 120,
                     onCheckedChange = { onUpdateSettings(settings.copy(targetFps = if (it) 120 else 60)) }
                 )
@@ -271,14 +271,14 @@ fun SettingsScreen(
                 if (result != null) {
                     onDataRestored()
                     Toast.makeText(context, addedMessage(result), Toast.LENGTH_LONG).show()
-                } else Toast.makeText(context, "Couldn't add that backup", Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, tr("Couldn't add that backup"), Toast.LENGTH_SHORT).show()
             },
             onReplace = {
                 pendingBackup = null
                 if (LocalStorage.importJsonBackupString(context, content)) {
                     onDataRestored()
-                    Toast.makeText(context, "Backup restored", Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, "That file isn't a GymTracker backup", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("Backup restored"), Toast.LENGTH_SHORT).show()
+                } else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
             },
             onDismiss = { pendingBackup = null }
         )
@@ -314,7 +314,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "Couldn't open Health Connect", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Couldn't open Health Connect"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -323,7 +323,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
             HealthSync.refresh(context)
             if (HealthSync.granted.isEmpty()) {
                 // Android stops showing the dialog after two refusals; access can still be given in Health Connect.
-                Toast.makeText(context, "Nothing was allowed. You can allow it in Health Connect.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, tr("Nothing was allowed. You can allow it in Health Connect."), Toast.LENGTH_LONG).show()
                 return@launch
             }
             LocalStorage.setHealthSyncOn(context, true)
@@ -333,40 +333,40 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
         }
     }
 
-    SettingsGroup("Health Connect") {
+    SettingsGroup(tr("Health Connect")) {
         when (availability) {
             HealthSync.Availability.UNAVAILABLE ->
-                Text("Health Connect isn't available on this phone.", style = AppType.caption, color = P.textTertiary)
+                Text(tr("Health Connect isn't available on this phone."), style = AppType.caption, color = P.textTertiary)
             HealthSync.Availability.NEEDS_INSTALL -> {
                 Text(
-                    "Install or update Health Connect to share workouts and body weight with Samsung Health and Google Fit.",
+                    tr("Install or update Health Connect to share workouts and body weight with Samsung Health and Google Fit."),
                     style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
                     color = P.textSecondary
                 )
                 Spacer(Modifier.height(10.dp))
-                SecondaryButton("Get Health Connect", { open(HealthSync.installIntent()) }, Modifier.fillMaxWidth())
+                SecondaryButton(tr("Get Health Connect"), { open(HealthSync.installIntent()) }, Modifier.fillMaxWidth())
             }
             HealthSync.Availability.AVAILABLE -> if (!on || granted.isEmpty()) {
                 Text(
-                    "Share your workouts and body weight with Samsung Health, Google Fit and other apps, bring in weigh-ins from your scale, and see your watch's heart rate in your history.",
+                    tr("Share your workouts and body weight with Samsung Health, Google Fit and other apps, bring in weigh-ins from your scale, and see your watch's heart rate in your history."),
                     style = AppType.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
                     color = P.textSecondary
                 )
                 Spacer(Modifier.height(12.dp))
-                PrimaryButton("Connect", { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
-                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, "Open Health Connect") { open(HealthSync.manageIntent(context)) }
+                PrimaryButton(tr("Connect"), { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
+                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, tr("Open Health Connect")) { open(HealthSync.manageIntent(context)) }
             } else {
-                SharedRow("Workouts you finish", HealthSync.WRITE_WORKOUTS in granted)
-                SharedRow("Body weight you log", HealthSync.WRITE_WEIGHT in granted)
-                SharedRow("Weigh-ins from scales and other apps", HealthSync.READ_WEIGHT in granted)
-                SharedRow("Heart rate during workouts", HealthSync.READ_HEART_RATE in granted)
+                SharedRow(tr("Workouts you finish"), HealthSync.WRITE_WORKOUTS in granted)
+                SharedRow(tr("Body weight you log"), HealthSync.WRITE_WEIGHT in granted)
+                SharedRow(tr("Weigh-ins from scales and other apps"), HealthSync.READ_WEIGHT in granted)
+                SharedRow(tr("Heart rate during workouts"), HealthSync.READ_HEART_RATE in granted)
                 if (!granted.containsAll(HealthSync.PERMISSIONS)) {
                     Spacer(Modifier.height(8.dp))
-                    SecondaryButton("Allow the rest", { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
+                    SecondaryButton(tr("Allow the rest"), { askPermissions.launch(HealthSync.PERMISSIONS) }, Modifier.fillMaxWidth())
                 }
                 Spacer(Modifier.height(4.dp))
-                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, "Manage in Health Connect") { open(HealthSync.manageIntent(context)) }
-                LinkRow(Icons.Rounded.LinkOff, "Stop sharing") {
+                LinkRow(Icons.AutoMirrored.Rounded.OpenInNew, tr("Manage in Health Connect")) { open(HealthSync.manageIntent(context)) }
+                LinkRow(Icons.Rounded.LinkOff, tr("Stop sharing")) {
                     HealthSync.disconnect(context)
                     on = false
                 }
@@ -381,7 +381,7 @@ private fun SharedRow(label: String, shared: Boolean) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
             if (shared) Icons.Rounded.Check else Icons.Rounded.Close,
-            if (shared) "Shared" else "Not shared",
+            if (shared) tr("Shared") else tr("Not shared"),
             tint = if (shared) P.successText else P.textTertiary,
             modifier = Modifier.size(18.dp)
         )
@@ -442,9 +442,9 @@ private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
 }
 
 private fun addedMessage(r: CombineResult): String = buildString {
-    append(if (r.addedWorkouts == 1) "Added 1 workout" else "Added ${r.addedWorkouts} workouts")
-    if (r.addedWeighIns > 0) append(" and ${r.addedWeighIns} weigh-in${if (r.addedWeighIns == 1) "" else "s"}")
-    if (r.alreadyHere > 0) append(" (${r.alreadyHere} ${if (r.alreadyHere == 1) "was" else "were"} already here)")
+    append(if (r.addedWorkouts == 1) tr("Added 1 workout") else tr("Added {0} workouts", r.addedWorkouts))
+    if (r.addedWeighIns > 0) append(if (r.addedWeighIns == 1) tr(" and 1 weigh-in") else tr(" and {0} weigh-ins", r.addedWeighIns))
+    if (r.alreadyHere > 0) append(if (r.alreadyHere == 1) tr(" (1 was already here)") else tr(" ({0} were already here)", r.alreadyHere))
 }
 
 /** Restore used to replace everything; adding the backup to what's here now comes first. */
@@ -454,18 +454,18 @@ private fun RestoreChoiceDialog(onAdd: () -> Unit, onReplace: () -> Unit, onDism
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text("Restore backup", style = AppType.headline, color = P.textPrimary) },
+        title = { Text(tr("Restore backup"), style = AppType.headline, color = P.textPrimary) },
         text = {
             Column {
-                ChoiceRow("Add to my data", "Workouts and weigh-ins from the backup join yours. Nothing here is removed.", onAdd)
+                ChoiceRow(tr("Add to my data"), tr("Workouts and weigh-ins from the backup join yours. Nothing here is removed."), onAdd)
                 Spacer(Modifier.height(8.dp))
-                ChoiceRow("Replace everything", "Your data becomes exactly what the backup holds.", onReplace, danger = true)
+                ChoiceRow(tr("Replace everything"), tr("Your data becomes exactly what the backup holds."), onReplace, danger = true)
                 Spacer(Modifier.height(8.dp))
-                Text("A copy of your data is kept first either way.", style = AppType.caption, color = P.textTertiary)
+                Text(tr("A copy of your data is kept first either way."), style = AppType.caption, color = P.textTertiary)
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }
 
@@ -505,11 +505,11 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
             val state = parsed
             val h = state?.first
             when {
-                state == null -> Text("Reading the file…", style = AppType.body, color = P.textSecondary)
+                state == null -> Text(tr("Reading the file…"), style = AppType.body, color = P.textSecondary)
                 h == null -> {
-                    Text("Not a Strong or Hevy export", style = AppType.title, color = P.textPrimary)
+                    Text(tr("Not a Strong or Hevy export"), style = AppType.title, color = P.textPrimary)
                     Text(
-                        "Export from Strong (Settings → Export Strong Data) or Hevy (Settings → Export & Import Data → Export Workouts), then pick the .csv file here.",
+                        tr("Export from Strong (Settings → Export Strong Data) or Hevy (Settings → Export & Import Data → Export Workouts), then pick the .csv file here."),
                         style = AppType.body,
                         color = P.textSecondary,
                         modifier = Modifier.padding(top = 6.dp)
@@ -519,24 +519,24 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                     val already = state.second
                     val first = h.workouts.minOf { it.id }
                     val last = h.workouts.maxOf { it.id }
-                    Text("Import from ${h.source.label}", style = AppType.title, color = P.textPrimary)
+                    Text(tr("Import from {0}", h.source.label), style = AppType.title, color = P.textPrimary)
                     Text(
-                        "${h.workouts.size} workouts · ${String.format(Locale.US, "%,d", h.setCount)} sets · " +
+                        tr("{0} workouts · {1} sets · ", h.workouts.size, String.format(Locale.US, "%,d", h.setCount)) +
                             "${DateUtils.formatShortDayYear(Date(first))} – ${DateUtils.formatShortDayYear(Date(last))}",
                         style = AppType.body,
                         color = P.textSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                     if (already > 0) {
-                        Text("$already of them are already here and stay as they are.", style = AppType.caption, color = P.textTertiary)
+                        Text(tr("{0} of them are already here and stay as they are.", already), style = AppType.caption, color = P.textTertiary)
                     }
                     if (!h.unitInFile) {
                         Spacer(Modifier.height(16.dp))
-                        Text("Weights in this file are in", style = AppType.label, color = P.textSecondary)
+                        Text(tr("Weights in this file are in"), style = AppType.label, color = P.textSecondary)
                         Spacer(Modifier.height(8.dp))
-                        ChoiceChips(options = listOf(WeightUnit.KG to "Kilograms (kg)", WeightUnit.LB to "Pounds (lb)"), selected = unit, onSelect = { unit = it })
+                        ChoiceChips(options = listOf(WeightUnit.KG to tr("Kilograms (kg)"), WeightUnit.LB to tr("Pounds (lb)")), selected = unit, onSelect = { unit = it })
                         Text(
-                            "${h.source.label} doesn't save the unit in its file: pick the one you used there.",
+                            tr("{0} doesn't save the unit in its file: pick the one you used there.", h.source.label),
                             style = AppType.caption,
                             color = P.textTertiary,
                             modifier = Modifier.padding(top = 6.dp)
@@ -544,22 +544,22 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                     }
                     if (h.renamed.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
-                        Text("Matched to this app's exercises", style = AppType.label, color = P.textSecondary)
+                        Text(tr("Matched to this app's exercises"), style = AppType.label, color = P.textSecondary)
                         h.renamed.entries.take(4).forEach { (from, to) ->
                             Text("$from → $to", style = AppType.caption, color = P.textPrimary, modifier = Modifier.padding(top = 4.dp))
                         }
                         if (h.renamed.size > 4) {
-                            Text("and ${h.renamed.size - 4} more", style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 4.dp))
+                            Text(tr("and {0} more", h.renamed.size - 4), style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 4.dp))
                         }
                     }
                     Spacer(Modifier.height(20.dp))
                     PrimaryButton(
-                        if (adding) "Adding…" else "Add to my history",
+                        if (adding) tr("Adding…") else tr("Add to my history"),
                         {
                             adding = true
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) { LocalStorage.addData(context, h.asStoreData()) }
-                                if (result == null) Toast.makeText(context, "Couldn't add the workouts", Toast.LENGTH_SHORT).show()
+                                if (result == null) Toast.makeText(context, tr("Couldn't add the workouts"), Toast.LENGTH_SHORT).show()
                                 onDone(result)
                             }
                         },
@@ -567,7 +567,7 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                         enabled = !adding && h.workouts.size > already
                     )
                     Text(
-                        "Nothing here is changed or removed. A copy of your data is kept first.",
+                        tr("Nothing here is changed or removed. A copy of your data is kept first."),
                         style = AppType.caption,
                         color = P.textTertiary,
                         modifier = Modifier.padding(top = 8.dp)
@@ -590,14 +590,14 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
     }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-            Text("Restore from Google Drive", style = AppType.title, color = P.textPrimary)
+            Text(tr("Restore from Google Drive"), style = AppType.title, color = P.textPrimary)
             Spacer(Modifier.height(4.dp))
             val list = files
             when {
-                list == null -> Text("Looking for your backups…", style = AppType.body, color = P.textSecondary)
-                list.isEmpty() -> Text("No backups in this Google account yet.", style = AppType.body, color = P.textSecondary)
+                list == null -> Text(tr("Looking for your backups…"), style = AppType.body, color = P.textSecondary)
+                list.isEmpty() -> Text(tr("No backups in this Google account yet."), style = AppType.body, color = P.textSecondary)
                 else -> {
-                    Text("Pick one. Next you choose to add it to your data or replace it.", style = AppType.caption, color = P.textSecondary)
+                    Text(tr("Pick one. Next you choose to add it to your data or replace it."), style = AppType.caption, color = P.textSecondary)
                     Spacer(Modifier.height(10.dp))
                     list.take(12).forEachIndexed { i, f ->
                         Row(
@@ -606,7 +606,7 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                                 scope.launch {
                                     val text = withContext(Dispatchers.IO) { DriveBackup.download(context, f.file) }
                                     downloading = null
-                                    if (text == null) Toast.makeText(context, "Couldn't download that backup", Toast.LENGTH_SHORT).show()
+                                    if (text == null) Toast.makeText(context, tr("Couldn't download that backup"), Toast.LENGTH_SHORT).show()
                                     else onPick(text)
                                 }
                             }.padding(horizontal = 8.dp, vertical = 12.dp),
@@ -622,12 +622,12 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                                     color = P.textPrimary
                                 )
                                 Text(
-                                    (if (i == 0) "Newest · " else "") + "${(f.sizeBytes + 1023) / 1024} KB",
+                                    (if (i == 0) tr("Newest · ") else "") + tr("{0} KB", (f.sizeBytes + 1023) / 1024),
                                     style = AppType.caption,
                                     color = P.textSecondary
                                 )
                             }
-                            if (downloading == f.file.id) Text("Downloading…", style = AppType.caption, color = P.textSecondary)
+                            if (downloading == f.file.id) Text(tr("Downloading…"), style = AppType.caption, color = P.textSecondary)
                         }
                     }
                 }
@@ -688,7 +688,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
             try {
                 AutoBackup.setFolder(context, tree)
             } catch (_: SecurityException) {
-                Toast.makeText(context, "That folder can't be used for backups. Try another one.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, tr("That folder can't be used for backups. Try another one."), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -696,7 +696,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         try {
             pickFolder.launch(null)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "No file picker on this phone", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("No file picker on this phone"), Toast.LENGTH_SHORT).show()
         }
     }
     fun restore() {
@@ -709,7 +709,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
     val anyOn = drive.signedIn || folder.isOn
     val running = drive.running || folder.running
     val error = drive.error ?: folder.error
-    val needsSignIn = drive.error == "Google needs you to sign in again."
+    val needsSignIn = drive.error == tr("Google needs you to sign in again.")
 
     // Status
     Row(verticalAlignment = Alignment.Top) {
@@ -731,23 +731,23 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         Column(Modifier.weight(1f)) {
             Text(
                 when {
-                    drive.signedIn -> "Backed up to Google Drive"
-                    folder.isOn -> "Backed up to a folder"
-                    else -> "Only on this phone"
+                    drive.signedIn -> tr("Backed up to Google Drive")
+                    folder.isOn -> tr("Backed up to a folder")
+                    else -> tr("Only on this phone")
                 },
                 style = AppType.bodyStrong,
                 color = P.textPrimary
             )
-            val where = listOfNotNull(drive.email, folder.folderName?.let { if (drive.signedIn) "and folder $it" else it }).joinToString(" ")
+            val where = listOfNotNull(drive.email, folder.folderName?.let { if (drive.signedIn) tr("and folder {0}", it) else it }).joinToString(" ")
             if (where.isNotEmpty()) Text(where, style = AppType.caption, color = P.textSecondary)
             val last = maxOf(drive.lastSuccessMillis, folder.lastSuccessMillis)
             Text(
                 when {
-                    !anyOn -> "Sign in and your workouts are saved to your own Google Drive after every workout. On a new phone, sign in and everything comes back."
-                    running -> "Backing up…"
+                    !anyOn -> tr("Sign in and your workouts are saved to your own Google Drive after every workout. On a new phone, sign in and everything comes back.")
+                    running -> tr("Backing up…")
                     error != null -> error
-                    last > 0L -> "Last backup ${whenText(last)}"
-                    else -> "Backs up after your next workout"
+                    last > 0L -> tr("Last backup {0}", whenText(last))
+                    else -> tr("Backs up after your next workout")
                 },
                 style = AppType.caption,
                 color = if (anyOn && error != null && !running) P.dangerText else P.textSecondary
@@ -758,14 +758,14 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
 
     // Actions
     if (!drive.signedIn) {
-        PrimaryButton(if (signingIn) "Signing in…" else "Sign in with Google", { signIn() }, Modifier.fillMaxWidth(), enabled = !signingIn, height = 48.dp)
+        PrimaryButton(if (signingIn) tr("Signing in…") else tr("Sign in with Google"), { signIn() }, Modifier.fillMaxWidth(), enabled = !signingIn, height = 48.dp)
         Spacer(Modifier.height(10.dp))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         when {
-            needsSignIn -> SecondaryButton("Sign in again", { signIn() }, Modifier.weight(1f))
+            needsSignIn -> SecondaryButton(tr("Sign in again"), { signIn() }, Modifier.weight(1f))
             anyOn -> SecondaryButton(
-                "Back up now",
+                tr("Back up now"),
                 {
                     DriveBackup.backUpNow(context)
                     AutoBackup.backUpNow(context)
@@ -775,7 +775,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
                 enabled = !running
             )
         }
-        SecondaryButton("Restore", { restore() }, Modifier.weight(1f), icon = Icons.Rounded.SettingsBackupRestore)
+        SecondaryButton(tr("Restore"), { restore() }, Modifier.weight(1f), icon = Icons.Rounded.SettingsBackupRestore)
     }
 
     // More options
@@ -783,7 +783,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.99f) { moreOpen = !moreOpen }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("More options", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+        Text(tr("More options"), style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
         val turn by animateFloatAsState(if (moreOpen) 180f else 0f, label = "more_turn")
         Icon(Icons.Rounded.ExpandMore, null, tint = P.textTertiary, modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = turn })
     }
@@ -792,26 +792,26 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
             if (folder.isOn) {
                 OptionRow(
                     Icons.Rounded.Folder,
-                    (if (drive.signedIn) "Also backing up to " else "Backing up to ") + "folder ${folder.folderName}",
-                    (folder.error ?: (if (folder.lastSuccessMillis > 0L) "Last ${whenText(folder.lastSuccessMillis)}" else "No backup there yet")) + " · tap to change"
+                    (if (drive.signedIn) tr("Also backing up to ") else tr("Backing up to ")) + tr("folder {0}", folder.folderName),
+                    (folder.error ?: (if (folder.lastSuccessMillis > 0L) tr("Last {0}", whenText(folder.lastSuccessMillis)) else tr("No backup there yet"))) + tr(" · tap to change")
                 ) { chooseFolder() }
-                OptionRow(Icons.Rounded.FolderOff, "Stop backing up to the folder", null) { confirmFolderOff = true }
+                OptionRow(Icons.Rounded.FolderOff, tr("Stop backing up to the folder"), null) { confirmFolderOff = true }
             } else {
-                OptionRow(Icons.Rounded.CreateNewFolder, "Also back up to a folder", "A copy after every workout, in a folder you pick (another cloud app or the phone)") { chooseFolder() }
+                OptionRow(Icons.Rounded.CreateNewFolder, tr("Also back up to a folder"), tr("A copy after every workout, in a folder you pick (another cloud app or the phone)")) { chooseFolder() }
             }
-            OptionRow(Icons.Rounded.FileDownload, "Save a backup file", "One file with everything, to keep or send anywhere") { onSaveFile() }
-            if (drive.signedIn) OptionRow(Icons.AutoMirrored.Rounded.Logout, "Sign out of Google", null) { confirmSignOut = true }
+            OptionRow(Icons.Rounded.FileDownload, tr("Save a backup file"), tr("One file with everything, to keep or send anywhere")) { onSaveFile() }
+            if (drive.signedIn) OptionRow(Icons.AutoMirrored.Rounded.Logout, tr("Sign out of Google"), null) { confirmSignOut = true }
         }
     }
 
     if (choosingSource) {
         AppBottomSheet(onDismiss = { choosingSource = false }) {
             Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
-                Text("Restore from…", style = AppType.title, color = P.textPrimary)
+                Text(tr("Restore from…"), style = AppType.title, color = P.textPrimary)
                 Spacer(Modifier.height(14.dp))
-                ChoiceRow("Google Drive", "Your automatic backups in ${drive.email}", { choosingSource = false; choosingDrive = true })
+                ChoiceRow(tr("Google Drive"), tr("Your automatic backups in {0}", drive.email), { choosingSource = false; choosingDrive = true })
                 Spacer(Modifier.height(8.dp))
-                ChoiceRow("A file", "A backup file you saved, or one from your backup folder", { choosingSource = false; onRestoreFile() })
+                ChoiceRow(tr("A file"), tr("A backup file you saved, or one from your backup folder"), { choosingSource = false; onRestoreFile() })
             }
         }
     }
@@ -828,20 +828,20 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             containerColor = P.bgElevated,
-            title = { Text("Sign out of Google?", style = AppType.headline, color = P.textPrimary) },
-            text = { Text("Your backups stay in Google Drive, but new workouts won't be backed up there.", style = AppType.body, color = P.textSecondary) },
-            confirmButton = { TextButton(onClick = { confirmSignOut = false; DriveBackup.signOut(context) }) { Text("Sign out", color = P.dangerText, style = AppType.label) } },
-            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+            title = { Text(tr("Sign out of Google?"), style = AppType.headline, color = P.textPrimary) },
+            text = { Text(tr("Your backups stay in Google Drive, but new workouts won't be backed up there."), style = AppType.body, color = P.textSecondary) },
+            confirmButton = { TextButton(onClick = { confirmSignOut = false; DriveBackup.signOut(context) }) { Text(tr("Sign out"), color = P.dangerText, style = AppType.label) } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
         )
     }
     if (confirmFolderOff) {
         AlertDialog(
             onDismissRequest = { confirmFolderOff = false },
             containerColor = P.bgElevated,
-            title = { Text("Stop backing up to the folder?", style = AppType.headline, color = P.textPrimary) },
-            text = { Text("Backups already in the folder stay there, but new workouts won't be copied to it.", style = AppType.body, color = P.textSecondary) },
-            confirmButton = { TextButton(onClick = { confirmFolderOff = false; AutoBackup.turnOff(context) }) { Text("Stop", color = P.dangerText, style = AppType.label) } },
-            dismissButton = { TextButton(onClick = { confirmFolderOff = false }) { Text("Keep it", color = P.textSecondary, style = AppType.label) } }
+            title = { Text(tr("Stop backing up to the folder?"), style = AppType.headline, color = P.textPrimary) },
+            text = { Text(tr("Backups already in the folder stay there, but new workouts won't be copied to it."), style = AppType.body, color = P.textSecondary) },
+            confirmButton = { TextButton(onClick = { confirmFolderOff = false; AutoBackup.turnOff(context) }) { Text(tr("Stop"), color = P.dangerText, style = AppType.label) } },
+            dismissButton = { TextButton(onClick = { confirmFolderOff = false }) { Text(tr("Keep it"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 }

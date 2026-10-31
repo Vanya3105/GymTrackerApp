@@ -65,10 +65,10 @@ fun HomeScreen(
     val tour = rememberTipTour(
         Tips.HOME,
         listOf(
-            TutorialStepInfo("UP_NEXT", "Your next workout", "The app picks the day of your plan you haven't done yet this week. Tap Start and your exercises are ready, with weights from last time."),
-            TutorialStepInfo("WEEK", "Your week", "How many of this week's workouts are done. A filled day is a day you trained; tap for your history."),
-            TutorialStepInfo("RECOVERY", "Recovery", "Which muscles are still recovering from your last sessions, so you can see what's ready to train. Tap it for every muscle."),
-            TutorialStepInfo("OTHERS", "Train something else", "Any other day of your plan, or an empty workout where you pick exercises as you go.")
+            TutorialStepInfo("UP_NEXT", tr("Your next workout"), tr("The app picks the day of your plan you haven't done yet this week. Tap Start and your exercises are ready, with weights from last time.")),
+            TutorialStepInfo("WEEK", tr("Your week"), tr("How many of this week's workouts are done. A filled day is a day you trained; tap for your history.")),
+            TutorialStepInfo("RECOVERY", tr("Recovery"), tr("Which muscles are still recovering from your last sessions, so you can see what's ready to train. Tap it for every muscle.")),
+            TutorialStepInfo("OTHERS", tr("Train something else"), tr("Any other day of your plan, or an empty workout where you pick exercises as you go."))
         ),
         ready = tipsAllowed
     )
@@ -133,7 +133,7 @@ fun HomeScreen(
             val others = splits.filter { it.title != upNext.title }
             val showQuick = activeSplitTitle != QUICK_WORKOUT_TITLE
             if (others.isNotEmpty() || showQuick) {
-                item { SectionHeader("Other workouts", Modifier.enterAnimation(4)) }
+                item { SectionHeader(tr("Other workouts"), Modifier.enterAnimation(4)) }
                 // One grouped list rather than a card per day; an empty workout for off-plan days last.
                 item {
                     AppCard(Modifier.fillMaxWidth().enterAnimation(5).tipTarget(tour, "OTHERS"), contentPadding = PaddingValues(vertical = 4.dp)) {
@@ -166,18 +166,18 @@ fun HomeScreen(
 }
 
 private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-    in 5..11 -> "Good morning"
-    in 12..17 -> "Good afternoon"
-    else -> "Good evening"
+    in 5..11 -> tr("Good morning")
+    in 12..17 -> tr("Good afternoon")
+    else -> tr("Good evening")
 }
 
 fun relativeDay(timestamp: Long): String {
     val days = ((System.currentTimeMillis() - timestamp) / (24L * 60 * 60 * 1000)).toInt()
     return when {
-        days <= 0 -> "today"
-        days == 1 -> "yesterday"
-        days < 14 -> "$days days ago"
-        else -> "${days / 7} weeks ago"
+        days <= 0 -> tr("today")
+        days == 1 -> tr("yesterday")
+        days < 14 -> tr("{0} days ago", days)
+        else -> tr("{0} weeks ago", days / 7)
     }
 }
 
@@ -206,21 +206,21 @@ private fun UpNextCard(
                 .background(Brush.verticalGradient(listOf(P.accentSoft, P.bgElevated)))
                 .padding(20.dp)
         ) {
-            Text(if (isInProgress) "In progress" else "Up next", style = AppType.overline, color = P.accentPrimary)
+            Text(if (isInProgress) tr("In progress") else tr("Up next"), style = AppType.overline, color = P.accentPrimary)
             Spacer(Modifier.height(6.dp))
             Text(split.title, style = AppType.display, color = P.textPrimary)
             Text(split.subtitle, style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(if (exerciseCount == 1) "1 exercise" else "$exerciseCount exercises", container = P.bgCard.copy(alpha = 0.7f))
+                Pill(if (exerciseCount == 1) tr("1 exercise") else tr("{0} exercises", exerciseCount), container = P.bgCard.copy(alpha = 0.7f))
                 Pill(
-                    last?.let { "Last done ${relativeDay(it.id)}" } ?: "Not done yet",
+                    last?.let { tr("Last done {0}", relativeDay(it.id)) } ?: tr("Not done yet"),
                     container = P.bgCard.copy(alpha = 0.7f)
                 )
             }
             Spacer(Modifier.height(18.dp))
             PrimaryButton(
-                text = if (isInProgress) "Resume workout" else "Start workout",
+                text = if (isInProgress) tr("Resume workout") else tr("Start workout"),
                 icon = Icons.Rounded.PlayArrow,
                 onClick = onStart,
                 modifier = Modifier.fillMaxWidth()
@@ -247,12 +247,12 @@ private fun WeekCard(
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpenHistory) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("This week", style = AppType.headline, color = P.textPrimary)
+                Text(tr("This week"), style = AppType.headline, color = P.textPrimary)
                 Text(
                     when {
-                        done >= goal -> "All $goal done. Nice work."
-                        done == 0 -> "$goal workouts planned · $programName"
-                        else -> "${goal - done} to go · $programName"
+                        done >= goal -> tr("All {0} done. Nice work.", goal)
+                        done == 0 -> tr("{0} workouts planned · {1}", goal, programName)
+                        else -> tr("{0} to go · {1}", goal - done, programName)
                     },
                     style = AppType.caption,
                     color = P.textSecondary,
@@ -268,7 +268,7 @@ private fun WeekCard(
         }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("S", "M", "T", "W", "T", "F", "S").forEachIndexed { i, letter ->
+            weekdayLetters().forEachIndexed { i, letter ->
                 val day = i + 1 // Calendar.SUNDAY == 1
                 val trained = day in trainedDays
                 val isToday = day == today
@@ -301,20 +301,20 @@ fun RecoveryStrip(items: List<MuscleRecoveryItem>, onClick: () -> Unit, modifier
     val notReady = items.filter { it.status != RecoveryStatus.READY }.sortedBy { it.recoveryPercent }
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Recovery", style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
+            Text(tr("Recovery"), style = AppType.headline, color = P.textPrimary, modifier = Modifier.weight(1f))
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = P.textTertiary, modifier = Modifier.size(16.dp))
         }
         if (notReady.isEmpty()) {
             // Five green 100s say less than one sentence.
             Text(
-                "Everything's recovered. Train whatever you like today.",
+                tr("Everything's recovered. Train whatever you like today."),
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.padding(top = 2.dp)
             )
         } else {
             Text(
-                "${notReady.size} of ${items.size} muscles still recovering",
+                tr("{0} of {1} muscles still recovering", notReady.size, items.size),
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.padding(top = 2.dp)
@@ -365,7 +365,7 @@ private fun SplitRow(
                 Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(if (doneThisWeek) P.successSurface else P.bgControl),
                 contentAlignment = Alignment.Center
             ) {
-                if (doneThisWeek) Icon(Icons.Rounded.Check, "Done this week", tint = P.successText, modifier = Modifier.size(22.dp))
+                if (doneThisWeek) Icon(Icons.Rounded.Check, tr("Done this week"), tint = P.successText, modifier = Modifier.size(22.dp))
                 // The day's place in the program; letters repeat too often (Push, Pull).
                 else Text(split.code.trimStart('0').ifBlank { split.title.take(1) }, style = AppType.headline.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
             }
@@ -373,12 +373,12 @@ private fun SplitRow(
             Column(Modifier.weight(1f)) {
                 Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
-                    if (doneThisWeek) "Done this week" else lastDone?.let { "Last done ${relativeDay(it.id)}" } ?: split.subtitle,
+                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: split.subtitle,
                     style = AppType.caption,
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )
             }
-            Icon(Icons.Rounded.PlayArrow, "Start ${split.title}", tint = P.textTertiary, modifier = Modifier.size(22.dp))
+            Icon(Icons.Rounded.PlayArrow, tr("Start {0}", split.title), tint = P.textTertiary, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -395,10 +395,10 @@ private fun QuickWorkoutRow(onClick: () -> Unit) {
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text("Empty workout", style = AppType.bodyStrong, color = P.textPrimary)
-            Text("Pick exercises as you go", style = AppType.caption, color = P.textSecondary)
+            Text(tr("Empty workout"), style = AppType.bodyStrong, color = P.textPrimary)
+            Text(tr("Pick exercises as you go"), style = AppType.caption, color = P.textSecondary)
         }
-        Icon(Icons.Rounded.PlayArrow, "Start an empty workout", tint = P.textTertiary, modifier = Modifier.size(22.dp))
+        Icon(Icons.Rounded.PlayArrow, tr("Start an empty workout"), tint = P.textTertiary, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -416,16 +416,16 @@ private fun RecoverySheet(items: List<MuscleRecoveryItem>, onDismiss: () -> Unit
         Column(
             Modifier.fillMaxHeight(0.85f).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()
         ) {
-            Text("Recovery", style = AppType.title, color = P.textPrimary)
+            Text(tr("Recovery"), style = AppType.title, color = P.textPrimary)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (ready == items.size) "Everything's recovered" else "${items.size - ready} of ${items.size} muscles still recovering",
+                    if (ready == items.size) tr("Everything's recovered") else tr("{0} of {1} muscles still recovering", items.size - ready, items.size),
                     style = AppType.body,
                     color = P.textSecondary,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    if (explain) "Hide" else "How it works",
+                    if (explain) tr("Hide") else tr("How it works"),
                     style = AppType.label,
                     color = P.textSecondary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
@@ -433,9 +433,9 @@ private fun RecoverySheet(items: List<MuscleRecoveryItem>, onDismiss: () -> Unit
             }
             if (explain) {
                 Text(
-                    "Based on when you last trained each muscle, how many sets it got and how long it usually takes " +
-                        "to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count " +
-                        "half a set, like biceps on rows or triceps on bench.",
+                    tr("Based on when you last trained each muscle, how many sets it got and how long it usually takes ") +
+                        tr("to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count ") +
+                        tr("half a set, like biceps on rows or triceps on bench."),
                     style = AppType.caption,
                     color = P.textSecondary,
                     modifier = Modifier.padding(top = 4.dp)
@@ -449,13 +449,13 @@ private fun RecoverySheet(items: List<MuscleRecoveryItem>, onDismiss: () -> Unit
                     Column(Modifier.weight(1f)) {
                         Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
                         Text(
-                            item.hoursSinceTrained?.let { h -> "Trained " + when { h < 1 -> "just now"; h < 48 -> "${h}h ago"; else -> "${h / 24} days ago" } } ?: "Not trained yet",
+                            item.hoursSinceTrained?.let { h -> tr("Trained ") + when { h < 1 -> tr("just now"); h < 48 -> tr("{0}h ago", h); else -> tr("{0} days ago", h / 24) } } ?: tr("Not trained yet"),
                             style = AppType.caption,
                             color = P.textSecondary
                         )
                     }
                     if (item.status == RecoveryStatus.READY) {
-                        Text("Ready", style = AppType.caption, color = P.successText)
+                        Text(tr("Ready"), style = AppType.caption, color = P.successText)
                     } else {
                         Column(Modifier.width(80.dp), horizontalAlignment = Alignment.End) {
                             Text("${item.recoveryPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = color)

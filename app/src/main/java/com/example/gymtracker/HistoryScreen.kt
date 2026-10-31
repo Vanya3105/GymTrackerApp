@@ -73,17 +73,17 @@ fun HistoryScreen(
     val byExercise = remember(history) { historyByExercise(history) }
     val tour = rememberTipTour(
         Tips.HISTORY,
-        listOf(TutorialStepInfo("CARD", "Your workouts", "Tap a workout to see or edit every set. ⋮ shares it as an image or deletes it. Swipe sideways for other weeks.")),
+        listOf(TutorialStepInfo("CARD", tr("Your workouts"), tr("Tap a workout to see or edit every set. ⋮ shares it as an image or deletes it. Swipe sideways for other weeks."))),
         ready = history.isNotEmpty()
     )
     Box(Modifier.fillMaxSize()) {
     CompositionLocalProvider(LocalHistoryIndex provides byExercise, LocalHistoryTip provides tour) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 12.dp)) {
-            Text("History", style = AppType.display, color = P.textPrimary)
+            Text(tr("History"), style = AppType.display, color = P.textPrimary)
             Spacer(Modifier.height(14.dp))
             SegmentedControl(
-                options = listOf(HistoryMode.WEEK to "Week", HistoryMode.MONTH to "Month"),
+                options = listOf(HistoryMode.WEEK to tr("Week"), HistoryMode.MONTH to tr("Month")),
                 selected = mode,
                 onSelect = { mode = it }
             )
@@ -108,15 +108,15 @@ fun HistoryScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             containerColor = P.bgElevated,
-            title = { Text("Delete this workout?", style = AppType.headline, color = P.textPrimary) },
-            text = { Text("${workout.splitTitle} on ${workout.displayDate.substringBefore(" •")} will be removed for good.", style = AppType.body, color = P.textSecondary) },
+            title = { Text(tr("Delete this workout?"), style = AppType.headline, color = P.textPrimary) },
+            text = { Text(tr("{0} on {1} will be removed for good.", workout.splitTitle, DateUtils.shortDayYearOf(workout.displayDate, workout.id)), style = AppType.body, color = P.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { onDeleteWorkout(workout.id); pendingDelete = null }) {
-                    Text("Delete", color = P.dangerText, style = AppType.label)
+                    Text(tr("Delete"), color = P.dangerText, style = AppType.label)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("Keep", color = P.textSecondary, style = AppType.label) }
+                TextButton(onClick = { pendingDelete = null }) { Text(tr("Keep"), color = P.textSecondary, style = AppType.label) }
             }
         )
     }
@@ -128,7 +128,7 @@ fun HistoryScreen(
         else AppBottomSheet(onDismiss = { photoToView = null }) {
             Image(
                 bitmap = bmp,
-                contentDescription = "Workout photo",
+                contentDescription = tr("Workout photo"),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(20.dp))
             )
@@ -153,21 +153,21 @@ private fun WeekView(
 
     Column(Modifier.fillMaxSize().swipeToPage({ weekOffset-- }, { weekOffset++ }, canGoNext = weekOffset < 0)) {
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous week", { weekOffset-- })
+            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, tr("Previous week"), { weekOffset-- })
             AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_title") { _ ->
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(week.titleLabel, style = AppType.bodyStrong, color = P.textPrimary)
                     Text(week.dateRangeLabel, style = AppType.caption, color = P.textSecondary)
                 }
             }
-            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next week", { weekOffset++ }, enabled = weekOffset < 0)
+            CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, tr("Next week"), { weekOffset++ }, enabled = weekOffset < 0)
         }
         // A row of zeros says nothing: the totals only show for weeks with workouts.
         AnimatedVisibility(week.workouts.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
             Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatTile("${week.workouts.size}", if (week.workouts.size == 1) "Workout" else "Workouts", Modifier.weight(1f))
-                StatTile("${stats.sumOf { it.workSets }}", "Sets", Modifier.weight(1f))
-                StatTile(formatVolume(stats.sumOf { it.volumeKg }), "Volume", Modifier.weight(1f))
+                StatTile("${week.workouts.size}", if (week.workouts.size == 1) tr("Workout") else tr("Workouts"), Modifier.weight(1f))
+                StatTile("${stats.sumOf { it.workSets }}", tr("Sets"), Modifier.weight(1f))
+                StatTile(formatVolume(stats.sumOf { it.volumeKg }), tr("Volume"), Modifier.weight(1f))
             }
         }
         AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_list") { offset ->
@@ -179,9 +179,9 @@ private fun WeekView(
             ) {
                 workoutList(
                     workouts, history, onOpen, onDelete, onViewPhoto,
-                    emptyTitle = if (offset == 0) "No workouts yet this week" else "A rest week",
-                    emptyText = if (offset == 0) history.firstOrNull()?.let { "Your last one was ${it.splitTitle}, ${relativeDay(it.id)}." } ?: "Finished workouts show up here."
-                    else "Nothing was logged that week."
+                    emptyTitle = if (offset == 0) tr("No workouts yet this week") else tr("A rest week"),
+                    emptyText = if (offset == 0) history.firstOrNull()?.let { tr("Your last one was {0}, {1}.", it.splitTitle, relativeDay(it.id)) } ?: tr("Finished workouts show up here.")
+                    else tr("Nothing was logged that week.")
                 )
             }
         }
@@ -227,16 +227,16 @@ private fun MonthView(
         item {
             AppCard(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Previous month", ::previousMonth, size = 36.dp)
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, tr("Previous month"), ::previousMonth, size = 36.dp)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(monthTitle, style = AppType.bodyStrong, color = P.textPrimary)
-                        Text(if (workoutsThisMonth == 1) "1 training day" else "$workoutsThisMonth training days", style = AppType.caption, color = P.textSecondary)
+                        Text(if (workoutsThisMonth == 1) tr("1 training day") else tr("{0} training days", workoutsThisMonth), style = AppType.caption, color = P.textSecondary)
                     }
-                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Next month", ::nextMonth, size = 36.dp)
+                    CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, tr("Next month"), ::nextMonth, size = 36.dp)
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth()) {
-                    listOf("S", "M", "T", "W", "T", "F", "S").forEach {
+                    weekdayLetters().forEach {
                         Text(it, Modifier.weight(1f), style = AppType.caption, color = P.textTertiary, textAlign = TextAlign.Center)
                     }
                 }
@@ -291,10 +291,10 @@ private fun MonthView(
             }
         }
         item {
-            val label = if (selectedKey == todayKey) "Today" else selectedKey.toDayLabel()
+            val label = if (selectedKey == todayKey) tr("Today") else selectedKey.toDayLabel()
             SectionHeader(label)
         }
-        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyTitle = "Rest day", emptyText = "No workout on this day.", emptyIcon = Icons.Rounded.Event)
+        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyTitle = tr("Rest day"), emptyText = tr("No workout on this day."), emptyIcon = Icons.Rounded.Event)
     }
     }
 }
@@ -352,16 +352,16 @@ fun WorkoutHistoryCard(
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(workout.splitTitle, style = AppType.headline, color = P.textPrimary)
-                Text(workout.displayDate.replace(" • ", " · "), style = AppType.caption, color = P.textSecondary)
+                Text(DateUtils.dateTimeOf(workout.displayDate, workout.id), style = AppType.caption, color = P.textSecondary)
             }
             if (workout.prsHit > 0) {
-                Pill("${workout.prsHit} PR${if (workout.prsHit > 1) "s" else ""}", icon = Icons.Rounded.EmojiEvents, color = P.warningText, container = P.warningSurface)
+                Pill(if (workout.prsHit == 1) tr("1 PR") else tr("{0} PRs", workout.prsHit), icon = Icons.Rounded.EmojiEvents, color = P.warningText, container = P.warningSurface)
             }
             Box {
-                CircleIconButton(Icons.Rounded.MoreVert, "More", { menuOpen = true }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+                CircleIconButton(Icons.Rounded.MoreVert, tr("More"), { menuOpen = true }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
                     DropdownMenuItem(
-                        text = { Text("Share", style = AppType.body) },
+                        text = { Text(tr("Share"), style = AppType.body) },
                         leadingIcon = { Icon(Icons.Rounded.IosShare, null) },
                         onClick = {
                             menuOpen = false
@@ -372,7 +372,7 @@ fun WorkoutHistoryCard(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete", style = AppType.body, color = P.dangerText) },
+                        text = { Text(tr("Delete"), style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onDelete() }
                     )
@@ -382,7 +382,7 @@ fun WorkoutHistoryCard(
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(formatDuration(workout.durationSeconds), icon = Icons.Rounded.Schedule)
-            Pill("$sets sets")
+            Pill(tr("{0} sets", sets))
             if (workout.totalVolumeKg > 0) Pill(formatVolume(workout.totalVolumeKg))
         }
         ExerciseSummary(workout, allHistory)
@@ -392,18 +392,18 @@ fun WorkoutHistoryCard(
         }
         heart?.let {
             Spacer(Modifier.height(8.dp))
-            Pill("${it.average} bpm avg · ${it.max} max", icon = Icons.Rounded.Favorite, color = P.dangerText, container = P.dangerSurface)
+            Pill(tr("{0} bpm avg · {1} max", it.average, it.max), icon = Icons.Rounded.Favorite, color = P.dangerText, container = P.dangerSurface)
         }
         if (workout.skippedExercises.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text("Skipped: ${workout.skippedExercises.joinToString(", ")}", style = AppType.caption, color = P.warningText)
+            Text(tr("Skipped: {0}", workout.skippedExercises.joinToString(", ")), style = AppType.caption, color = P.warningText)
         }
         val bitmap = photo.bitmap
         if (bitmap != null && workout.photoPath != null) {
             Spacer(Modifier.height(12.dp))
             Image(
                 bitmap = bitmap,
-                contentDescription = "Workout photo",
+                contentDescription = tr("Workout photo"),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -445,14 +445,14 @@ private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<Complete
                 Text("${ex.workSets.size} ×", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.width(28.dp))
                 Text(ex.name, style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (isBest) {
-                    Icon(Icons.Rounded.EmojiEvents, "New best", tint = P.warningText, modifier = Modifier.padding(end = 4.dp).size(14.dp))
+                    Icon(Icons.Rounded.EmojiEvents, tr("New best"), tint = P.warningText, modifier = Modifier.padding(end = 4.dp).size(14.dp))
                 }
                 if (best != null) Text(formatSet(best, ex.type), style = AppType.label.copy(fontFeatureSettings = "tnum"), color = if (isBest) P.warningText else P.textSecondary)
             }
         }
         if (rows.size > SUMMARY_ROWS) {
             val more = rows.size - SUMMARY_ROWS
-            Text(if (more == 1) "+1 more exercise" else "+$more more exercises", style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
+            Text(if (more == 1) tr("+1 more exercise") else tr("+{0} more exercises", more), style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
         }
     }
 }

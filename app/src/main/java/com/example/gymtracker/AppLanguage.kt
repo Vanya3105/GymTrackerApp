@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.LocaleManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
@@ -29,15 +30,18 @@ enum class AppLanguage(val tag: String, val label: String) {
             return of(chosen ?: Locale.getDefault().language)
         }
 
-        /** Switches the app to [language]; the activity restarts in it. */
+        /** Switches the app to [language]; the app restarts in it. */
         fun set(activity: Activity, language: AppLanguage) {
             if (language == current(activity)) return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 activity.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(language.tag)
             } else {
                 prefs(activity).edit().putString(KEY_TAG, language.tag).commit()
-                activity.recreate()
             }
+            // Some text is made once per run (tab names, labels), so start the app afresh in the new language.
+            val launch = activity.packageManager.getLaunchIntentForPackage(activity.packageName) ?: return activity.recreate()
+            activity.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            Runtime.getRuntime().exit(0)
         }
 
         /** For attachBaseContext: before Android 13, gives the activity the chosen language. */
@@ -65,3 +69,20 @@ internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+/** Hebrew is on: chosen in the app, or the phone's language when nothing was chosen. */
+internal fun hebrewOn(): Boolean = Locale.getDefault().language.let { it == "he" || it == "iw" }
+
+/**
+ * The app's text in the current language. The code keeps the English, with {0}, {1}… where values
+ * go; the Hebrew comes from [HebrewText]. Text with no Hebrew entry shows in English.
+ */
+fun tr(text: String, vararg args: Any?): String {
+    var out = if (hebrewOn()) HebrewText.of(text) ?: text else text
+    args.forEachIndexed { i, a -> out = out.replace("{$i}", a.toString()) }
+    return out
+}
+
+/** One letter per day, Sunday first. Not through [tr]: in English two days share each of S and T. */
+internal fun weekdayLetters(): List<String> =
+    if (hebrewOn()) listOf("א", "ב", "ג", "ד", "ה", "ו", "ש") else listOf("S", "M", "T", "W", "T", "F", "S")

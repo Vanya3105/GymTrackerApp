@@ -74,9 +74,9 @@ private fun WidgetSettingsScreen(appWidgetId: Int, kind: String, onSave: (Widget
     val context = LocalContext.current
     var settings by remember { mutableStateOf(LocalStorage.loadWidgetSettings(context, appWidgetId, kind)) }
     val title = when (kind) {
-        WIDGET_KIND_RECOVERY -> "Recovery widget"
-        WIDGET_KIND_WEEKLY -> "Weekly widget"
-        else -> "Workout widget"
+        WIDGET_KIND_RECOVERY -> tr("Recovery widget")
+        WIDGET_KIND_WEEKLY -> tr("Weekly widget")
+        else -> tr("Workout widget")
     }
 
     Column(Modifier.fillMaxSize().background(P.bgPrimary).statusBarsPadding().navigationBarsPadding()) {
@@ -88,31 +88,31 @@ private fun WidgetSettingsScreen(appWidgetId: Int, kind: String, onSave: (Widget
                 .padding(top = 20.dp)
         ) {
             Text(title, style = AppType.display, color = P.textPrimary)
-            Text("Changes show in the preview straight away.", style = AppType.body, color = P.textSecondary)
+            Text(tr("Changes show in the preview straight away."), style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(20.dp))
 
             WidgetPreview(kind, settings)
             Spacer(Modifier.height(20.dp))
 
             AppCard(Modifier.fillMaxWidth()) {
-                Text("Theme", style = AppType.label, color = P.textSecondary)
+                Text(tr("Theme"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 SegmentedControl(
-                    options = listOf(THEME_SYSTEM to "Match app", THEME_LIGHT to "Light", THEME_DARK to "Dark"),
+                    options = listOf(THEME_SYSTEM to tr("Match app"), THEME_LIGHT to tr("Light"), THEME_DARK to tr("Dark")),
                     selected = settings.theme,
                     onSelect = { settings = settings.copy(theme = it) }
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("Background", style = AppType.label, color = P.textSecondary)
+                Text(tr("Background"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 SegmentedControl(
-                    options = listOf(WIDGET_STYLE_STANDARD to "Plain", WIDGET_STYLE_TINTED to "Tinted"),
+                    options = listOf(WIDGET_STYLE_STANDARD to tr("Plain"), WIDGET_STYLE_TINTED to tr("Tinted")),
                     selected = settings.style,
                     onSelect = { settings = settings.copy(style = it) }
                 )
                 Spacer(Modifier.height(16.dp))
                 Row {
-                    Text("Opacity", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+                    Text(tr("Opacity"), style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
                     Text("${settings.opacityPercent}%", style = AppType.label.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                 }
                 Slider(
@@ -137,7 +137,7 @@ private fun WidgetSettingsScreen(appWidgetId: Int, kind: String, onSave: (Widget
             Spacer(Modifier.height(20.dp))
         }
         PrimaryButton(
-            "Save",
+            tr("Save"),
             onClick = { onSave(settings) },
             icon = Icons.Rounded.Check,
             modifier = Modifier.padding(20.dp).fillMaxWidth()
@@ -176,7 +176,7 @@ private fun WidgetPreview(kind: String, settings: WidgetSettings) {
                 if (kind == WIDGET_KIND_RECOVERY) MuscleFatigueWidgetProvider.render(context, settings, wDp, hDp)
                 else SquarePulseWidgetProvider.render(context, settings, wDp, hDp)
             }
-            Image(bitmap.asImageBitmap(), contentDescription = "Widget preview", contentScale = ContentScale.Fit, modifier = Modifier.size(wDp.dp, hDp.dp))
+            Image(bitmap.asImageBitmap(), contentDescription = tr("Widget preview"), contentScale = ContentScale.Fit, modifier = Modifier.size(wDp.dp, hDp.dp))
         }
     }
 }

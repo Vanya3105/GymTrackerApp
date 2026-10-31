@@ -66,7 +66,7 @@ object AutoBackup {
     fun refreshStatus(context: Context) {
         val p = prefs(context)
         status = Status(
-            folderName = p.getString(KEY_TREE, null)?.let { p.getString(KEY_FOLDER_NAME, null) ?: "Chosen folder" },
+            folderName = p.getString(KEY_TREE, null)?.let { p.getString(KEY_FOLDER_NAME, null) ?: tr("Chosen folder") },
             lastSuccessMillis = p.getLong(KEY_LAST_SUCCESS, 0L),
             error = p.getString(KEY_ERROR, null)
         )
@@ -163,8 +163,8 @@ object AutoBackup {
     }
 
     private fun folderError(e: Exception): String =
-        if (e is SecurityException || e is IllegalArgumentException) "Can't reach the folder any more. Choose it again."
-        else "The last backup didn't work. Check the folder still exists."
+        if (e is SecurityException || e is IllegalArgumentException) tr("Can't reach the folder any more. Choose it again.")
+        else tr("The last backup didn't work. Check the folder still exists.")
 
     internal fun fileName(nowMillis: Long): String =
         FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date(nowMillis)) + ".json"

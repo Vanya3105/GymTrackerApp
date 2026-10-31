@@ -61,7 +61,7 @@ fun SplitPicker(
     var searching by remember { mutableStateOf(false) }
     val selected = programFor(selectedId)
 
-    SearchBarButton("Search splits") { searching = true }
+    SearchBarButton(tr("Search splits")) { searching = true }
     Spacer(Modifier.height(12.dp))
     AnimatedContent(
         targetState = selected,
@@ -76,7 +76,7 @@ fun SplitPicker(
     ) {
         Icon(Icons.Rounded.Add, null, tint = P.textSecondary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
-        Text("Build your own split", style = AppType.label, color = P.textPrimary)
+        Text(tr("Build your own split"), style = AppType.label, color = P.textPrimary)
     }
 
     if (searching) {
@@ -116,7 +116,7 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
     val content: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your split", style = AppType.caption, color = P.textSecondary)
+                Text(tr("Your split"), style = AppType.caption, color = P.textSecondary)
                 Text(program.name, style = AppType.headline, color = P.textPrimary)
             }
             if (actionLabel != null && onAction != null) {
@@ -146,7 +146,7 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
     else Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), content = content)
 }
 
-fun daysLabel(days: Int) = if (days == 1) "1 day a week" else "$days days a week"
+fun daysLabel(days: Int) = if (days == 1) tr("1 day a week") else tr("{0} days a week", days)
 
 /** Search every split (built-in and the user's), filter by days a week, or start building a new one. */
 @Composable
@@ -175,9 +175,9 @@ fun SplitPickerSheet(
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
             Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Choose a split", style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))
+                Text(tr("Choose a split"), style = AppType.title, color = P.textPrimary, modifier = Modifier.weight(1f))
                 Text(
-                    "Done",
+                    tr("Done"),
                     style = AppType.label,
                     color = P.textPrimary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = onDismiss).padding(8.dp)
@@ -198,7 +198,7 @@ fun SplitPickerSheet(
                 Icon(Icons.Rounded.Search, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text("Try \"ppl\", \"upper lower\" or \"4 days\"", style = AppType.body, color = P.textTertiary)
+                    if (query.isEmpty()) Text(tr("Try \"ppl\", \"upper lower\" or \"4 days\""), style = AppType.body, color = P.textTertiary)
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -211,7 +211,7 @@ fun SplitPickerSheet(
                     )
                 }
                 if (query.isNotEmpty()) {
-                    CircleIconButton(Icons.Rounded.Close, "Clear search", { query = "" }, size = 28.dp, container = Color.Transparent, tint = P.textSecondary)
+                    CircleIconButton(Icons.Rounded.Close, tr("Clear search"), { query = "" }, size = 28.dp, container = Color.Transparent, tint = P.textSecondary)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -222,7 +222,7 @@ fun SplitPickerSheet(
                     val bg by animateColorAsState(if (isSel) P.textPrimary else P.bgControl, label = "days_bg")
                     val fg by animateColorAsState(if (isSel) P.bgPrimary else P.textSecondary, label = "days_fg")
                     Text(
-                        if (d == null) "Any days" else if (d == 1) "1 day" else "$d days",
+                        if (d == null) tr("Any days") else if (d == 1) tr("1 day") else tr("{0} days", d),
                         style = AppType.label,
                         color = fg,
                         modifier = Modifier
@@ -243,23 +243,23 @@ fun SplitPickerSheet(
                 modifier = Modifier.weight(1f)
             ) {
                 item(key = "build") {
-                    BuildRow(if (trimmed.isEmpty()) "Build your own split" else "Build \"$trimmed\"") { onBuild(trimmed) }
+                    BuildRow(if (trimmed.isEmpty()) tr("Build your own split") else tr("Build \"{0}\"", trimmed)) { onBuild(trimmed) }
                 }
                 if (own.isNotEmpty()) {
-                    item(key = "own_header") { ListLabel("Your splits") }
+                    item(key = "own_header") { ListLabel(tr("Your splits")) }
                     items(own, key = { it.id }) { p ->
                         SplitRow(p, p.id == selectedId, onEdit?.let { { it(p) } }, Modifier.animateItem()) { onSelect(p) }
                     }
                 }
                 if (builtIn.isNotEmpty()) {
-                    item(key = "builtin_header") { ListLabel(if (trimmed.isEmpty() && days == null) "Popular splits" else "Splits") }
+                    item(key = "builtin_header") { ListLabel(if (trimmed.isEmpty() && days == null) tr("Popular splits") else tr("Splits")) }
                     items(builtIn, key = { it.id }) { p ->
                         SplitRow(p, p.id == selectedId, null, Modifier.animateItem()) { onSelect(p) }
                     }
                 }
                 if (results.isEmpty()) {
                     item(key = "empty") {
-                        EmptyState(Icons.Rounded.Search, "No splits match", "Build it yourself: pick your days and the muscles for each.")
+                        EmptyState(Icons.Rounded.Search, tr("No splits match"), tr("Build it yourself: pick your days and the muscles for each."))
                     }
                 }
             }
@@ -292,7 +292,7 @@ private fun BuildRow(title: String, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = AppType.bodyStrong, color = P.accentPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Pick your days and what each one trains", style = AppType.caption, color = P.textSecondary)
+            Text(tr("Pick your days and what each one trains"), style = AppType.caption, color = P.textSecondary)
         }
     }
 }
@@ -326,11 +326,11 @@ private fun SplitRow(
             )
         }
         if (onEdit != null) {
-            CircleIconButton(Icons.Rounded.Edit, "Edit ${program.name}", onEdit, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+            CircleIconButton(Icons.Rounded.Edit, tr("Edit {0}", program.name), onEdit, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
         }
         if (selected) {
             Box(Modifier.padding(horizontal = 6.dp).size(22.dp).clip(CircleShape).background(P.accentPrimary), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Check, "Selected", tint = P.onAccentPrimary, modifier = Modifier.size(14.dp))
+                Icon(Icons.Rounded.Check, tr("Selected"), tint = P.onAccentPrimary, modifier = Modifier.size(14.dp))
             }
         }
     }

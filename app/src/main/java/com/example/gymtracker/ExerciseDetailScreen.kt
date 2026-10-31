@@ -103,10 +103,10 @@ fun ExerciseDetailScreen(
                 Modifier.statusBarsPadding().padding(top = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
+                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), onBack)
                 Spacer(Modifier.weight(1f))
                 if (canRename && stats.sessions.isNotEmpty()) {
-                    CircleIconButton(Icons.Rounded.Edit, "Rename", { haptics.tick(); showRename = true })
+                    CircleIconButton(Icons.Rounded.Edit, tr("Rename"), { haptics.tick(); showRename = true })
                 }
             }
         }
@@ -134,37 +134,37 @@ fun ExerciseDetailScreen(
         }
 
         if (stats.sessions.isEmpty()) {
-            item { EmptyState(Icons.Rounded.FitnessCenter, "Nothing logged yet", "Finish a workout with this exercise to see your progress.") }
+            item { EmptyState(Icons.Rounded.FitnessCenter, tr("Nothing logged yet"), tr("Finish a workout with this exercise to see your progress.")) }
             return@LazyColumn
         }
 
         item {
             val type = stats.type
-            val sessions = "${stats.sessions.size}" to if (stats.sessions.size == 1) "Session" else "Sessions"
+            val sessions = "${stats.sessions.size}" to if (stats.sessions.size == 1) tr("Session") else tr("Sessions")
             val tiles = when (type) {
                 ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT -> listOf(
-                    formatWeightKg(stats.best1RmKg) to "Est. 1-rep max",
-                    formatWeightKg(stats.heaviestKg) to if (type == ExerciseType.WEIGHT_REPS) "Heaviest" else "Most added",
+                    formatWeightKg(stats.best1RmKg) to tr("Est. 1-rep max"),
+                    formatWeightKg(stats.heaviestKg) to if (type == ExerciseType.WEIGHT_REPS) tr("Heaviest") else tr("Most added"),
                     sessions
                 )
                 ExerciseType.BODYWEIGHT -> listOf(
-                    ChartMetric.MOST_REPS.format(stats.bestValue) to "Most in a set",
-                    "${stats.allTimeReps}" to "Total reps",
+                    ChartMetric.MOST_REPS.format(stats.bestValue) to tr("Most in a set"),
+                    "${stats.allTimeReps}" to tr("Total reps"),
                     sessions
                 )
                 ExerciseType.ASSISTED -> listOf(
-                    ChartMetric.ASSISTANCE.format(stats.bestValue) to "Least help",
-                    ChartMetric.MOST_REPS.format(stats.sessions.maxOf { it.maxReps }.toFloat()) to "Most in a set",
+                    ChartMetric.ASSISTANCE.format(stats.bestValue) to tr("Least help"),
+                    ChartMetric.MOST_REPS.format(stats.sessions.maxOf { it.maxReps }.toFloat()) to tr("Most in a set"),
                     sessions
                 )
                 ExerciseType.DURATION -> listOf(
-                    formatClock(stats.bestValue.toLong()) to "Longest",
-                    formatClock(stats.allTimeSeconds.toLong()) to "Total time",
+                    formatClock(stats.bestValue.toLong()) to tr("Longest"),
+                    formatClock(stats.allTimeSeconds.toLong()) to tr("Total time"),
                     sessions
                 )
                 ExerciseType.DISTANCE_TIME -> listOf(
-                    formatDistance(stats.bestValue) to "Longest",
-                    formatDistance(stats.allTimeDistanceM) to "Total distance",
+                    formatDistance(stats.bestValue) to tr("Longest"),
+                    formatDistance(stats.allTimeDistanceM) to tr("Total distance"),
                     sessions
                 )
             }
@@ -176,11 +176,11 @@ fun ExerciseDetailScreen(
         item { ProgressChartCard(stats, haptics, Modifier.enterAnimation(0)) }
 
         if (stats.type.hasWeightSuggestions) {
-            item { SectionHeader("Rep records") }
+            item { SectionHeader(tr("Rep records")) }
             item { RepRecordsCard(stats, Modifier.enterAnimation(1)) }
         }
 
-        item { SectionHeader("History") }
+        item { SectionHeader(tr("History")) }
         items(stats.sessions, key = { it.workoutId }) { session -> SessionCard(session) }
     }
 
@@ -256,7 +256,7 @@ private fun ProgressChartCard(stats: ExerciseHistory, haptics: Haptics, modifier
         if (shown != null) {
             Text(format(shown.second), style = AppType.bigNumber, color = P.textPrimary)
             Text(
-                (if (selected == null) "Latest · " else "") + DateUtils.formatShortDayYear(Date(shown.first)),
+                (if (selected == null) tr("Latest · ") else "") + DateUtils.formatShortDayYear(Date(shown.first)),
                 style = AppType.caption,
                 color = P.textSecondary
             )
@@ -274,7 +274,7 @@ private fun ProgressChartCard(stats: ExerciseHistory, haptics: Haptics, modifier
             }
         } else {
             Text(
-                if (points.isEmpty()) "No sessions in this period." else "Log one more session to see a trend.",
+                if (points.isEmpty()) tr("No sessions in this period.") else tr("Log one more session to see a trend."),
                 style = AppType.label.copy(fontWeight = FontWeight.Normal),
                 color = P.textTertiary,
                 modifier = Modifier.padding(vertical = 24.dp)
@@ -381,7 +381,7 @@ private fun RepRecordsCard(stats: ExerciseHistory, modifier: Modifier = Modifier
             if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
             val rec = byReps[reps]
             Row(Modifier.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (reps == 1) "1 rep" else "$reps reps", style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
+                Text(if (reps == 1) tr("1 rep") else tr("{0} reps", reps), style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
                 if (rec == null) {
                     Text("—", style = AppType.number, color = P.textTertiary)
                 } else {
@@ -404,18 +404,18 @@ private fun SessionCard(session: ExerciseSession) {
                 Text(session.splitTitle, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (session.isRecord) {
-                Pill("Best yet", color = P.warningText, container = P.warningSurface, icon = Icons.Rounded.EmojiEvents)
+                Pill(tr("Best yet"), color = P.warningText, container = P.warningSurface, icon = Icons.Rounded.EmojiEvents)
             }
         }
         Spacer(Modifier.height(10.dp))
         var workNumber = 0
         session.sets.forEach { set ->
             val tag = when {
-                set.isWarmupSet -> "W"
+                set.isWarmupSet -> tr("W")
                 else -> "${++workNumber}"
             }
             val kind = when (set.intensityType) {
-                "DROP" -> "drop set"
+                "DROP" -> tr("drop set")
                 "REST_PAUSE" -> "rest-pause"
                 else -> null
             }
@@ -434,10 +434,10 @@ private fun SessionCard(session: ExerciseSession) {
         }
         val footer = when (session.type) {
             ExerciseType.WEIGHT_REPS, ExerciseType.WEIGHTED_BODYWEIGHT ->
-                "Est. 1RM ${formatWeightKg(session.estimated1RmKg)} · Volume ${formatVolume(session.volumeKg.roundToInt())}"
-            ExerciseType.BODYWEIGHT, ExerciseType.ASSISTED -> "${session.totalReps} reps in total"
-            ExerciseType.DURATION -> "${formatClock(session.totalSeconds.toLong())} in total"
-            ExerciseType.DISTANCE_TIME -> ChartMetric.PACE.valueOf(session).takeIf { it > 0f }?.let { "Pace ${ChartMetric.PACE.format(it)}" }
+                tr("Est. 1RM {0} · Volume {1}", formatWeightKg(session.estimated1RmKg), formatVolume(session.volumeKg.roundToInt()))
+            ExerciseType.BODYWEIGHT, ExerciseType.ASSISTED -> tr("{0} reps in total", session.totalReps)
+            ExerciseType.DURATION -> tr("{0} in total", formatClock(session.totalSeconds.toLong()))
+            ExerciseType.DISTANCE_TIME -> ChartMetric.PACE.valueOf(session).takeIf { it > 0f }?.let { tr("Pace {0}", ChartMetric.PACE.format(it)) }
         }
         if (footer != null) {
             Spacer(Modifier.height(6.dp))
@@ -477,13 +477,13 @@ fun TrainingMaxRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Training max · $programNames", style = AppType.caption, color = P.textSecondary)
-            Text(currentKg?.let { formatWeightKg(it) } ?: "Not set", style = AppType.bodyStrong, color = P.textPrimary)
+            Text(tr("Training max · {0}", programNames), style = AppType.caption, color = P.textSecondary)
+            Text(currentKg?.let { formatWeightKg(it) } ?: tr("Not set"), style = AppType.bodyStrong, color = P.textPrimary)
             if (tm != null && currentKg != null && currentKg > tm.kg) {
-                Text("Started at ${formatWeightKg(tm.kg)}; the program has added the rest", style = AppType.caption, color = P.textSecondary)
+                Text(tr("Started at {0}; the program has added the rest", formatWeightKg(tm.kg)), style = AppType.caption, color = P.textSecondary)
             }
         }
-        Icon(Icons.Rounded.Edit, "Change", tint = P.textSecondary, modifier = Modifier.size(20.dp))
+        Icon(Icons.Rounded.Edit, tr("Change"), tint = P.textSecondary, modifier = Modifier.size(20.dp))
     }
 
     if (editing) {
@@ -493,13 +493,13 @@ fun TrainingMaxRow(
         AlertDialog(
             onDismissRequest = { editing = false },
             containerColor = P.bgElevated,
-            title = { Text("Training max", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Training max"), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Column {
                     Text(
-                        "Your $programNames weights are worked out from this. A good start is 90% of your best estimated 1-rep max" +
+                        tr("Your {0} weights are worked out from this. A good start is 90% of your best estimated 1-rep max", programNames) +
                             (if (best1RmKg > 0f) " (${formatWeightKg(suggestedTrainingMaxKg(best1RmKg))})." else ".") +
-                            " Saving starts the program again at week 1.",
+                            tr(" Saving starts the program again at week 1."),
                         style = AppType.caption,
                         color = P.textSecondary
                     )
@@ -516,7 +516,7 @@ fun TrainingMaxRow(
                         editing = false
                         onChanged()
                     }
-                ) { Text("Save", color = P.accentPrimary, style = AppType.label) }
+                ) { Text(tr("Save"), color = P.accentPrimary, style = AppType.label) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -526,7 +526,7 @@ fun TrainingMaxRow(
                         onChanged()
                     }
                     editing = false
-                }) { Text(if (tm != null) "Clear" else "Cancel", color = P.textSecondary, style = AppType.label) }
+                }) { Text(if (tm != null) tr("Clear") else tr("Cancel"), color = P.textSecondary, style = AppType.label) }
             }
         )
     }
@@ -544,10 +544,10 @@ private fun RenameDialog(current: String, onDismiss: () -> Unit, onRename: (Stri
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text("Rename exercise", style = AppType.headline, color = P.textPrimary) },
+        title = { Text(tr("Rename exercise"), style = AppType.headline, color = P.textPrimary) },
         text = {
             Column {
-                Text("Your history, notes and workouts keep it under the new name.", style = AppType.body, color = P.textSecondary)
+                Text(tr("Your history, notes and workouts keep it under the new name."), style = AppType.body, color = P.textSecondary)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = field,
@@ -569,10 +569,10 @@ private fun RenameDialog(current: String, onDismiss: () -> Unit, onRename: (Stri
         confirmButton = {
             TextButton(
                 enabled = text.isNotBlank() && text.trim() != current,
-                onClick = { if (!onRename(text.trim())) error = "Another exercise already has that name." }
-            ) { Text("Rename", color = P.accentPrimary, style = AppType.label) }
+                onClick = { if (!onRename(text.trim())) error = tr("Another exercise already has that name.") }
+            ) { Text(tr("Rename"), color = P.accentPrimary, style = AppType.label) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }
 
@@ -597,12 +597,12 @@ private fun NoteRow(note: String, onEdit: () -> Unit) {
         Icon(Icons.Rounded.PushPin, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(10.dp))
         Text(
-            note.ifBlank { "Add a setup note (seat height, grip…)" },
+            note.ifBlank { tr("Add a setup note (seat height, grip…)") },
             style = AppType.body,
             color = if (note.isBlank()) P.textTertiary else P.textPrimary,
             modifier = Modifier.weight(1f)
         )
-        Icon(Icons.Rounded.Edit, "Edit note", tint = P.textTertiary, modifier = Modifier.size(16.dp))
+        Icon(Icons.Rounded.Edit, tr("Edit note"), tint = P.textTertiary, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -613,12 +613,12 @@ private fun NoteDialog(current: String, onDismiss: () -> Unit, onSave: (String) 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text("Setup note", style = AppType.headline, color = P.textPrimary) },
+        title = { Text(tr("Setup note"), style = AppType.headline, color = P.textPrimary) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Seat height, grip, pin…") },
+                placeholder = { Text(tr("Seat height, grip, pin…")) },
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = P.accentPrimary,
@@ -627,8 +627,8 @@ private fun NoteDialog(current: String, onDismiss: () -> Unit, onSave: (String) 
                 modifier = Modifier.fillMaxWidth()
             )
         },
-        confirmButton = { TextButton(onClick = { onSave(text) }) { Text("Save", color = P.accentPrimary, style = AppType.label) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text(tr("Save"), color = P.accentPrimary, style = AppType.label) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }
 
@@ -641,7 +641,7 @@ private fun MergeRow(onClick: () -> Unit) {
     ) {
         Icon(Icons.Rounded.CallMerge, null, tint = P.textSecondary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text("Same exercise under another name? Merge them", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+        Text(tr("Same exercise under another name? Merge them"), style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(18.dp))
     }
 }
@@ -660,13 +660,13 @@ private fun MergePickerSheet(exerciseName: String, others: List<String>, onPick:
     }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxHeight(0.8f).navigationBarsPadding().imePadding()) {
-            Text("Merge $exerciseName with…", style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 20.dp))
-            Text("Pick the exercise it's the same as. Next you choose which name to keep.", style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
+            Text(tr("Merge {0} with…", exerciseName), style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 20.dp))
+            Text(tr("Pick the exercise it's the same as. Next you choose which name to keep."), style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search your exercises") },
+                placeholder = { Text(tr("Search your exercises")) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = P.accentPrimary, unfocusedBorderColor = P.borderStrong),
@@ -680,7 +680,7 @@ private fun MergePickerSheet(exerciseName: String, others: List<String>, onPick:
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(name, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
-                        if (name in likely) Text("Looks the same", style = AppType.caption, color = P.accentPrimary)
+                        if (name in likely) Text(tr("Looks the same"), style = AppType.caption, color = P.accentPrimary)
                     }
                 }
             }
@@ -700,11 +700,11 @@ fun MergeExercisesDialog(a: String, b: String, history: List<CompletedWorkout>, 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text("Merge into one exercise?", style = AppType.headline, color = P.textPrimary) },
+        title = { Text(tr("Merge into one exercise?"), style = AppType.headline, color = P.textPrimary) },
         text = {
             Column {
                 Text(
-                    "Choose the name to keep. The other one's sessions, records and notes move into it. A copy of your data is kept first.",
+                    tr("Choose the name to keep. The other one's sessions, records and notes move into it. A copy of your data is kept first."),
                     style = AppType.body,
                     color = P.textSecondary
                 )
@@ -717,15 +717,15 @@ fun MergeExercisesDialog(a: String, b: String, history: List<CompletedWorkout>, 
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Keep “$name”", style = AppType.bodyStrong, color = P.textPrimary)
-                            Text(if (count == 1) "1 session" else "$count sessions", style = AppType.caption, color = P.textSecondary)
+                            Text(tr("Keep “{0}”", name), style = AppType.bodyStrong, color = P.textPrimary)
+                            Text(if (count == 1) tr("1 session") else tr("{0} sessions", count), style = AppType.caption, color = P.textSecondary)
                         }
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }
 
@@ -749,9 +749,9 @@ private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) 
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(if (guide != null) "How to do it" else "Muscles worked", style = AppType.headline, color = P.textPrimary)
+                Text(if (guide != null) tr("How to do it") else tr("Muscles worked"), style = AppType.headline, color = P.textPrimary)
                 Text(
-                    listOfNotNull(main.joinToString(", ").ifEmpty { null }, helping.takeIf { it.isNotEmpty() }?.let { "helped by " + it.joinToString(", ") })
+                    listOfNotNull(main.joinToString(", ").ifEmpty { null }, helping.takeIf { it.isNotEmpty() }?.let { tr("helped by ") + it.joinToString(", ") })
                         .joinToString(", "),
                     style = AppType.caption,
                     color = P.textSecondary
@@ -759,7 +759,7 @@ private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) 
             }
             Icon(
                 if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                if (open) "Hide" else "Show",
+                if (open) tr("Hide") else tr("Show"),
                 tint = P.textTertiary
             )
         }
@@ -789,8 +789,8 @@ fun ExerciseGuideBody(exerciseName: String, muscle: String, modifier: Modifier =
         if (main.isNotEmpty()) {
             MuscleMap(loads, Modifier.fillMaxWidth())
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Legend(P.accentPrimary, "Main")
-                if (helping.isNotEmpty()) Legend(P.accentPrimary.copy(alpha = 0.5f), "Helping")
+                Legend(P.accentPrimary, tr("Main"))
+                if (helping.isNotEmpty()) Legend(P.accentPrimary.copy(alpha = 0.5f), tr("Helping"))
             }
         }
         if (guide != null) {

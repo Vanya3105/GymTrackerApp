@@ -93,7 +93,7 @@ object DriveBackup {
     }
 
     private fun completeSignIn(context: Context, result: AuthorizationResult, onStep: (SignInStep) -> Unit) {
-        val token = result.accessToken ?: return onStep(SignInStep.Failed("Google didn't allow access to Drive."))
+        val token = result.accessToken ?: return onStep(SignInStep.Failed(tr("Google didn't allow access to Drive.")))
         // The account comes with the sign-in; asking Google for it separately could fail on its own.
         val signedInAs = runCatching { result.toGoogleSignInAccount()?.email }.getOrNull()
         executor.execute {
@@ -118,9 +118,9 @@ object DriveBackup {
             // Status 16: the user backed out; nothing to say.
             "16:" in text -> ""
             // Status 10: no OAuth client for this app's package and signing key.
-            "10:" in text || "DEVELOPER_ERROR" in text -> "Google sign-in isn't set up for this version of the app yet."
-            "7:" in text || "NETWORK" in text.uppercase(Locale.US) -> "No connection. Try again when you're online."
-            else -> "Couldn't sign in with Google."
+            "10:" in text || "DEVELOPER_ERROR" in text -> tr("Google sign-in isn't set up for this version of the app yet.")
+            "7:" in text || "NETWORK" in text.uppercase(Locale.US) -> tr("No connection. Try again when you're online.")
+            else -> tr("Couldn't sign in with Google.")
         }
     }
 
@@ -129,11 +129,11 @@ object DriveBackup {
         val detail = (e as? DriveException)?.message.orEmpty()
         return when {
             e is DriveException && e.code == 403 && ("accessNotConfigured" in detail || "has not been used" in detail || "disabled" in detail) ->
-                "Signed in, but the Google Drive API isn't turned on in the Google Cloud project."
-            e is DriveException && e.code == 403 -> "Signed in, but Google didn't give access to Drive (403). Check the drive.appdata scope."
-            e is DriveException && e.code == 401 -> "Signed in, but Google turned down the access (401). Try signing in again."
-            e is DriveException -> "Signed in, but Google Drive answered with an error (${e.code})."
-            else -> "Signed in, but Google Drive didn't answer. Check the connection and try again."
+                tr("Signed in, but the Google Drive API isn't turned on in the Google Cloud project.")
+            e is DriveException && e.code == 403 -> tr("Signed in, but Google didn't give access to Drive (403). Check the drive.appdata scope.")
+            e is DriveException && e.code == 401 -> tr("Signed in, but Google turned down the access (401). Try signing in again.")
+            e is DriveException -> tr("Signed in, but Google Drive answered with an error ({0}).", e.code)
+            else -> tr("Signed in, but Google Drive didn't answer. Check the connection and try again.")
         }
     }
 
@@ -172,8 +172,8 @@ object DriveBackup {
             prefs(context).edit().putString(AutoBackup.KEY_ERROR, "Google needs you to sign in again.").apply()
         } else {
             AutoBackup.run(context, DriveFolder(token), force, System.currentTimeMillis(), PREFS) { e ->
-                if (e is DriveException && e.code == 401) "Google needs you to sign in again."
-                else "The last backup to Google Drive didn't work. It'll try again next time."
+                if (e is DriveException && e.code == 401) tr("Google needs you to sign in again.")
+                else tr("The last backup to Google Drive didn't work. It'll try again next time.")
             }
         }
         main.post { refreshStatus(context) }

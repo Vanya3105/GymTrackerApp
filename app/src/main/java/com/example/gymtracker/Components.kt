@@ -507,7 +507,7 @@ fun NumberStepper(
             .background(P.bgControl),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StepperButton(Icons.Rounded.Remove, "Decrease", enabled, P.textSecondary, onMinus)
+        StepperButton(Icons.Rounded.Remove, tr("Decrease"), enabled, P.textSecondary, onMinus)
         if (enabled) {
             val textStyle = AppType.number.copy(color = P.textPrimary, textAlign = TextAlign.Center)
             val decoration: @Composable (@Composable () -> Unit) -> Unit = { inner ->
@@ -542,7 +542,7 @@ fun NumberStepper(
         } else {
             Text(value.ifEmpty { "0" }, style = AppType.number, color = P.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         }
-        StepperButton(Icons.Rounded.Add, "Increase", enabled, P.textSecondary, onPlus)
+        StepperButton(Icons.Rounded.Add, tr("Increase"), enabled, P.textSecondary, onPlus)
     }
 }
 

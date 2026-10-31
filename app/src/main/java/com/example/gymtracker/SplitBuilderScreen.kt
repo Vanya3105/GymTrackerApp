@@ -110,7 +110,7 @@ fun SplitBuilderScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircleIconButton(
                 if (step == 0) Icons.Rounded.Close else Icons.AutoMirrored.Rounded.ArrowBack,
-                if (step == 0) "Close" else "Back",
+                if (step == 0) tr("Close") else tr("Back"),
                 ::back,
                 container = Color.Transparent
             )
@@ -157,7 +157,7 @@ fun SplitBuilderScreen(
                     )
                     else -> ReviewStep(
                         name = name,
-                        placeholder = "My $dayCount-day split",
+                        placeholder = tr("My {0}-day split", dayCount),
                         onName = { name = it },
                         titles = titles,
                         days = days.map { it.muscles },
@@ -176,9 +176,9 @@ fun SplitBuilderScreen(
         val missingMuscles = titles.indices.firstOrNull { days[it].muscles.isEmpty() && !days[it].manualTitle }
         val missingExercises = titles.indices.firstOrNull { exercises[it].isEmpty() }
         val (label, enabled) = when (step) {
-            0 -> "Continue" to true
-            1 -> if (missingMuscles != null) "Pick muscles for ${titles[missingMuscles]}" to false else "Continue" to true
-            else -> if (missingExercises != null) "Add exercises to ${titles[missingExercises]}" to false else "Create split" to true
+            0 -> tr("Continue") to true
+            1 -> if (missingMuscles != null) tr("Pick muscles for {0}", titles[missingMuscles]) to false else tr("Continue") to true
+            else -> if (missingExercises != null) tr("Add exercises to {0}", titles[missingExercises]) to false else tr("Create split") to true
         }
         PrimaryButton(
             text = label,
@@ -235,7 +235,7 @@ fun SplitBuilderScreen(
                 editedExercises[key] = (editedExercises[key] ?: exercises[i]) + (exName to "")
             },
             onDismiss = { pickingFor = null },
-            addedLabel = "Already on this day"
+            addedLabel = tr("Already on this day")
         )
     }
 }
@@ -249,20 +249,20 @@ private fun variantOf(title: String): Int {
 @Composable
 private fun ColumnScope.DaysStep(dayCount: Int, haptics: Haptics, onChange: (Int) -> Unit) {
     val P = LocalPalette.current
-    Text("How many days a week?", style = AppType.display, color = P.textPrimary)
+    Text(tr("How many days a week?"), style = AppType.display, color = P.textPrimary)
     Spacer(Modifier.height(6.dp))
-    Text("Count the different workouts in your week. You can change everything later.", style = AppType.body, color = P.textSecondary)
+    Text(tr("Count the different workouts in your week. You can change everything later."), style = AppType.body, color = P.textSecondary)
     Spacer(Modifier.height(40.dp))
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        CircleIconButton(Icons.Rounded.Remove, "Fewer days", { haptics.tick(); onChange(dayCount - 1) }, enabled = dayCount > 1, size = 56.dp)
+        CircleIconButton(Icons.Rounded.Remove, tr("Fewer days"), { haptics.tick(); onChange(dayCount - 1) }, enabled = dayCount > 1, size = 56.dp)
         Box(Modifier.width(120.dp), contentAlignment = Alignment.Center) {
             RollingText("$dayCount", style = AppType.bigNumber.copy(fontSize = 72.sp, lineHeight = 80.sp), color = P.textPrimary)
         }
-        CircleIconButton(Icons.Rounded.Add, "More days", { haptics.tick(); onChange(dayCount + 1) }, enabled = dayCount < 7, size = 56.dp)
+        CircleIconButton(Icons.Rounded.Add, tr("More days"), { haptics.tick(); onChange(dayCount + 1) }, enabled = dayCount < 7, size = 56.dp)
     }
     Text(
-        if (dayCount == 1) "day a week" else "days a week",
+        if (dayCount == 1) tr("day a week") else tr("days a week"),
         style = AppType.body,
         color = P.textSecondary,
         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -277,7 +277,7 @@ private fun ColumnScope.DaysStep(dayCount: Int, haptics: Haptics, onChange: (Int
     }
     Spacer(Modifier.height(24.dp))
     Text(
-        "Most people on $dayCount ${if (dayCount == 1) "day" else "days"} run: ${QuickLayout.suggestedFor(dayCount).label}",
+        tr("Most people on {0} {1} run: {2}", dayCount, if (dayCount == 1) tr("day") else tr("days"), QuickLayout.suggestedFor(dayCount).label),
         style = AppType.caption,
         color = P.textTertiary,
         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -295,9 +295,9 @@ private fun MusclesStep(
     onRename: (Int) -> Unit
 ) {
     val P = LocalPalette.current
-    Text("What does each day train?", style = AppType.display, color = P.textPrimary)
+    Text(tr("What does each day train?"), style = AppType.display, color = P.textPrimary)
     Spacer(Modifier.height(6.dp))
-    Text("Start from a layout, then tap muscles to change any day.", style = AppType.body, color = P.textSecondary)
+    Text(tr("Start from a layout, then tap muscles to change any day."), style = AppType.body, color = P.textSecondary)
     Spacer(Modifier.height(16.dp))
 
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -324,7 +324,7 @@ private fun MusclesStep(
                     modifier = Modifier.weight(1f),
                     label = "day_title"
                 ) { t -> Text(t, style = AppType.headline, color = P.textPrimary) }
-                CircleIconButton(Icons.Rounded.Edit, "Rename ${titles[i]}", { onRename(i) }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+                CircleIconButton(Icons.Rounded.Edit, tr("Rename {0}", titles[i]), { onRename(i) }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
             }
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -378,11 +378,11 @@ private fun ReviewStep(
     onAdd: (day: Int) -> Unit
 ) {
     val P = LocalPalette.current
-    Text("Your split", style = AppType.display, color = P.textPrimary)
+    Text(tr("Your split"), style = AppType.display, color = P.textPrimary)
     Spacer(Modifier.height(6.dp))
-    Text("Name it and check each day's exercises. Sets and reps are set during workouts.", style = AppType.body, color = P.textSecondary)
+    Text(tr("Name it and check each day's exercises. Sets and reps are set during workouts."), style = AppType.body, color = P.textSecondary)
     Spacer(Modifier.height(20.dp))
-    Text("Name", style = AppType.label, color = P.textSecondary)
+    Text(tr("Name"), style = AppType.label, color = P.textSecondary)
     Spacer(Modifier.height(6.dp))
     OutlinedTextField(
         value = name,
@@ -402,7 +402,7 @@ private fun ReviewStep(
         ) {
             Text(title, style = AppType.headline, color = P.textPrimary)
             val muscles = BUILDER_MUSCLES.filter { it in days[i] }.joinToString(", ")
-            val note = if (shared[i]) "You already have a $title day: it keeps its exercises and history, and changes here apply to it everywhere" else null
+            val note = if (shared[i]) tr("You already have a {0} day: it keeps its exercises and history, and changes here apply to it everywhere", title) else null
             listOfNotNull(muscles.ifBlank { null }, note).forEach {
                 Text(it, style = AppType.caption, color = P.textSecondary)
             }
@@ -413,11 +413,11 @@ private fun ReviewStep(
                         Text(exName, style = AppType.body, color = P.textPrimary)
                         if (muscle.isNotBlank()) Text(muscle, style = AppType.caption, color = P.textTertiary)
                     }
-                    CircleIconButton(Icons.Rounded.Close, "Remove $exName", { onRemove(i, j) }, size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
+                    CircleIconButton(Icons.Rounded.Close, tr("Remove {0}", exName), { onRemove(i, j) }, size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
                 }
             }
             Text(
-                "Add exercise",
+                tr("Add exercise"),
                 style = AppType.label,
                 color = P.accentPrimary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onAdd(i) }.padding(vertical = 10.dp, horizontal = 2.dp)
@@ -436,20 +436,20 @@ private fun RenameDayDialog(current: String, onDismiss: () -> Unit, onSave: (Str
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text("Name this day", style = AppType.headline, color = P.textPrimary) },
+        title = { Text(tr("Name this day"), style = AppType.headline, color = P.textPrimary) },
         text = {
             OutlinedTextField(
                 value = field,
                 onValueChange = { field = it },
-                label = { Text("Like Push or Upper A") },
-                supportingText = { Text("Leave it empty to name it after its muscles.") },
+                label = { Text(tr("Like Push or Upper A")) },
+                supportingText = { Text(tr("Leave it empty to name it after its muscles.")) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = fieldColors(),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus)
             )
         },
-        confirmButton = { TextButton(onClick = { onSave(field.text) }) { Text("Save", color = P.accentPrimary, style = AppType.label) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        confirmButton = { TextButton(onClick = { onSave(field.text) }) { Text(tr("Save"), color = P.accentPrimary, style = AppType.label) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }

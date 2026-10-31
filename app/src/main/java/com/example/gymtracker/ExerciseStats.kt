@@ -56,17 +56,17 @@ data class ExerciseHistory(
 )
 
 enum class ChartMetric(val label: String) {
-    EST_1RM("Est. 1RM"),
-    TOP_WEIGHT("Top weight"),
-    VOLUME("Volume"),
-    MOST_REPS("Most reps"),
-    TOTAL_REPS("Total reps"),
-    ASSISTANCE("Assistance"),
-    LONGEST("Longest"),
-    TOTAL_TIME("Total time"),
-    DISTANCE("Distance"),
-    TIME("Time"),
-    PACE("Pace");
+    EST_1RM(tr("Est. 1RM")),
+    TOP_WEIGHT(tr("Top weight")),
+    VOLUME(tr("Volume")),
+    MOST_REPS(tr("Most reps")),
+    TOTAL_REPS(tr("Total reps")),
+    ASSISTANCE(tr("Assistance")),
+    LONGEST(tr("Longest")),
+    TOTAL_TIME(tr("Total time")),
+    DISTANCE(tr("Distance")),
+    TIME(tr("Time")),
+    PACE(tr("Pace"));
 
     fun valueOf(session: ExerciseSession): Float = when (this) {
         EST_1RM -> session.estimated1RmKg
@@ -86,8 +86,8 @@ enum class ChartMetric(val label: String) {
     fun format(v: Float): String = when (this) {
         EST_1RM, TOP_WEIGHT -> formatWeightKg(v)
         VOLUME -> formatVolume(v.roundToInt())
-        MOST_REPS, TOTAL_REPS -> if (v.roundToInt() == 1) "1 rep" else "${v.roundToInt()} reps"
-        ASSISTANCE -> if (v > 0f) "−${formatWeightKg(v)}" else "No help"
+        MOST_REPS, TOTAL_REPS -> if (v.roundToInt() == 1) tr("1 rep") else tr("{0} reps", v.roundToInt())
+        ASSISTANCE -> if (v > 0f) "−${formatWeightKg(v)}" else tr("No help")
         LONGEST, TOTAL_TIME, TIME -> formatClock(v.roundToInt().toLong())
         DISTANCE -> formatDistance(v)
         PACE -> "${formatClock((v * Units.current.metersPerDistanceUnit).roundToInt().toLong())} /${Units.current.distanceLabel}"
@@ -115,7 +115,7 @@ fun metricsFor(type: ExerciseType): List<ChartMetric> = when (type) {
 enum class ChartRange(val label: String, val days: Int?) {
     THREE_MONTHS("3M", 91),
     YEAR("1Y", 365),
-    ALL("All", null)
+    ALL(tr("All"), null)
 }
 
 fun buildExerciseHistory(exerciseName: String, history: List<CompletedWorkout>): ExerciseHistory {

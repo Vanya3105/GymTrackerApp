@@ -62,7 +62,7 @@ fun ProgressScreen(
     val scope = rememberCoroutineScope()
     val tour = rememberTipTour(
         Tips.PROGRESS,
-        listOf(TutorialStepInfo("LIFTS", "Your lifts", "Tap any exercise for its chart, records and every session. Your estimated 1-rep max shows how strong you're getting, even when your reps change.")),
+        listOf(TutorialStepInfo("LIFTS", tr("Your lifts"), tr("Tap any exercise for its chart, records and every session. Your estimated 1-rep max shows how strong you're getting, even when your reps change."))),
         ready = bestLifts.isNotEmpty()
     )
 
@@ -74,7 +74,7 @@ fun ProgressScreen(
     ) {
         item {
             Text(
-                "Progress",
+                tr("Progress"),
                 style = AppType.display,
                 color = P.textPrimary,
                 modifier = Modifier.statusBarsPadding().padding(top = 20.dp, bottom = 2.dp)
@@ -93,8 +93,8 @@ fun ProgressScreen(
         if (weightHistory.isNotEmpty()) {
             item {
                 SectionHeader(
-                    "Weigh-ins",
-                    action = if (weightHistory.size > 4) (if (showAllWeighIns) "Show less" else "See all") else null,
+                    tr("Weigh-ins"),
+                    action = if (weightHistory.size > 4) (if (showAllWeighIns) tr("Show less") else tr("See all")) else null,
                     onAction = { showAllWeighIns = !showAllWeighIns }
                 )
             }
@@ -112,7 +112,7 @@ fun ProgressScreen(
                     }
                 }
                 Text(
-                    "Swipe a weigh-in to the left to delete it.",
+                    tr("Swipe a weigh-in to the left to delete it."),
                     style = AppType.caption,
                     color = P.textTertiary,
                     modifier = Modifier.padding(start = 4.dp, top = 6.dp)
@@ -120,7 +120,7 @@ fun ProgressScreen(
             }
         }
 
-        item { SectionHeader("Sets per muscle") }
+        item { SectionHeader(tr("Sets per muscle")) }
         item { WeeklySetsCard(recovery, Modifier.enterAnimation(1)) }
 
         duplicate?.let { (a, b) ->
@@ -140,13 +140,13 @@ fun ProgressScreen(
 
         item {
             SectionHeader(
-                "Best lifts",
-                action = if (bestLifts.size > 6) (if (showAllLifts) "Show less" else "See all") else null,
+                tr("Best lifts"),
+                action = if (bestLifts.size > 6) (if (showAllLifts) tr("Show less") else tr("See all")) else null,
                 onAction = { showAllLifts = !showAllLifts }
             )
         }
         if (bestLifts.isEmpty()) {
-            item { EmptyState(Icons.Rounded.EmojiEvents, "No lifts yet", "Finish a workout and your best sets show up here.") }
+            item { EmptyState(Icons.Rounded.EmojiEvents, tr("No lifts yet"), tr("Finish a workout and your best sets show up here.")) }
         } else {
             item {
                 AppCard(
@@ -162,7 +162,7 @@ fun ProgressScreen(
                             ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
                             Column(Modifier.weight(1f)) {
                                 Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
-                                Text("Best set ${lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"}", style = AppType.caption, color = P.textSecondary)
+                                Text(tr("Best set {0}", lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"), style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(lift.headline, style = AppType.number, color = P.textPrimary)
@@ -219,16 +219,16 @@ private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> {
             val rec = computeExerciseRecords(name, byExercise[ignoreCaseKey(name)].orEmpty())
             val type = rec.type
             if (type.hasWeightSuggestions && rec.bestEstimated1Rm > 0f) {
-                BestLift(name, type, rec.bestSet, rec.bestEstimated1Rm, formatWeightKg(rec.bestEstimated1Rm), "est. 1-rep max")
+                BestLift(name, type, rec.bestSet, rec.bestEstimated1Rm, formatWeightKg(rec.bestEstimated1Rm), tr("est. 1-rep max"))
             } else if (type == ExerciseType.WEIGHTED_BODYWEIGHT) {
                 // Nothing added yet: it's a bodyweight exercise for now.
-                BestLift(name, type, rec.bestSet, 0f, ChartMetric.MOST_REPS.format(rec.maxReps.toFloat()), "most reps")
+                BestLift(name, type, rec.bestSet, 0f, ChartMetric.MOST_REPS.format(rec.maxReps.toFloat()), tr("most reps"))
             } else {
                 val best = rec.bestSet
                 val label = when (type) {
-                    ExerciseType.BODYWEIGHT -> "most reps"
-                    ExerciseType.ASSISTED -> "least help"
-                    else -> "longest"
+                    ExerciseType.BODYWEIGHT -> tr("most reps")
+                    ExerciseType.ASSISTED -> tr("least help")
+                    else -> tr("longest")
                 }
                 val headline = best?.let { formatSessionValue(type, sessionValue(type, listOf(it))) } ?: "—"
                 BestLift(name, type, best, 0f, headline, label)
@@ -242,17 +242,17 @@ private fun computeBestLifts(history: List<CompletedWorkout>): List<BestLift> {
 private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, onLog: () -> Unit, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     val shown = weightHistory.take(8).reversed()
-    val points = shown.map { it.displayDate.substringBefore(",") to it.weightKg }
+    val points = shown.map { DateUtils.shortDayOf(it.displayDate, it.id) to it.weightKg }
     // The same span as the chart below, so the arrow and the line agree.
     val first = shown.firstOrNull()
     val (change, since) = if (shown.size >= 2 && first != null && current > 0f) {
-        (current - first.weightKg) to "since ${first.displayDate.substringBefore(",")}"
+        (current - first.weightKg) to tr("since {0}", DateUtils.shortDayOf(first.displayDate, first.id))
     } else null to ""
 
     AppCard(modifier.fillMaxWidth(), elevated = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Body weight", style = AppType.label, color = P.textSecondary)
+                Text(tr("Body weight"), style = AppType.label, color = P.textSecondary)
                 Row(verticalAlignment = Alignment.Bottom) {
                     RollingText(formatWeightNumber(current), AppType.bigNumber, P.textPrimary)
                     Text(" ${Units.current.label}", style = AppType.body, color = P.textSecondary, modifier = Modifier.padding(bottom = 3.dp))
@@ -263,7 +263,7 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
                     val (icon, text) = when {
                         rounded > 0f -> Icons.AutoMirrored.Rounded.TrendingUp to "+${formatKgClean(rounded)} $unit $since"
                         rounded < 0f -> Icons.AutoMirrored.Rounded.TrendingDown to "−${formatKgClean(abs(rounded))} $unit $since"
-                        else -> Icons.AutoMirrored.Rounded.TrendingFlat to "No change $since"
+                        else -> Icons.AutoMirrored.Rounded.TrendingFlat to tr("No change {0}", since)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
@@ -272,14 +272,14 @@ private fun BodyWeightCard(current: Float, weightHistory: List<WeightLogEntry>, 
                     }
                 }
             }
-            PrimaryButton("Log", onLog, icon = Icons.Rounded.Add, height = 44.dp)
+            PrimaryButton(tr("Log"), onLog, icon = Icons.Rounded.Add, height = 44.dp)
         }
         if (points.size >= 2) {
             Spacer(Modifier.height(16.dp))
             TrendChart(points)
         } else {
             Spacer(Modifier.height(12.dp))
-            Text("Log your weight a few times to see a trend.", style = AppType.caption, color = P.textTertiary)
+            Text(tr("Log your weight a few times to see a trend."), style = AppType.caption, color = P.textTertiary)
         }
     }
 }
@@ -296,14 +296,14 @@ private fun WeighInRow(entry: WeightLogEntry, prev: WeightLogEntry?, onDelete: (
         onDismiss = { onDelete() },
         backgroundContent = {
             Box(Modifier.fillMaxSize().background(P.dangerSurface).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                Icon(Icons.Rounded.DeleteOutline, "Delete", tint = P.dangerText)
+                Icon(Icons.Rounded.DeleteOutline, tr("Delete"), tint = P.dangerText)
             }
         }
     ) {
     Row(Modifier.background(P.bgCard).padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(formatWeightKg(entry.weightKg), style = AppType.number, color = P.textPrimary)
-            Text(entry.displayDate.substringBefore(" •"), style = AppType.caption, color = P.textSecondary)
+            Text(DateUtils.shortDayYearOf(entry.displayDate, entry.id), style = AppType.caption, color = P.textSecondary)
         }
         if (diff != null && diff != 0f) {
             Text(
@@ -331,13 +331,13 @@ private fun WeeklySetsCard(items: List<MuscleRecoveryItem>, modifier: Modifier =
     AppCard(modifier.fillMaxWidth().animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow))) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Last 7 days · aim for ${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last}",
+                tr("Last 7 days · aim for {0}–{1}", WEEKLY_SET_TARGET.first, WEEKLY_SET_TARGET.last),
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.weight(1f)
             )
             Text(
-                if (explain) "Hide" else "Why",
+                if (explain) tr("Hide") else tr("Why"),
                 style = AppType.label,
                 color = P.textSecondary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { explain = !explain }.padding(horizontal = 6.dp, vertical = 4.dp)
@@ -345,16 +345,16 @@ private fun WeeklySetsCard(items: List<MuscleRecoveryItem>, modifier: Modifier =
         }
         if (explain) {
             Text(
-                "Most people build muscle well with ${WEEKLY_SET_TARGET.first}–${WEEKLY_SET_TARGET.last} hard sets per muscle " +
-                    "each week. Muscles that help in a lift count half a set, like biceps on rows or triceps on bench. " +
-                    "The shaded part of each bar is that range.",
+                tr("Most people build muscle well with {0}–{1} hard sets per muscle ", WEEKLY_SET_TARGET.first, WEEKLY_SET_TARGET.last) +
+                    tr("each week. Muscles that help in a lift count half a set, like biceps on rows or triceps on bench. ") +
+                    tr("The shaded part of each bar is that range."),
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
             )
         }
         if (trained.isEmpty()) {
-            Text("No sets in the last 7 days yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 8.dp))
+            Text(tr("No sets in the last 7 days yet."), style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(top = 8.dp))
         }
         trained.forEach { item ->
             val inRange = item.weeklyWorkingSets in WEEKLY_SET_TARGET
@@ -386,7 +386,7 @@ private fun WeeklySetsCard(items: List<MuscleRecoveryItem>, modifier: Modifier =
         }
         if (none.isNotEmpty()) {
             Text(
-                "Not trained: " + none.joinToString(", "),
+                tr("Not trained: ") + none.joinToString(", "),
                 style = AppType.caption,
                 color = P.textTertiary,
                 modifier = Modifier.padding(top = 12.dp)
@@ -410,8 +410,8 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
     var input by remember { mutableStateOf(formatKgClean(start)) }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding().imePadding()) {
-            Text("Log today's weight", style = AppType.title, color = P.textPrimary)
-            Text("Weigh yourself at the same time each day for the clearest trend.", style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textSecondary)
+            Text(tr("Log today's weight"), style = AppType.title, color = P.textPrimary)
+            Text(tr("Weigh yourself at the same time each day for the clearest trend."), style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textSecondary)
             Spacer(Modifier.height(20.dp))
             NumberStepper(
                 value = input,
@@ -423,7 +423,7 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
             )
             Spacer(Modifier.height(20.dp))
             PrimaryButton(
-                "Save",
+                tr("Save"),
                 onClick = { input.toFloatOrNull()?.takeIf { it > 0f }?.let { onSave(unit.toKg(it)) } },
                 enabled = (input.toFloatOrNull() ?: 0f) > 0f,
                 modifier = Modifier.fillMaxWidth()
@@ -437,17 +437,17 @@ private fun LogWeightSheet(startKg: Float, onDismiss: () -> Unit, onSave: (Float
 private fun DuplicateCard(a: String, b: String, onMerge: () -> Unit, onNotSame: () -> Unit, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     AppCard(modifier.fillMaxWidth()) {
-        Text("Same exercise?", style = AppType.bodyStrong, color = P.textPrimary)
+        Text(tr("Same exercise?"), style = AppType.bodyStrong, color = P.textPrimary)
         Text(
-            "“$a” and “$b” look like one exercise logged under two names, so their history and records are split.",
+            tr("“{0}” and “{1}” look like one exercise logged under two names, so their history and records are split.", a, b),
             style = AppType.caption,
             color = P.textSecondary,
             modifier = Modifier.padding(top = 2.dp)
         )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SecondaryButton("Merge them", onMerge, Modifier.weight(1f), height = 40.dp)
-            SecondaryButton("Not the same", onNotSame, Modifier.weight(1f), height = 40.dp, contentColor = P.textSecondary)
+            SecondaryButton(tr("Merge them"), onMerge, Modifier.weight(1f), height = 40.dp)
+            SecondaryButton(tr("Not the same"), onNotSame, Modifier.weight(1f), height = 40.dp, contentColor = P.textSecondary)
         }
     }
 }

@@ -84,8 +84,8 @@ fun bestSetOf(type: ExerciseType, sets: List<SetEntry>): SetEntry? = when (type)
 fun formatSessionValue(type: ExerciseType, value: Float): String = when (type) {
     ExerciseType.WEIGHT_REPS -> formatWeightKg(value)
     ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(value)}"
-    ExerciseType.BODYWEIGHT -> if (value.toInt() == 1) "1 rep" else "${value.toInt()} reps"
-    ExerciseType.ASSISTED -> if (value > 0f) "−${formatWeightKg(value)}" else "No help"
+    ExerciseType.BODYWEIGHT -> if (value.toInt() == 1) tr("1 rep") else tr("{0} reps", value.toInt())
+    ExerciseType.ASSISTED -> if (value > 0f) "−${formatWeightKg(value)}" else tr("No help")
     ExerciseType.DURATION -> formatClock(value.toLong())
     ExerciseType.DISTANCE_TIME -> formatDistance(value)
 }
@@ -100,12 +100,12 @@ fun formatSessionValueShort(type: ExerciseType, value: Float): String = when (ty
 
 /** What [sessionValue] means, as a chart title. */
 fun sessionValueTitle(type: ExerciseType): String = when (type) {
-    ExerciseType.WEIGHT_REPS -> "Top weight per session"
-    ExerciseType.WEIGHTED_BODYWEIGHT -> "Most added weight per session"
-    ExerciseType.BODYWEIGHT -> "Most reps per session"
-    ExerciseType.ASSISTED -> "Least assistance per session"
-    ExerciseType.DURATION -> "Longest hold per session"
-    ExerciseType.DISTANCE_TIME -> "Longest distance per session"
+    ExerciseType.WEIGHT_REPS -> tr("Top weight per session")
+    ExerciseType.WEIGHTED_BODYWEIGHT -> tr("Most added weight per session")
+    ExerciseType.BODYWEIGHT -> tr("Most reps per session")
+    ExerciseType.ASSISTED -> tr("Least assistance per session")
+    ExerciseType.DURATION -> tr("Longest hold per session")
+    ExerciseType.DISTANCE_TIME -> tr("Longest distance per session")
 }
 
 const val WIDGET_KIND_WORKOUT = "WORKOUT"
@@ -127,16 +127,16 @@ data class WidgetSettings(
 /** Toggle key → label shown in the widget settings screen, per widget kind. All on by default. */
 fun widgetOptionLabels(kind: String): List<Pair<String, String>> = when (kind) {
     WIDGET_KIND_WORKOUT -> listOf(
-        "controls" to "Weight and rep buttons",
-        "weekly" to "Weekly progress when not training"
+        "controls" to tr("Weight and rep buttons"),
+        "weekly" to tr("Weekly progress when not training")
     )
     WIDGET_KIND_RECOVERY -> listOf(
-        "sets" to "Sets in the last 7 days",
-        "hours" to "Time since last trained"
+        "sets" to tr("Sets in the last 7 days"),
+        "hours" to tr("Time since last trained")
     )
     else -> listOf(
-        "volume" to "Weekly volume",
-        "next" to "Next workout"
+        "volume" to tr("Weekly volume"),
+        "next" to tr("Next workout")
     )
 }
 
@@ -303,8 +303,8 @@ val SplitProgramInfo.isBuiltIn: Boolean get() = id in SPLIT_PROGRAMS
 val REST_PRESETS = listOf(0, 60, 90, 120, 180, 240)
 
 fun formatRestShort(sec: Int): String {
-    if (sec <= 0) return "Off"
-    return if (sec % 60 == 0) "${sec / 60}m" else "${sec}s"
+    if (sec <= 0) return tr("Off")
+    return if (sec % 60 == 0) tr("{0}m", sec / 60) else tr("{0}s", sec)
 }
 
 fun formatClock(totalSec: Long): String {
@@ -317,9 +317,9 @@ fun formatClock(totalSec: Long): String {
 fun formatDuration(totalSec: Long): String {
     val mins = (totalSec / 60).toInt()
     return when {
-        mins >= 60 -> "${mins / 60}h ${mins % 60}m"
-        mins > 0 -> "$mins min"
-        else -> "< 1 min"
+        mins >= 60 -> tr("{0}h {1}m", mins / 60, mins % 60)
+        mins > 0 -> tr("{0} min", mins)
+        else -> tr("< 1 min")
     }
 }
 
@@ -349,16 +349,29 @@ fun parseRepsClean(raw: String, fallback: Int = 8): Int {
 
 object DateUtils {
     private val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    // Saved with each workout and weigh-in, so it stays English; shown through the *Of helpers below.
     private val displayDateFmt = SimpleDateFormat("MMM d, yyyy • HH:mm", Locale.US)
-    private val shortDayFmt = SimpleDateFormat("MMM d", Locale.US)
-    private val shortDayYearFmt = SimpleDateFormat("MMM d, yyyy", Locale.US)
-    private val monthTitleFmt = SimpleDateFormat("MMMM yyyy", Locale.US)
+    // Only shown, so in the app's language (made once per run; a language change restarts the app).
+    private val hebrew = hebrewOn()
+    private val shownLocale = if (hebrew) Locale.forLanguageTag("he") else Locale.US
+    private val shortDayFmt = SimpleDateFormat(if (hebrew) "d בMMM" else "MMM d", shownLocale)
+    private val shortDayYearFmt = SimpleDateFormat(if (hebrew) "d בMMM yyyy" else "MMM d, yyyy", shownLocale)
+    private val timeFmt = SimpleDateFormat("HH:mm", shownLocale)
+    private val monthTitleFmt = SimpleDateFormat("MMMM yyyy", shownLocale)
 
     @Synchronized fun formatDayKey(date: Date): String = dayKeyFmt.format(date)
     @Synchronized fun formatDisplayDate(date: Date): String = displayDateFmt.format(date)
     @Synchronized fun formatShortDay(date: Date): String = shortDayFmt.format(date)
     @Synchronized fun formatShortDayYear(date: Date): String = shortDayYearFmt.format(date)
     @Synchronized fun formatMonthTitle(date: Date): String = monthTitleFmt.format(date)
+
+    // A saved English display date ("Oct 25, 2026 • 18:05"), shown in the app's language from its time.
+    fun shortDayOf(displayDate: String, millis: Long): String =
+        if (hebrew) formatShortDay(Date(millis)) else displayDate.substringBefore(",")
+    fun shortDayYearOf(displayDate: String, millis: Long): String =
+        if (hebrew) formatShortDayYear(Date(millis)) else displayDate.substringBefore(" •")
+    @Synchronized fun dateTimeOf(displayDate: String, millis: Long): String =
+        if (hebrew) "${shortDayYearFmt.format(Date(millis))} · ${timeFmt.format(Date(millis))}" else displayDate.replace(" • ", " · ")
 }
 
 fun applyDisplayRefreshRate(activity: Activity, targetHz: Int) {
@@ -402,14 +415,14 @@ fun ensureNotificationChannelCreated(context: Context) {
     try {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(REST_NOTIFICATION_CHANNEL_ID, "Rest timer", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Lets you know when your rest between sets is over"
+            NotificationChannel(REST_NOTIFICATION_CHANNEL_ID, tr("Rest timer"), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = tr("Lets you know when your rest between sets is over")
                 enableVibration(true)
             }
         )
         manager.createNotificationChannel(
-            NotificationChannel(SET_DONE_NOTIFICATION_CHANNEL_ID, "Logged sets", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Confirms each set you finish"
+            NotificationChannel(SET_DONE_NOTIFICATION_CHANNEL_ID, tr("Logged sets"), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = tr("Confirms each set you finish")
                 enableVibration(true)
             }
         )
@@ -451,21 +464,21 @@ private fun postAlert(context: Context, id: Int, channelId: String, icon: Int, t
 
 /** [setText] is the set in words, e.g. from [formatSet]. */
 fun sendSetDoneNotification(context: Context, exerciseName: String, setText: String, restSeconds: Int) {
-    val restMsg = if (restSeconds > 0) " · Rest ${formatRestShort(restSeconds)}" else ""
+    val restMsg = if (restSeconds > 0) tr(" · Rest {0}", formatRestShort(restSeconds)) else ""
     postAlert(
         context, id = 1002, channelId = SET_DONE_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_workout,
-        title = "Set logged · $exerciseName", text = "$setText$restMsg", requestCode = 1
+        title = tr("Set logged · {0}", exerciseName), text = "$setText$restMsg", requestCode = 1
     )
 }
 
 fun sendRestFinishedNotification(
     context: Context,
     splitTitle: String,
-    detailText: String = "Time for your next set."
+    detailText: String = tr("Time for your next set.")
 ) {
     postAlert(
         context, id = 1001, channelId = REST_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_timer,
-        title = "Rest's over · $splitTitle", text = detailText, requestCode = 0
+        title = tr("Rest's over · {0}", splitTitle), text = detailText, requestCode = 0
     )
 }
 
@@ -612,7 +625,7 @@ fun computeExerciseRecords(exerciseName: String, history: List<CompletedWorkout>
         if (workSets.isEmpty()) continue
 
         if (recentLogs.size < 5) {
-            val shortDate = workout.displayDate.substringBefore(",")
+            val shortDate = DateUtils.shortDayOf(workout.displayDate, workout.id)
             recentLogs.add("${workout.splitTitle} ($shortDate)" to workSets)
             recentChartPoints.add(shortDate to sessionValue(type, workSets))
         }
@@ -714,9 +727,9 @@ fun computeWeekSummary(
     val remainingCore = coreRotation.filter { it !in completedCore }
 
     val titleLabel = when (weekOffset) {
-        0 -> "This week"
-        -1 -> "Last week"
-        else -> "${-weekOffset} weeks ago"
+        0 -> tr("This week")
+        -1 -> tr("Last week")
+        else -> tr("{0} weeks ago", -weekOffset)
     }
 
     // Next up is the first split not done this week; once all are done, a stable pick for a bonus day.
@@ -790,7 +803,7 @@ object RestAlarmScheduler {
         }
 
         if (settings.restSoundEnabled) playRestBeep(context)
-        sendRestFinishedNotification(context, active?.first ?: "Workout", detailLine)
+        sendRestFinishedNotification(context, active?.first ?: tr("Workout"), detailLine)
     }
 
     /** Short alarm beep that ducks (rather than stops) any music that's playing. */

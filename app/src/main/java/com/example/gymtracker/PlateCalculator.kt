@@ -142,7 +142,7 @@ fun PlateCalculatorSheet(storedKg: String, step: Float, onChange: (String) -> Un
                 .padding(bottom = 20.dp)
                 .navigationBarsPadding()
         ) {
-            Text("Plate calculator", style = AppType.title, color = P.textPrimary)
+            Text(tr("Plate calculator"), style = AppType.title, color = P.textPrimary)
             Spacer(Modifier.height(14.dp))
             WeightStepper(storedKg = storedKg, onChange = onChange, step = step, fallbackKg = 0f, height = 48.dp, modifier = Modifier.fillMaxWidth())
 
@@ -150,7 +150,7 @@ fun PlateCalculatorSheet(storedKg: String, step: Float, onChange: (String) -> Un
             LoadedBar(shown.perSide, setup.plates.maxOrNull() ?: 1f, hasBar = setup.barWeight > 0f)
             Spacer(Modifier.height(10.dp))
             Text(
-                if (shown.perSide.isEmpty()) "Nothing on the bar" else "Each side: " + shown.perSide.joinToString("  ·  ") { formatKgClean(it) },
+                if (shown.perSide.isEmpty()) tr("Nothing on the bar") else tr("Each side: ") + shown.perSide.joinToString("  ·  ") { formatKgClean(it) },
                 style = AppType.bodyStrong,
                 color = P.textPrimary,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -163,7 +163,7 @@ fun PlateCalculatorSheet(storedKg: String, step: Float, onChange: (String) -> Un
                         Icon(Icons.Rounded.Info, null, tint = P.warningText, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "${formatInUnit(target, unit)} can't be loaded with these plates.",
+                            tr("{0} can't be loaded with these plates.", formatInUnit(target, unit)),
                             style = AppType.label.copy(fontWeight = FontWeight.Normal),
                             color = P.textPrimary
                         )
@@ -171,7 +171,7 @@ fun PlateCalculatorSheet(storedKg: String, step: Float, onChange: (String) -> Un
                     Row(Modifier.padding(top = 10.dp, start = 26.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOfNotNull(math.lighter, math.heavier).forEach { load ->
                             Text(
-                                "Use ${formatInUnit(load.total, unit)}",
+                                tr("Use {0}", formatInUnit(load.total, unit)),
                                 style = AppType.label,
                                 color = P.warningText,
                                 modifier = Modifier
@@ -186,16 +186,16 @@ fun PlateCalculatorSheet(storedKg: String, step: Float, onChange: (String) -> Un
             }
 
             Spacer(Modifier.height(22.dp))
-            Text("Bar", style = AppType.label, color = P.textSecondary)
+            Text(tr("Bar"), style = AppType.label, color = P.textSecondary)
             Spacer(Modifier.height(8.dp))
             SegmentedControl(
-                options = unit.barOptions.map { it to if (it == 0f) "No bar" else formatInUnit(it, unit) },
+                options = unit.barOptions.map { it to if (it == 0f) tr("No bar") else formatInUnit(it, unit) },
                 selected = setup.barWeight,
                 onSelect = { update(setup.copy(barWeight = it)) }
             )
 
             Spacer(Modifier.height(18.dp))
-            Text("Plates you have", style = AppType.label, color = P.textSecondary)
+            Text(tr("Plates you have"), style = AppType.label, color = P.textSecondary)
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 unit.plateOptions.forEach { plate ->

@@ -128,16 +128,16 @@ private class LiveSession(
         return NextSetInfo(
             exerciseName = ex.name,
             label = when {
-                set.isWarmupSet -> "Warm-up"
-                set.intensityType == "DROP" -> "Drop set"
-                else -> "Set $workNum"
+                set.isWarmupSet -> tr("Warm-up")
+                set.intensityType == "DROP" -> tr("Drop set")
+                else -> tr("Set {0}", workNum)
             },
             summary = formatSet(set, ex.type),
             primary = when (ex.type) {
                 ExerciseType.WEIGHT_REPS -> formatWeightKg(parseWeightClean(set.weight, 20f))
                 ExerciseType.WEIGHTED_BODYWEIGHT -> "+${formatWeightKg(set.weightKg)}"
                 ExerciseType.ASSISTED -> "−${formatWeightKg(set.weightKg)}"
-                ExerciseType.BODYWEIGHT -> "${parseRepsClean(set.reps, 8)} reps"
+                ExerciseType.BODYWEIGHT -> tr("{0} reps", parseRepsClean(set.reps, 8))
                 ExerciseType.DURATION -> formatClock(set.secondCount.toLong())
                 ExerciseType.DISTANCE_TIME -> formatDistance(set.distanceMeters)
             },
@@ -166,15 +166,15 @@ fun watchStateOf(context: Context): WatchState {
         setLabel = next?.label.orEmpty(),
         primary = next?.primary.orEmpty(),
         primaryLabel = when (type) {
-            ExerciseType.BODYWEIGHT -> "reps"
-            ExerciseType.DURATION -> "time"
-            ExerciseType.DISTANCE_TIME -> "distance"
-            ExerciseType.WEIGHTED_BODYWEIGHT -> "added"
-            ExerciseType.ASSISTED -> "assist"
-            else -> "weight"
+            ExerciseType.BODYWEIGHT -> tr("reps")
+            ExerciseType.DURATION -> tr("time")
+            ExerciseType.DISTANCE_TIME -> tr("distance")
+            ExerciseType.WEIGHTED_BODYWEIGHT -> tr("added")
+            ExerciseType.ASSISTED -> tr("assist")
+            else -> tr("weight")
         },
         secondary = next?.secondary,
-        secondaryLabel = next?.secondary?.let { if (type == ExerciseType.DISTANCE_TIME) "time" else "reps" },
+        secondaryLabel = next?.secondary?.let { if (type == ExerciseType.DISTANCE_TIME) tr("time") else tr("reps") },
         summary = next?.summary.orEmpty(),
         setsLeft = live.totalSetsLeft,
         restEndsAtMillis = restEnd,
@@ -285,7 +285,7 @@ fun buildWorkoutWidgetViews(
         if (next != null) {
             status(
                 when {
-                    live.isResting -> "Resting"
+                    live.isResting -> tr("Resting")
                     compact -> next.label
                     else -> "${live.splitName} · ${next.label}"
                 },
@@ -294,8 +294,8 @@ fun buildWorkoutWidgetViews(
             views.setTextViewText(R.id.widget_split_title, next.exerciseName)
             views.setTextViewText(
                 R.id.widget_subtitle,
-                if (live.isResting) "Next: ${next.summary}"
-                else "${live.totalSetsLeft} sets left today"
+                if (live.isResting) tr("Next: {0}", next.summary)
+                else tr("{0} sets left today", live.totalSetsLeft)
             )
             views.setViewVisibility(R.id.widget_subtitle, if (compact && !live.isResting && showControls) View.GONE else View.VISIBLE)
 
@@ -316,9 +316,9 @@ fun buildWorkoutWidgetViews(
                 }
             }
         } else {
-            status("${live.splitName} · done", p.successText.toArgb())
-            views.setTextViewText(R.id.widget_split_title, "All sets done")
-            views.setTextViewText(R.id.widget_subtitle, "Open the app to save your workout")
+            status(tr("{0} · done", live.splitName), p.successText.toArgb())
+            views.setTextViewText(R.id.widget_split_title, tr("All sets done"))
+            views.setTextViewText(R.id.widget_subtitle, tr("Open the app to save your workout"))
             views.setViewVisibility(R.id.widget_controls_row, View.GONE)
         }
 
@@ -330,24 +330,24 @@ fun buildWorkoutWidgetViews(
         } else {
             views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
             views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
-            views.setTextViewText(R.id.widget_action_badge, "Open")
+            views.setTextViewText(R.id.widget_action_badge, tr("Open"))
         }
     } else {
         val profile = LocalStorage.loadUserProfile(context)
         val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
         val split = programFor(profile.splitProgram).splits.find { it.title == week.recommendedSplit }
-        status("Up next", accent)
+        status(tr("Up next"), accent)
         views.setTextViewText(R.id.widget_split_title, week.recommendedSplit)
         views.setTextViewText(
             R.id.widget_subtitle,
-            if (WIDGET_OPTION_WEEKLY in settings.options) "${week.completedCoreSplits.size} of ${week.weeklyGoal} done this week"
+            if (WIDGET_OPTION_WEEKLY in settings.options) tr("{0} of {1} done this week", week.completedCoreSplits.size, week.weeklyGoal)
             else split?.subtitle.orEmpty()
         )
         views.setViewVisibility(R.id.widget_subtitle, View.VISIBLE)
         views.setViewVisibility(R.id.widget_controls_row, View.GONE)
         views.setViewVisibility(R.id.widget_rest_chronometer, View.GONE)
         views.setViewVisibility(R.id.widget_badge_container, View.VISIBLE)
-        views.setTextViewText(R.id.widget_action_badge, "Start")
+        views.setTextViewText(R.id.widget_action_badge, tr("Start"))
     }
 
     val openApp = openAppPendingIntent(context, 0)
@@ -371,8 +371,8 @@ object LockScreenWorkoutController {
     private fun ensureChannel(manager: NotificationManager) {
         if (channelCreated || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         manager.createNotificationChannel(
-            NotificationChannel(LIVE_WORKOUT_CHANNEL_ID, "Workout in progress", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Shows your current set on the lock screen while you train"
+            NotificationChannel(LIVE_WORKOUT_CHANNEL_ID, tr("Workout in progress"), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = tr("Shows your current set on the lock screen while you train")
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setSound(null, null)
                 enableVibration(false)
@@ -421,8 +421,8 @@ private fun buildCompactWorkoutNotificationViews(context: Context, live: LiveSes
     val accent = appPalette(context).accentPrimary.toArgb()
     val next = live.nextSet
     if (next == null) {
-        views.setTextViewText(R.id.notif_title, "All sets done")
-        views.setTextViewText(R.id.notif_text, "Open the app to save ${live.splitName}")
+        views.setTextViewText(R.id.notif_title, tr("All sets done"))
+        views.setTextViewText(R.id.notif_text, tr("Open the app to save {0}", live.splitName))
         views.setViewVisibility(R.id.notif_done, View.GONE)
         views.setViewVisibility(R.id.notif_rest, View.GONE)
         return views
@@ -433,12 +433,12 @@ private fun buildCompactWorkoutNotificationViews(context: Context, live: LiveSes
         views.setChronometerCountDown(R.id.notif_rest, true)
         views.setChronometer(R.id.notif_rest, SystemClock.elapsedRealtime() + live.restRemainingMillis, "%s", true)
         views.setTextColor(R.id.notif_rest, accent)
-        views.setTextViewText(R.id.notif_text, "rest · next ${next.summary}")
+        views.setTextViewText(R.id.notif_text, tr("rest · next {0}", next.summary))
         views.setViewVisibility(R.id.notif_done, View.GONE)
     } else {
         views.setViewVisibility(R.id.notif_rest, View.GONE)
-        val numbers = listOfNotNull(next.primary, next.secondary?.let { if (it.all(Char::isDigit)) "$it reps" else it }).joinToString(" × ")
-        views.setTextViewText(R.id.notif_text, "$numbers · ${live.totalSetsLeft} sets left")
+        val numbers = listOfNotNull(next.primary, next.secondary?.let { if (it.all(Char::isDigit)) tr("{0} reps", it) else it }).joinToString(" × ")
+        views.setTextViewText(R.id.notif_text, tr("{0} · {1} sets left", numbers, live.totalSetsLeft))
         views.setViewVisibility(R.id.notif_done, View.VISIBLE)
         views.setInt(R.id.notif_done_bg, "setColorFilter", accent)
         views.setInt(R.id.notif_done_icon, "setColorFilter", appPalette(context).onAccentPrimary.toArgb())
@@ -636,9 +636,9 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
             val fit = ((w - pad * 2) / (56 * s)).toInt().coerceIn(3, all.size)
             val items = all.sortedBy { it.recoveryPercent }.take(fit)
 
-            canvas.drawText("Recovery", pad, pad + 14 * s, textPaint(p.textPrimary.toArgb(), 15 * s))
+            canvas.drawText(tr("Recovery"), pad, pad + 14 * s, textPaint(p.textPrimary.toArgb(), 15 * s))
             canvas.drawText(
-                if (ready == all.size) "All rested" else "$ready of ${all.size} rested",
+                if (ready == all.size) tr("All rested") else tr("{0} of {1} rested", ready, all.size),
                 w - pad, pad + 14 * s,
                 textPaint(p.textSecondary.toArgb(), 12 * s, REGULAR, Paint.Align.RIGHT)
             )
@@ -674,11 +674,11 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
                 if (showSets) {
                     y += 15 * s
                     val inTarget = item.weeklyWorkingSets in WEEKLY_SET_TARGET
-                    canvas.drawText("${item.weeklyWorkingSets} sets", cx, y, textPaint((if (inTarget) p.successText else p.textSecondary).toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
+                    canvas.drawText(tr("{0} sets", item.weeklyWorkingSets), cx, y, textPaint((if (inTarget) p.successText else p.textSecondary).toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
                 }
                 if (showHours) {
                     y += 15 * s
-                    val label = item.hoursSinceTrained?.let { if (it < 1) "Just now" else if (it < 48) "${it}h ago" else "${it / 24}d ago" } ?: "Not yet"
+                    val label = item.hoursSinceTrained?.let { if (it < 1) tr("Just now") else if (it < 48) tr("{0}h ago", it) else tr("{0}d ago", it / 24) } ?: tr("Not yet")
                     canvas.drawText(label, cx, y, textPaint(p.textTertiary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
                 }
             }
@@ -725,7 +725,7 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             val showNext = "next" in settings.options
             val pad = 14 * s
 
-            canvas.drawText("This week", pad, pad + 13 * s, textPaint(p.textPrimary.toArgb(), 14 * s))
+            canvas.drawText(tr("This week"), pad, pad + 13 * s, textPaint(p.textPrimary.toArgb(), 14 * s))
 
             val footerLines = (if (showNext) 1 else 0) + (if (showVolume) 1 else 0)
             val footerH = footerLines * 16 * s + if (footerLines > 0) 6 * s else 0f
@@ -741,17 +741,17 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             if (done > 0) canvas.drawArc(arc, -90f, 360f * (done.toFloat() / goal).coerceAtMost(1f), false, strokePaint(p.accentPrimary.toArgb(), stroke))
             val big = textPaint(p.textPrimary.toArgb(), d * 0.26f, BOLD, Paint.Align.CENTER)
             canvas.drawText("$done/$goal", cx, cy + big.textSize * 0.2f, big)
-            canvas.drawText("workouts", cx, cy + big.textSize * 0.2f + 13 * s, textPaint(p.textSecondary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
+            canvas.drawText(tr("workouts"), cx, cy + big.textSize * 0.2f + 13 * s, textPaint(p.textSecondary.toArgb(), 10.5f * s, REGULAR, Paint.Align.CENTER))
 
             var y = h - pad - footerH + 16 * s
             if (showNext) {
-                val nextText = "Next: ${week.recommendedSplit}"
+                val nextText = tr("Next: {0}", week.recommendedSplit)
                 canvas.drawText(nextText, cx, y, textPaint(p.accentPrimary.toArgb(), 12 * s, MEDIUM, Paint.Align.CENTER).fitTo(nextText, w - pad * 2))
                 y += 16 * s
             }
             if (showVolume) {
                 val vol = week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }
-                canvas.drawText(formatVolume(vol) + " lifted", cx, y, textPaint(p.textSecondary.toArgb(), 11 * s, REGULAR, Paint.Align.CENTER))
+                canvas.drawText(formatVolume(vol) + tr(" lifted"), cx, y, textPaint(p.textSecondary.toArgb(), 11 * s, REGULAR, Paint.Align.CENTER))
             }
             return bmp
         }

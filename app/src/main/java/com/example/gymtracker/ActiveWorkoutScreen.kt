@@ -152,24 +152,24 @@ fun ActiveWorkoutScreen(
     val workoutTour = rememberTipTour(
         Tips.WORKOUT,
         listOf(
-            TutorialStepInfo("SET_ROW", "Log a set", "Tap a number to change the weight or reps. Tap \u2713 when the set is done and the rest timer starts on its own."),
-            TutorialStepInfo("SUGGESTION", "Your next weight", "Worked out from your last sessions and today's sets. Tap Use to fill it in."),
-            TutorialStepInfo("NAME", "Everything about an exercise", "Tap its name for your history, chart, records and a setup note like seat height."),
-            TutorialStepInfo("SET_BADGE", "Set options", "Tap a set's number to make it a warm-up or drop set, change its rest or see the plates. Hold the dotted handle to move an exercise."),
-            TutorialStepInfo("FINISH", "Done for today?", "Finish saves the workout and shows your new bests. You can edit it later in History.")
+            TutorialStepInfo("SET_ROW", tr("Log a set"), tr("Tap a number to change the weight or reps. Tap \u2713 when the set is done and the rest timer starts on its own.")),
+            TutorialStepInfo("SUGGESTION", tr("Your next weight"), tr("Worked out from your last sessions and today's sets. Tap Use to fill it in.")),
+            TutorialStepInfo("NAME", tr("Everything about an exercise"), tr("Tap its name for your history, chart, records and a setup note like seat height.")),
+            TutorialStepInfo("SET_BADGE", tr("Set options"), tr("Tap a set's number to make it a warm-up or drop set, change its rest or see the plates. Hold the dotted handle to move an exercise.")),
+            TutorialStepInfo("FINISH", tr("Done for today?"), tr("Finish saves the workout and shows your new bests. You can edit it later in History."))
         ),
         ready = !isEditingPastWorkout && exercises.isNotEmpty() && !showPicker
     )
     var restShowing by remember { mutableStateOf(false) }
     val restTour = rememberTipTour(
         Tips.REST_TIMER,
-        listOf(TutorialStepInfo("REST", "Rest timer", "Counts down your rest. \u221215 / +15 changes it, \u23ED skips it. It keeps going on the lock screen and your watch, and buzzes when it's time.")),
+        listOf(TutorialStepInfo("REST", tr("Rest timer"), tr("Counts down your rest. \u221215 / +15 changes it, \u23ED skips it. It keeps going on the lock screen and your watch, and buzzes when it's time."))),
         ready = restShowing && !workoutTour.active && !isEditingPastWorkout
     )
     val hasPrevious = remember(exercises, history) { exercises.any { ex -> history.any { w -> w.exercises.any { it.name.equals(ex.name, ignoreCase = true) } } } }
     val previousTour = rememberTipTour(
         Tips.PREVIOUS,
-        listOf(TutorialStepInfo("PREVIOUS", "Last time", "What you did on this set last time. Tap it to copy those numbers in.")),
+        listOf(TutorialStepInfo("PREVIOUS", tr("Last time"), tr("What you did on this set last time. Tap it to copy those numbers in."))),
         ready = hasPrevious && !workoutTour.active && !restTour.active && !restShowing && !isEditingPastWorkout
     )
 
@@ -234,7 +234,7 @@ fun ActiveWorkoutScreen(
         haptics.confirm()
 
         if (isSetPersonalRecord(updatedSet, computeExerciseRecords(exercise.name, history), exercise.type)) {
-            banner = Banner("New best: ${exercise.name}, ${formatSet(updatedSet, exercise.type)}", Icons.Rounded.EmojiEvents, isPr = true)
+            banner = Banner(tr("New best: {0}, {1}", exercise.name, formatSet(updatedSet, exercise.type)), Icons.Rounded.EmojiEvents, isPr = true)
         }
         if (isEditingPastWorkout) return
 
@@ -253,7 +253,7 @@ fun ActiveWorkoutScreen(
                 }
                 if (rest > 0) LocalStorage.setRestEndTimeMillis(context, System.currentTimeMillis() + rest * 1000L, fromWidget = true)
             } else {
-                if (banner?.isPr != true) banner = Banner("Superset: go straight to $waitingOn", Icons.Rounded.Link, isPr = false)
+                if (banner?.isPr != true) banner = Banner(tr("Superset: go straight to {0}", waitingOn), Icons.Rounded.Link, isPr = false)
             }
         } else {
             val rest = setEntry.restSeconds.takeIf { it >= 0 } ?: exercise.restSeconds
@@ -334,9 +334,9 @@ fun ActiveWorkoutScreen(
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("Use last time's numbers", style = AppType.bodyStrong, color = P.textPrimary)
+                                    Text(tr("Use last time's numbers"), style = AppType.bodyStrong, color = P.textPrimary)
                                     Text(
-                                        "Fill in weights and reps from ${previousSplitWorkout.displayDate.substringBefore(",")}",
+                                        tr("Fill in weights and reps from {0}", DateUtils.shortDayOf(previousSplitWorkout.displayDate, previousSplitWorkout.id)),
                                         style = AppType.caption,
                                         color = P.textSecondary
                                     )
@@ -437,11 +437,11 @@ fun ActiveWorkoutScreen(
                 if (skipped.isNotEmpty() && !reordering) {
                     item(key = "skipped") {
                         AppCard(Modifier.fillMaxWidth().animateItem()) {
-                            Text("Skipped today", style = AppType.headline, color = P.textPrimary)
+                            Text(tr("Skipped today"), style = AppType.headline, color = P.textPrimary)
                             skipped.forEach { (idx, ex) ->
                                 Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(ex.name, style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
-                                    SecondaryButton("Bring back", {
+                                    SecondaryButton(tr("Bring back"), {
                                         haptics.tick()
                                         updateAt(idx) { it.copy(isSkipped = false) }
                                     }, icon = Icons.AutoMirrored.Rounded.Undo, height = 36.dp)
@@ -453,7 +453,7 @@ fun ActiveWorkoutScreen(
 
                 if (!reordering) item(key = "add") {
                     SecondaryButton(
-                        "Add exercise",
+                        tr("Add exercise"),
                         { haptics.tick(); showPicker = true },
                         Modifier.fillMaxWidth().animateItem(),
                         icon = Icons.Rounded.Add,
@@ -477,13 +477,13 @@ fun ActiveWorkoutScreen(
                     val fieldName = when (ref.field) {
                         SetField.WEIGHT -> Units.current.label
                         SetField.DISTANCE -> Units.current.distanceLabel
-                        SetField.REPS -> "reps"
-                        SetField.TIME -> "time"
+                        SetField.REPS -> tr("reps")
+                        SetField.TIME -> tr("time")
                     }
                     val setName = when {
-                        set.isWarmupSet -> "Warm-up"
-                        set.intensityType == "DROP" -> "Drop set"
-                        else -> "Set ${exercise.sets.take(ref.setIdx + 1).count { !it.isWarmupSet && it.intensityType != "DROP" }}"
+                        set.isWarmupSet -> tr("Warm-up")
+                        set.intensityType == "DROP" -> tr("Drop set")
+                        else -> tr("Set {0}", exercise.sets.take(ref.setIdx + 1).count { !it.isWarmupSet && it.intensityType != "DROP" })
                     }
                     val next = nextField(ref, exercise)
                     SetKeypad(
@@ -574,12 +574,12 @@ fun ActiveWorkoutScreen(
         AlertDialog(
             onDismissRequest = { removeCandidate = null },
             containerColor = P.bgElevated,
-            title = { Text("Remove $name?", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Remove {0}?", name), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
-                    if (isEditingPastWorkout) "It will be removed from this logged workout."
-                    else if (split.title == QUICK_WORKOUT_TITLE) "It will be removed from this workout."
-                    else "It won't show up in future ${split.title} workouts. You can add it back any time.",
+                    if (isEditingPastWorkout) tr("It will be removed from this logged workout.")
+                    else if (split.title == QUICK_WORKOUT_TITLE) tr("It will be removed from this workout.")
+                    else tr("It won't show up in future {0} workouts. You can add it back any time.", split.title),
                     style = AppType.body,
                     color = P.textSecondary
                 )
@@ -589,9 +589,9 @@ fun ActiveWorkoutScreen(
                     haptics.tick()
                     onRemoveExercisePermanently(name)
                     removeCandidate = null
-                }) { Text("Remove", color = P.dangerText, style = AppType.label) }
+                }) { Text(tr("Remove"), color = P.dangerText, style = AppType.label) }
             },
-            dismissButton = { TextButton(onClick = { removeCandidate = null }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+            dismissButton = { TextButton(onClick = { removeCandidate = null }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 
@@ -599,20 +599,20 @@ fun ActiveWorkoutScreen(
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
             containerColor = P.bgElevated,
-            title = { Text(if (isEditingPastWorkout) "Discard changes?" else "Discard this workout?", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(if (isEditingPastWorkout) tr("Discard changes?") else tr("Discard this workout?"), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
-                    if (isEditingPastWorkout) "Your edits to this workout won't be saved." else "Nothing from today's session will be saved.",
+                    if (isEditingPastWorkout) tr("Your edits to this workout won't be saved.") else tr("Nothing from today's session will be saved."),
                     style = AppType.body,
                     color = P.textSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { confirmDiscard = false; onDiscardWorkout() }) {
-                    Text("Discard", color = P.dangerText, style = AppType.label)
+                    Text(tr("Discard"), color = P.dangerText, style = AppType.label)
                 }
             },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep going", color = P.textSecondary, style = AppType.label) } }
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(tr("Keep going"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 
@@ -677,22 +677,22 @@ private fun WorkoutTopBar(
         Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             CircleIconButton(
                 if (isEditing) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.KeyboardArrowDown,
-                if (isEditing) "Back" else "Minimize workout",
+                if (isEditing) tr("Back") else tr("Minimize workout"),
                 onClose,
                 container = Color.Transparent
             )
             Spacer(Modifier.width(4.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, style = AppType.title, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (isEditing) Text("Editing a logged workout", style = AppType.caption, color = P.textSecondary)
+                if (isEditing) Text(tr("Editing a logged workout"), style = AppType.caption, color = P.textSecondary)
                 else ElapsedClock(startTimeMillis)
             }
-            PrimaryButton(if (isEditing) "Save" else "Finish", onFinish, finishModifier, height = 40.dp)
+            PrimaryButton(if (isEditing) tr("Save") else tr("Finish"), onFinish, finishModifier, height = 40.dp)
             Box {
-                CircleIconButton(Icons.Rounded.MoreVert, "More options", { menuOpen = true }, container = Color.Transparent, tint = P.textSecondary)
+                CircleIconButton(Icons.Rounded.MoreVert, tr("More options"), { menuOpen = true }, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
                     DropdownMenuItem(
-                        text = { Text(if (isEditing) "Discard changes" else "Discard workout", style = AppType.body, color = P.dangerText) },
+                        text = { Text(if (isEditing) tr("Discard changes") else tr("Discard workout"), style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onDiscard() }
                     )
@@ -706,7 +706,7 @@ private fun WorkoutTopBar(
                 height = 5.dp
             )
             Spacer(Modifier.width(10.dp))
-            Text("$doneSets of $totalSets sets", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+            Text(tr("{0} of {1} sets", doneSets, totalSets), style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
         }
     }
 }
@@ -794,7 +794,7 @@ private fun ExerciseCard(
             Row(Modifier.padding(start = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Link, null, tint = P.textSecondary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Superset with ${partners.joinToString(", ")}", style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(tr("Superset with {0}", partners.joinToString(", ")), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -804,7 +804,7 @@ private fun ExerciseCard(
                 handleModifier.size(36.dp, 44.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.DragIndicator, "Drag to reorder", tint = if (isDragging) P.accentPrimary else P.textTertiary)
+                Icon(Icons.Rounded.DragIndicator, tr("Drag to reorder"), tint = if (isDragging) P.accentPrimary else P.textTertiary)
             }
             ExerciseThumb(
                 exercise.name,
@@ -833,17 +833,17 @@ private fun ExerciseCard(
                     if (!collapsed) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
                     AnimatedVisibility(allDone, enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                         Box(Modifier.padding(start = 6.dp).size(18.dp).clip(CircleShape).background(P.successSurface), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.Check, "All sets done", tint = P.successText, modifier = Modifier.size(12.dp))
+                            Icon(Icons.Rounded.Check, tr("All sets done"), tint = P.successText, modifier = Modifier.size(12.dp))
                         }
                     }
                 }
                 val sub = if (collapsed) {
                     val done = exercise.sets.count { it.isCompleted }
-                    listOfNotNull(exercise.targetMuscle.ifBlank { null }, "$done of ${exercise.sets.size} sets").joinToString(" · ")
+                    listOfNotNull(exercise.targetMuscle.ifBlank { null }, tr("{0} of {1} sets", done, exercise.sets.size)).joinToString(" · ")
                 } else buildList {
                     if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
-                    exercise.target?.let { add("Plan ${it.label}") }
-                    records.bestSet?.let { add("Best ${formatSet(it, exercise.type)}") }
+                    exercise.target?.let { add(tr("Plan {0}", it.label)) }
+                    records.bestSet?.let { add(tr("Best {0}", formatSet(it, exercise.type))) }
                 }.joinToString(" · ")
                 if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -851,22 +851,22 @@ private fun ExerciseCard(
                 var restOpen by remember { mutableStateOf(false) }
                 Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
                 DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
-                    RestChooser("Rest between sets", exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
+                    RestChooser(tr("Rest between sets"), exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
                 }
             }
             Box {
-                CircleIconButton(Icons.Rounded.MoreVert, "Exercise options", { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
+                CircleIconButton(Icons.Rounded.MoreVert, tr("Exercise options"), { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
                     if (canLinkNext) {
                         DropdownMenuItem(
-                            text = { Text(if (exercise.isSuperset) "Unlink from next" else "Superset with next", style = AppType.body) },
+                            text = { Text(if (exercise.isSuperset) tr("Unlink from next") else tr("Superset with next"), style = AppType.body) },
                             leadingIcon = { Icon(if (exercise.isSuperset) Icons.Rounded.LinkOff else Icons.Rounded.Link, null) },
                             onClick = { menuOpen = false; onToggleSuperset() }
                         )
                     }
                     if (suggestion != null && !suggestion.forNextTime && exercise.type.hasWeightSuggestions) {
                         DropdownMenuItem(
-                            text = { Text("Go lighter for the rest", style = AppType.body) },
+                            text = { Text(tr("Go lighter for the rest"), style = AppType.body) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Rounded.TrendingDown, null) },
                             onClick = {
                                 menuOpen = false
@@ -882,12 +882,12 @@ private fun ExerciseCard(
                     }
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
-                        text = { Text("Skip for today", style = AppType.body) },
+                        text = { Text(tr("Skip for today"), style = AppType.body) },
                         leadingIcon = { Icon(Icons.Rounded.SkipNext, null) },
                         onClick = { menuOpen = false; onSkip() }
                     )
                     DropdownMenuItem(
-                        text = { Text("Remove from $splitTitle", style = AppType.body, color = P.dangerText) },
+                        text = { Text(tr("Remove from {0}", splitTitle), style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onRemove() }
                     )
@@ -928,18 +928,18 @@ private fun ExerciseCard(
             )
 
             Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Set", style = AppType.caption, color = P.textTertiary, modifier = Modifier.width(40.dp))
+                Text(tr("Set"), style = AppType.caption, color = P.textTertiary, modifier = Modifier.width(40.dp))
                 if (previousSets != null) {
-                    Text("Previous", style = AppType.caption, color = P.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(PREVIOUS_WIDTH))
+                    Text(tr("Previous"), style = AppType.caption, color = P.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(PREVIOUS_WIDTH))
                 }
                 val unit = Units.current
                 val (first, second) = when (exercise.type) {
-                    ExerciseType.WEIGHT_REPS -> unit.label to "Reps"
-                    ExerciseType.WEIGHTED_BODYWEIGHT -> "Added ${unit.label}" to "Reps"
-                    ExerciseType.ASSISTED -> "Assist ${unit.label}" to "Reps"
-                    ExerciseType.BODYWEIGHT -> null to "Reps"
-                    ExerciseType.DURATION -> null to "Time"
-                    ExerciseType.DISTANCE_TIME -> unit.distanceLabel to "Time"
+                    ExerciseType.WEIGHT_REPS -> unit.label to tr("Reps")
+                    ExerciseType.WEIGHTED_BODYWEIGHT -> tr("Added {0}", unit.label) to tr("Reps")
+                    ExerciseType.ASSISTED -> tr("Assist {0}", unit.label) to tr("Reps")
+                    ExerciseType.BODYWEIGHT -> null to tr("Reps")
+                    ExerciseType.DURATION -> null to tr("Time")
+                    ExerciseType.DISTANCE_TIME -> unit.distanceLabel to tr("Time")
                 }
                 if (first != null) {
                     Text(first, style = AppType.caption, color = P.textTertiary, modifier = Modifier.weight(1.25f).padding(start = 12.dp))
@@ -986,7 +986,7 @@ private fun ExerciseCard(
             }
 
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SecondaryButton("Add set", {
+                SecondaryButton(tr("Add set"), {
                     haptics.tick()
                     onUpdate { ex ->
                         val last = ex.sets.lastOrNull()
@@ -1000,7 +1000,7 @@ private fun ExerciseCard(
                         ))
                     }
                 }, Modifier.weight(1f), icon = Icons.Rounded.Add, height = 40.dp)
-                if (exercise.type.hasWeightSuggestions) SecondaryButton("Drop set", {
+                if (exercise.type.hasWeightSuggestions) SecondaryButton(tr("Drop set"), {
                     haptics.tick()
                     onUpdate { ex ->
                         val last = ex.sets.lastOrNull()
@@ -1064,7 +1064,7 @@ private fun SuggestionLine(suggestion: Suggestion, alreadyApplied: Boolean, modi
         if (!suggestion.forNextTime && suggestion.suggestedWeight.isNotBlank() && !alreadyApplied) {
             Spacer(Modifier.width(8.dp))
             Text(
-                "Use ${formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))}",
+                tr("Use {0}", formatWeightKg(parseWeightClean(suggestion.suggestedWeight, 0f))),
                 style = AppType.label,
                 color = P.textPrimary,
                 maxLines = 1,
@@ -1104,9 +1104,9 @@ private fun SetRow(
     var menuOpen by remember { mutableStateOf(false) }
     var platesOpen by remember { mutableStateOf(false) }
     val (badgeText, badgeFg, badgeBg) = when {
-        set.isWarmupSet -> Triple("W", P.warningText, P.warningSurface)
-        set.intensityType == "DROP" -> Triple("D", P.dangerText, P.dangerSurface)
-        set.intensityType == "REST_PAUSE" -> Triple("RP", P.textSecondary, P.bgControl)
+        set.isWarmupSet -> Triple(tr("W"), P.warningText, P.warningSurface)
+        set.intensityType == "DROP" -> Triple(tr("D"), P.dangerText, P.dangerSurface)
+        set.intensityType == "REST_PAUSE" -> Triple(tr("RP"), P.textSecondary, P.bgControl)
         else -> Triple("$workNumber", P.textPrimary, P.bgControl)
     }
 
@@ -1129,13 +1129,13 @@ private fun SetRow(
                     .pressable(pressedScale = 0.88f) { haptics.tick(); menuOpen = true },
                 contentAlignment = Alignment.Center
             ) {
-                if (isPr && set.intensityType == "NORMAL") Icon(Icons.Rounded.EmojiEvents, "Personal best", tint = P.warningText, modifier = Modifier.size(16.dp))
+                if (isPr && set.intensityType == "NORMAL") Icon(Icons.Rounded.EmojiEvents, tr("Personal best"), tint = P.warningText, modifier = Modifier.size(16.dp))
                 else Text(badgeText, style = AppType.label.copy(fontWeight = FontWeight.SemiBold), color = badgeFg)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
                 // Drop sets and rest-pause only mean something when there's a load to change.
-                val kinds = if (type.hasWeightSuggestions) listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up", "DROP" to "Drop set", "REST_PAUSE" to "Rest-pause")
-                else listOf("NORMAL" to "Working set", "WARMUP" to "Warm-up")
+                val kinds = if (type.hasWeightSuggestions) listOf("NORMAL" to tr("Working set"), "WARMUP" to tr("Warm-up"), "DROP" to tr("Drop set"), "REST_PAUSE" to tr("Rest-pause"))
+                else listOf("NORMAL" to tr("Working set"), "WARMUP" to tr("Warm-up"))
                 kinds.forEach { (kind, label) ->
                     val selected = if (kind == "WARMUP") set.isWarmupSet else set.intensityType == kind && !set.isWarmupSet
                     DropdownMenuItem(
@@ -1145,11 +1145,11 @@ private fun SetRow(
                     )
                 }
                 HorizontalDivider(color = P.borderSubtle)
-                RestChooser("Rest after this set", set.restSeconds) { menuOpen = false; onSetRest(it) }
+                RestChooser(tr("Rest after this set"), set.restSeconds) { menuOpen = false; onSetRest(it) }
                 if (usesPlates) {
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
-                        text = { Text("Plate calculator", style = AppType.body) },
+                        text = { Text(tr("Plate calculator"), style = AppType.body) },
                         leadingIcon = { Icon(Icons.Rounded.FitnessCenter, null, tint = P.textSecondary) },
                         onClick = { menuOpen = false; platesOpen = true }
                     )
@@ -1157,7 +1157,7 @@ private fun SetRow(
                 if (canDelete) {
                     HorizontalDivider(color = P.borderSubtle)
                     DropdownMenuItem(
-                        text = { Text("Delete set", style = AppType.body, color = P.dangerText) },
+                        text = { Text(tr("Delete set"), style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onDelete() }
                     )
@@ -1239,7 +1239,7 @@ private fun CheckButton(done: Boolean, onClick: () -> Unit) {
             .pressable(pressedScale = 0.88f, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Rounded.Check, if (done) "Mark set not done" else "Mark set done", tint = fg, modifier = Modifier.size(22.dp))
+        Icon(Icons.Rounded.Check, if (done) tr("Mark set not done") else tr("Mark set done"), tint = fg, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -1307,8 +1307,8 @@ private fun RestTimerBar(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Resting", style = AppType.bodyStrong, color = P.textPrimary)
-                    if (next != null) Text("Next: $next", style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(tr("Resting"), style = AppType.bodyStrong, color = P.textPrimary)
+                    if (next != null) Text(tr("Next: {0}", next), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(
                     "−15",
@@ -1331,7 +1331,7 @@ private fun RestTimerBar(
                     }.padding(horizontal = 10.dp, vertical = 8.dp)
                 )
                 Spacer(Modifier.width(6.dp))
-                CircleIconButton(Icons.Rounded.SkipNext, "Skip rest", {
+                CircleIconButton(Icons.Rounded.SkipNext, tr("Skip rest"), {
                     haptics.tick()
                     LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
                 }, size = 36.dp, container = P.bgControl, tint = P.textPrimary)
@@ -1390,15 +1390,15 @@ private fun FinishSheet(
                 Column(Modifier.weight(1f)) {
                     Text(
                         when {
-                            isEditing -> "Save changes"
-                            celebrate -> if (stats.prCount == 1) "New best!" else "${stats.prCount} new bests!"
-                            else -> "Nice work"
+                            isEditing -> tr("Save changes")
+                            celebrate -> if (stats.prCount == 1) tr("New best!") else tr("{0} new bests!", stats.prCount)
+                            else -> tr("Nice work")
                         },
                         style = AppType.display,
                         color = P.textPrimary
                     )
                     Text(
-                        if (isEditing) split.title else "That's ${split.title} done.",
+                        if (isEditing) split.title else tr("That's {0} done.", split.title),
                         style = AppType.body,
                         color = P.textSecondary
                     )
@@ -1407,14 +1407,14 @@ private fun FinishSheet(
             }
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountUpTile(durationSeconds.toFloat(), { formatDuration(it.toLong()) }, "Time", Modifier.weight(1f).enterAnimation(1), delayMillis = 150)
-                CountUpTile(stats.workSets.toFloat(), { "${it.roundToInt()}" }, "Sets", Modifier.weight(1f).enterAnimation(2), delayMillis = 200)
+                CountUpTile(durationSeconds.toFloat(), { formatDuration(it.toLong()) }, tr("Time"), Modifier.weight(1f).enterAnimation(1), delayMillis = 150)
+                CountUpTile(stats.workSets.toFloat(), { "${it.roundToInt()}" }, tr("Sets"), Modifier.weight(1f).enterAnimation(2), delayMillis = 200)
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountUpTile(stats.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, "Volume", Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
+                CountUpTile(stats.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
                 CountUpTile(
-                    stats.prCount.toFloat(), { "${it.roundToInt()}" }, "New bests", Modifier.weight(1f).enterAnimation(4), delayMillis = 300,
+                    stats.prCount.toFloat(), { "${it.roundToInt()}" }, tr("New bests"), Modifier.weight(1f).enterAnimation(4), delayMillis = 300,
                     valueColor = if (stats.prCount > 0) P.warningText else null
                 )
             }
@@ -1433,9 +1433,9 @@ private fun FinishSheet(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         when {
-                            up -> "$pct% more volume than your last ${split.title}"
-                            pct < 0 -> "${-pct}% less volume than your last ${split.title}"
-                            else -> "Same volume as your last ${split.title}"
+                            up -> tr("{0}% more volume than your last {1}", pct, split.title)
+                            pct < 0 -> tr("{0}% less volume than your last {1}", -pct, split.title)
+                            else -> tr("Same volume as your last {0}", split.title)
                         },
                         style = AppType.label,
                         color = if (up) P.successText else P.textSecondary
@@ -1448,7 +1448,7 @@ private fun FinishSheet(
                 Column(
                     Modifier.fillMaxWidth().enterAnimation(6).clip(RoundedCornerShape(16.dp)).background(P.warningSurface).padding(horizontal = 14.dp, vertical = 12.dp)
                 ) {
-                    Text("New bests", style = AppType.overline, color = P.warningText)
+                    Text(tr("New bests"), style = AppType.overline, color = P.warningText)
                     bests.forEach { (ex, set) ->
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.EmojiEvents, null, tint = P.warningText, modifier = Modifier.size(16.dp))
@@ -1463,9 +1463,9 @@ private fun FinishSheet(
             if (skipped.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(P.warningSurface).padding(14.dp)) {
-                    Text("You skipped ${skipped.size}: ${skipped.joinToString(", ") { it.name }}", style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
+                    Text(tr("You skipped {0}: {1}", skipped.size, skipped.joinToString(", ") { it.name }), style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
                     Text(
-                        "Do them now",
+                        tr("Do them now"),
                         style = AppType.label,
                         color = P.warningText,
                         modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(8.dp)).pressable(onClick = onUnskipAll).padding(vertical = 4.dp)
@@ -1479,25 +1479,25 @@ private fun FinishSheet(
                 Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(16.dp))) {
                     Image(preview, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                     CircleIconButton(
-                        Icons.Rounded.Close, "Remove photo", onClearPhoto,
+                        Icons.Rounded.Close, tr("Remove photo"), onClearPhoto,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                         size = 32.dp, container = Color.Black.copy(alpha = 0.55f), tint = Color.White
                     )
                 }
             } else {
-                Text("Add a photo (optional)", style = AppType.label, color = P.textSecondary)
+                Text(tr("Add a photo (optional)"), style = AppType.label, color = P.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryButton("Camera", onCamera, Modifier.weight(1f), icon = Icons.Rounded.PhotoCamera)
-                    SecondaryButton("Gallery", onGallery, Modifier.weight(1f), icon = Icons.Rounded.Image)
+                    SecondaryButton(tr("Camera"), onCamera, Modifier.weight(1f), icon = Icons.Rounded.PhotoCamera)
+                    SecondaryButton(tr("Gallery"), onGallery, Modifier.weight(1f), icon = Icons.Rounded.Image)
                 }
             }
 
             Spacer(Modifier.height(20.dp))
-            PrimaryButton(if (isEditing) "Save changes" else "Save workout", onSave, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check)
+            PrimaryButton(if (isEditing) tr("Save changes") else tr("Save workout"), onSave, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check)
             Spacer(Modifier.height(8.dp))
             SecondaryButton(
-                "Share",
+                tr("Share"),
                 {
                     shareWorkoutCardImage(split.title, durationSeconds, exercises, history, photoPath)
                 },

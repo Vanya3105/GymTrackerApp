@@ -99,12 +99,12 @@ fun ProgramEditorScreen(
     ) {
         item {
             Row(Modifier.statusBarsPadding().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onBack)
+                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), onBack)
                 Spacer(Modifier.weight(1f))
-                CircleIconButton(Icons.Rounded.DeleteOutline, "Delete program", { confirmDelete = true }, tint = P.dangerText)
+                CircleIconButton(Icons.Rounded.DeleteOutline, tr("Delete program"), { confirmDelete = true }, tint = P.dangerText)
             }
         }
-        item { Text("Edit program", style = AppType.display, color = P.textPrimary) }
+        item { Text(tr("Edit program"), style = AppType.display, color = P.textPrimary) }
 
         item {
             OutlinedTextField(
@@ -113,7 +113,7 @@ fun ProgramEditorScreen(
                     name = v
                     if (v.isNotBlank()) save(program.copy(name = v.trim()))
                 },
-                label = { Text("Name") },
+                label = { Text(tr("Name")) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = fieldColors(),
@@ -124,8 +124,8 @@ fun ProgramEditorScreen(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Workouts per week", style = AppType.bodyStrong, color = P.textPrimary)
-                    Text("Your weekly goal on Today and in widgets", style = AppType.caption, color = P.textSecondary)
+                    Text(tr("Workouts per week"), style = AppType.bodyStrong, color = P.textPrimary)
+                    Text(tr("Your weekly goal on Today and in widgets"), style = AppType.caption, color = P.textSecondary)
                 }
                 NumberStepper(
                     value = "${program.weeklyGoal}",
@@ -139,12 +139,12 @@ fun ProgramEditorScreen(
         }
 
         if (!isActive) {
-            item { PrimaryButton("Use this program", { haptics.confirm(); onUseProgram() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check) }
+            item { PrimaryButton(tr("Use this program"), { haptics.confirm(); onUseProgram() }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Check) }
         }
 
-        item { SectionHeader("Days") }
+        item { SectionHeader(tr("Days")) }
         if (program.splits.isEmpty()) {
-            item { EmptyState(Icons.Rounded.FitnessCenter, "No days yet", "Add a day, then pick its exercises.") }
+            item { EmptyState(Icons.Rounded.FitnessCenter, tr("No days yet"), tr("Add a day, then pick its exercises.")) }
         }
         itemsIndexed(program.splits, key = { _, s -> s.title }) { i, split ->
             val count = remember(split.title, UserPrograms.all) { LocalStorage.loadTemplateForSplit(context, split.title).size }
@@ -161,20 +161,20 @@ fun ProgramEditorScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
-                            val sub = listOf(split.subtitle, if (count == 1) "1 exercise" else "$count exercises").filter { it.isNotBlank() }
+                            val sub = listOf(split.subtitle, if (count == 1) tr("1 exercise") else tr("{0} exercises", count)).filter { it.isNotBlank() }
                             Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        CircleIconButton(Icons.Rounded.Edit, "Rename day", { renaming = split }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+                        CircleIconButton(Icons.Rounded.Edit, tr("Rename day"), { renaming = split }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
                     }
                 }
             }
         }
         item {
-            SecondaryButton("Add day", { addingDay = true }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
+            SecondaryButton(tr("Add day"), { addingDay = true }, Modifier.fillMaxWidth(), icon = Icons.Rounded.Add)
         }
         item {
             Text(
-                "Drag to reorder. Days with the same name share their exercise list and history, in every program.",
+                tr("Drag to reorder. Days with the same name share their exercise list and history, in every program."),
                 style = AppType.caption,
                 color = P.textTertiary
             )
@@ -183,7 +183,7 @@ fun ProgramEditorScreen(
 
     renaming?.let { split ->
         DayDialog(
-            title = "Rename day",
+            title = tr("Rename day"),
             initialTitle = split.title,
             initialSubtitle = split.subtitle,
             taken = program.splits.map { it.title }.filter { it != split.title },
@@ -208,7 +208,7 @@ fun ProgramEditorScreen(
 
     if (addingDay) {
         DayDialog(
-            title = "Add day",
+            title = tr("Add day"),
             initialTitle = "",
             initialSubtitle = "",
             taken = program.splits.map { it.title },
@@ -229,10 +229,10 @@ fun ProgramEditorScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = P.bgElevated,
-            title = { Text("Delete ${program.name}?", style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Delete {0}?", program.name), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
-                    "Your logged workouts and each day's exercises are kept." + if (isActive) " You'll switch back to a built-in program." else "",
+                    tr("Your logged workouts and each day's exercises are kept.") + if (isActive) tr(" You'll switch back to a built-in program.") else "",
                     style = AppType.body,
                     color = P.textSecondary
                 )
@@ -242,9 +242,9 @@ fun ProgramEditorScreen(
                     confirmDelete = false
                     LocalStorage.deleteProgram(context, program.id)
                     onDeleted()
-                }) { Text("Delete", color = P.dangerText, style = AppType.label) }
+                }) { Text(tr("Delete"), color = P.dangerText, style = AppType.label) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
         )
     }
 }
@@ -277,10 +277,10 @@ private fun DayDialog(
                 OutlinedTextField(
                     value = titleField,
                     onValueChange = { titleField = it },
-                    label = { Text("Name, like Push or Upper A") },
+                    label = { Text(tr("Name, like Push or Upper A")) },
                     singleLine = true,
                     isError = clash,
-                    supportingText = if (clash) ({ Text("This program already has a day with that name.") }) else null,
+                    supportingText = if (clash) ({ Text(tr("This program already has a day with that name.")) }) else null,
                     shape = RoundedCornerShape(14.dp),
                     colors = fieldColors(),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus)
@@ -289,7 +289,7 @@ private fun DayDialog(
                 OutlinedTextField(
                     value = subtitle,
                     onValueChange = { subtitle = it },
-                    label = { Text("Focus (optional)") },
+                    label = { Text(tr("Focus (optional)")) },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     colors = fieldColors(),
@@ -297,16 +297,16 @@ private fun DayDialog(
                 )
                 if (onDelete != null) {
                     Spacer(Modifier.height(12.dp))
-                    SecondaryButton("Remove this day", onDelete, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteOutline, contentColor = P.dangerText)
+                    SecondaryButton(tr("Remove this day"), onDelete, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteOutline, contentColor = P.dangerText)
                 }
             }
         },
         confirmButton = {
             TextButton(enabled = trimmed.isNotEmpty() && !clash, onClick = { onSave(trimmed, subtitle.trim()) }) {
-                Text("Save", color = P.accentPrimary, style = AppType.label)
+                Text(tr("Save"), color = P.accentPrimary, style = AppType.label)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = P.textSecondary, style = AppType.label) } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
     )
 }
 
@@ -348,11 +348,11 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
             item(key = "header") {
                 Column(Modifier.padding(bottom = 8.dp)) {
                     Text(dayTitle, style = AppType.title, color = P.textPrimary)
-                    Text("These start every $dayTitle workout. Drag to reorder; tap one to set its sets and reps.", style = AppType.caption, color = P.textSecondary)
+                    Text(tr("These start every {0} workout. Drag to reorder; tap one to set its sets and reps.", dayTitle), style = AppType.caption, color = P.textSecondary)
                 }
             }
             if (items.isEmpty()) item(key = "empty") {
-                Text("No exercises yet.", style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(vertical = 12.dp))
+                Text(tr("No exercises yet."), style = AppType.body, color = P.textTertiary, modifier = Modifier.padding(vertical = 12.dp))
             }
             itemsIndexed(items, key = { _, it -> it.first }) { i, (name, muscle) ->
                 val target = remember(name, targetsVersion) { LocalStorage.getTarget(context, dayTitle, name) }
@@ -375,18 +375,18 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
                         val sub = listOfNotNull(muscle.ifBlank { null }, type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label)
                         if (sub.isNotEmpty()) Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary)
                         Text(
-                            target?.let { if (type.usesReps) "Plan: ${it.label} reps" else "Plan: ${it.sets} sets" } ?: "Tap to set a plan",
+                            target?.let { if (type.usesReps) tr("Plan: {0} reps", it.label) else tr("Plan: {0} sets", it.sets) } ?: tr("Tap to set a plan"),
                             style = AppType.caption,
                             color = if (target != null) P.accentPrimary else P.textTertiary
                         )
                     }
-                    CircleIconButton(Icons.Rounded.Close, "Remove", { haptics.tick(); save(items.filterIndexed { j, _ -> j != i }) },
+                    CircleIconButton(Icons.Rounded.Close, tr("Remove"), { haptics.tick(); save(items.filterIndexed { j, _ -> j != i }) },
                         size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
                 }
                 }
             }
             item(key = "add") {
-                PrimaryButton("Add exercise", { picking = true }, Modifier.fillMaxWidth().padding(top = 12.dp).animateItem(), icon = Icons.Rounded.Add)
+                PrimaryButton(tr("Add exercise"), { picking = true }, Modifier.fillMaxWidth().padding(top = 12.dp).animateItem(), icon = Icons.Rounded.Add)
             }
         }
     }
@@ -416,7 +416,7 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
                 save(items + (name to ""))
             },
             onDismiss = { picking = false },
-            addedLabel = "Already on this day"
+            addedLabel = tr("Already on this day")
         )
     }
 }
@@ -457,24 +457,24 @@ private fun TargetDialog(
         text = {
             Column {
                 Text(
-                    if (usesReps) "New workouts start with these sets. Hit the top of the range on every set and the app suggests more weight."
-                    else "New workouts start with this many sets.",
+                    if (usesReps) tr("New workouts start with these sets. Hit the top of the range on every set and the app suggests more weight.")
+                    else tr("New workouts start with this many sets."),
                     style = AppType.caption,
                     color = P.textSecondary
                 )
                 Spacer(Modifier.height(10.dp))
-                row("Sets", sets, { sets = it }, 1..10)
+                row(tr("Sets"), sets, { sets = it }, 1..10)
                 if (usesReps) {
-                    row("Reps from", repMin, { repMin = it; if (repMax < it) repMax = it }, 1..50)
-                    row("Reps up to", repMax, { repMax = it; if (repMin > it) repMin = it }, 1..50)
+                    row(tr("Reps from"), repMin, { repMin = it; if (repMax < it) repMax = it }, 1..50)
+                    row(tr("Reps up to"), repMax, { repMax = it; if (repMin > it) repMin = it }, 1..50)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(ExerciseTarget(sets, repMin, repMax)) }) { Text("Save", color = P.accentPrimary, style = AppType.label) }
+            TextButton(onClick = { onSave(ExerciseTarget(sets, repMin, repMax)) }) { Text(tr("Save"), color = P.accentPrimary, style = AppType.label) }
         },
         dismissButton = {
-            TextButton(onClick = { onSave(null) }) { Text(if (current != null) "No plan" else "Cancel", color = P.textSecondary, style = AppType.label) }
+            TextButton(onClick = { onSave(null) }) { Text(if (current != null) tr("No plan") else tr("Cancel"), color = P.textSecondary, style = AppType.label) }
         }
     )
 }
@@ -500,7 +500,7 @@ fun DragGrip(isDragging: Boolean, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     val tint by animateColorAsState(if (isDragging) P.accentPrimary else P.textTertiary, label = "grip")
     Box(modifier.size(36.dp, 44.dp), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.DragIndicator, "Drag to reorder", tint = tint)
+        Icon(Icons.Rounded.DragIndicator, tr("Drag to reorder"), tint = tint)
     }
 }
 
