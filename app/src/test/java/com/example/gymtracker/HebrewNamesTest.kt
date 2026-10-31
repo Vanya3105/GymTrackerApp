@@ -29,6 +29,16 @@ class HebrewNamesTest {
     }
 
     @Test
+    fun everyGuideHasHebrewWithTheSameSteps() {
+        val wrong = ExerciseDatabase.all.mapNotNull { info ->
+            val en = ExerciseGuides.find(info.name) ?: return@mapNotNull null
+            val he = HebrewGuides.find(info.name)
+            if (he == null || he.steps.size != en.steps.size || he.tip.isBlank()) info.name else null
+        }
+        assertEquals(emptyList<String>(), wrong)
+    }
+
+    @Test
     fun madeUpDayNamesAreBuiltFromTheirParts() {
         java.util.Locale.setDefault(java.util.Locale.forLanguageTag("he"))
         try {

@@ -45,7 +45,9 @@ fun MuscleMap(loads: FloatArray, modifier: Modifier = Modifier) {
                     val s = size.width / 100f
                     drawFigure(front, s, ::fill, bone)
                 }
-                Text(if (front) tr("Front") else tr("Back"), style = AppType.caption, color = P.textTertiary)
+                // Not tr("Back"): that's the back button (חזרה); here it's the back of the body.
+                val label = if (front) tr("Front") else if (hebrewOn()) "מאחור" else "Back"
+                Text(label, style = AppType.caption, color = P.textTertiary)
             }
         }
     }

@@ -23,6 +23,16 @@ class HebrewTextTest {
     }
 
     @Test
+    fun spacesAtTheEndSurviveTranslation() {
+        // Text joined to what follows keeps its space, unless it ends in a Hebrew prefix letter (מגבים ל|תיקייה).
+        val wrong = HebrewText.english.filter { en ->
+            val he = HebrewText.of(en)!!
+            en.endsWith(" ") && !he.endsWith(" ") && he.last() !in "לבו-"
+        }
+        assertEquals(emptyList<String>(), wrong)
+    }
+
+    @Test
     fun placeholdersSurviveTranslation() {
         val wrong = HebrewText.english.filter { en ->
             placeholder.findAll(en).map { it.value }.toSet() != placeholder.findAll(HebrewText.of(en)!!).map { it.value }.toSet()

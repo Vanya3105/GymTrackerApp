@@ -8,7 +8,8 @@ data class ExerciseGuide(val steps: List<String>, val tip: String)
 
 /** Written for this app; keyed by the library's exercise names (see [ExerciseDatabase]). */
 object ExerciseGuides {
-    fun find(name: String): ExerciseGuide? = guides[exerciseKey(name)]
+    fun find(name: String): ExerciseGuide? =
+        (if (hebrewOn()) HebrewGuides.find(name) else null) ?: guides[exerciseKey(name)]
 
     private fun g(tip: String, vararg steps: String) = ExerciseGuide(steps.toList(), tip)
 
