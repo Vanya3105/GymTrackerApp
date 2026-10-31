@@ -768,7 +768,7 @@ private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) 
 }
 
 /**
- * Everything about how an exercise is done: the start and end photos, which muscles it works,
+ * Everything about how an exercise is done: the moving figure, which muscles it works,
  * the steps and a tip. On the exercise's page and when a row is opened in "Add exercise".
  */
 @Composable
@@ -779,8 +779,11 @@ fun ExerciseGuideBody(exerciseName: String, muscle: String, modifier: Modifier =
     val main = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] >= 1f }
     val helping = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] > 0f && loads[i] < 1f }
     Column(modifier) {
-        if (ExercisePhotos.has(exerciseName) || ExerciseFigures.has(exerciseName)) {
-            ExercisePhotoClip(exerciseName, Modifier.fillMaxWidth().aspectRatio(1.5f))
+        if (ExerciseFigures.has(exerciseName)) {
+            ExerciseFigure(
+                exerciseName,
+                Modifier.fillMaxWidth().aspectRatio(1.5f).clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(12.dp)
+            )
             Spacer(Modifier.height(14.dp))
         }
         if (main.isNotEmpty()) {

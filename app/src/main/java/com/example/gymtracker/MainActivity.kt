@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
                 .withEndAction { provider.remove() }.start()
         }
         super.onCreate(savedInstanceState)
+        // Exercise photos were downloaded here before the drawn figures replaced them (2026-10-31).
+        Thread { java.io.File(noBackupFilesDir, "exercise_photos").deleteRecursively() }.start()
         enableEdgeToEdge()
         setContent { GymTrackerRoot(activity = this) }
     }
