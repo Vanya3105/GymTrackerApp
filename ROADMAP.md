@@ -13,7 +13,7 @@ Everything through **tab-transitions** is merged into `master` (2026-10-30, at t
 
 **Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30). **Drawn exercise figures** : all 294 exercises drawn in the app's style, replacing the photos; tested and merged (2026-10-31). **Photo code removed**: `ExercisePhotos` and its test are gone, `ExerciseThumb` now lives with the figures, and the app deletes the old downloaded photos once on start; tested and merged (2026-10-31).
 
-Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Next: Android OAuth client for the upload key, then privacy policy, store listing, consent screen to In production, internal testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Next: privacy policy (needed to publish the consent screen), consent screen to In production, store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -193,7 +193,8 @@ The app should also serve runners and people who train with bodyweight (calisthe
   - SHA-1 `69:63:87:59:C1:ED:A8:F7:3B:49:9A:A6:90:C5:E2:14:AB:21:0F:A2`
   - SHA-256 `B2:3F:22:F2:0F:9F:87:5E:47:24:EE:D5:70:36:5F:0E:86:44:25:32:B4:E0:68:8E:4B:AD:26:BA:BB:5C:45:A0`
   - An app signed with one key can't update an install signed with another: moving the phone from a debug-signed install to a release one means back up, uninstall, install, restore.
-- [ ] Android OAuth client for the upload key's SHA-1 (Google sign-in in release builds), then one for the Play App Signing key once the app exists in Play Console (App integrity)
+- [x] Android OAuth client for the upload key's SHA-1: Google sign-in works in self-signed release builds (owner, 2026-10-31)
+- [ ] Android OAuth client for the Play App Signing key once the app exists in Play Console (Test and release → App integrity); Play installs are signed with that key, not the upload key
 - [ ] Privacy policy (what's stored on the phone, Health Connect, Google Drive backup) at a public URL
 - [ ] Store listing: name, short and full description, icon, feature graphic, screenshots, content rating, data safety form
 - [ ] OAuth consent screen to In production
