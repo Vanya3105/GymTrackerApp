@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -402,10 +403,14 @@ private fun PhotoFrame(id: String, frame: Int, maxPx: Int, modifier: Modifier, p
 @Composable
 fun ExerciseThumb(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp, showEmpty: Boolean = true) {
     val P = LocalPalette.current
+    val shape = RoundedCornerShape(size * 0.24f)
+    if (ExerciseFigures.has(name)) {
+        ExerciseFigure(name, modifier.size(size).clip(shape).background(P.bgControl).padding(size * 0.1f), moving = false)
+        return
+    }
     val id = remember(name) { ExercisePhotos.idFor(name) }
     if (id == null && !showEmpty) return
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val shape = RoundedCornerShape(size * 0.24f)
     val empty: @Composable () -> Unit = {
         Icon(Icons.Rounded.FitnessCenter, null, tint = P.textTertiary, modifier = Modifier.size(size * 0.42f))
     }
@@ -422,6 +427,10 @@ fun ExerciseThumb(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp,
 @Composable
 fun ExercisePhotoClip(name: String, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
+    if (ExerciseFigures.has(name)) {
+        ExerciseFigure(name, modifier.clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(12.dp))
+        return
+    }
     val id = remember(name) { ExercisePhotos.idFor(name) } ?: return
     var frame by remember(name) { mutableIntStateOf(0) }
     LaunchedEffect(name) {

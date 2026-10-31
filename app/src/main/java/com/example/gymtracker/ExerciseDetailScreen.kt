@@ -779,7 +779,7 @@ fun ExerciseGuideBody(exerciseName: String, muscle: String, modifier: Modifier =
     val main = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] >= 1f }
     val helping = RECOVERY_GROUPS.filterIndexed { i, _ -> loads[i] > 0f && loads[i] < 1f }
     Column(modifier) {
-        if (ExercisePhotos.has(exerciseName)) {
+        if (ExercisePhotos.has(exerciseName) || ExerciseFigures.has(exerciseName)) {
             ExercisePhotoClip(exerciseName, Modifier.fillMaxWidth().aspectRatio(1.5f))
             Spacer(Modifier.height(14.dp))
         }
