@@ -86,3 +86,24 @@ fun tr(text: String, vararg args: Any?): String {
 /** One letter per day, Sunday first. Not through [tr]: in English two days share each of S and T. */
 internal fun weekdayLetters(): List<String> =
     if (hebrewOn()) listOf("א", "ב", "ג", "ד", "ה", "ו", "ש") else listOf("S", "M", "T", "W", "T", "F", "S")
+
+/**
+ * A name saved in English (exercise, muscle, equipment, a built-in day or program) shown in the
+ * app's language. Day names the split builder makes from muscles ("Chest, Back & Biceps", "Day 2",
+ * "Push B") are put together from their parts. Names the user typed have no Hebrew and stay as they are.
+ */
+fun shown(name: String): String {
+    if (!hebrewOn()) return name
+    HebrewText.ofName(name)?.let { return it }
+    Regex("""Day (\d+)""").matchEntire(name)?.let { return tr("Day {0}", it.groupValues[1]) }
+    Regex("""(.+) ([A-Z]|\+\d+)""").matchEntire(name)?.let { m ->
+        val base = shown(m.groupValues[1])
+        if (base != m.groupValues[1]) return "$base ${m.groupValues[2]}"
+    }
+    val parts = name.split(", ", " & ")
+    if (parts.size > 1 && parts.all { HebrewText.ofName(it) != null }) {
+        val he = parts.map { HebrewText.ofName(it)!! }
+        return if (he.size == 2) "${he[0]} ו${he[1]}" else he.dropLast(1).joinToString(", ") + " ו" + he.last()
+    }
+    return name
+}

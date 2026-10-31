@@ -467,7 +467,7 @@ fun sendSetDoneNotification(context: Context, exerciseName: String, setText: Str
     val restMsg = if (restSeconds > 0) tr(" · Rest {0}", formatRestShort(restSeconds)) else ""
     postAlert(
         context, id = 1002, channelId = SET_DONE_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_workout,
-        title = tr("Set logged · {0}", exerciseName), text = "$setText$restMsg", requestCode = 1
+        title = tr("Set logged · {0}", shown(exerciseName)), text = "$setText$restMsg", requestCode = 1
     )
 }
 
@@ -478,7 +478,7 @@ fun sendRestFinishedNotification(
 ) {
     postAlert(
         context, id = 1001, channelId = REST_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_timer,
-        title = tr("Rest's over · {0}", splitTitle), text = detailText, requestCode = 0
+        title = tr("Rest's over · {0}", shown(splitTitle)), text = detailText, requestCode = 0
     )
 }
 
@@ -797,9 +797,9 @@ object RestAlarmScheduler {
         val nextEx = active?.second?.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
         val nextSet = nextEx?.let { it.sets.getOrNull(it.nextSetIndex()) }
         val detailLine = if (nextEx != null && nextSet != null) {
-            "Next: ${nextEx.name} · ${formatSet(nextSet, nextEx.type)}"
+            tr("Next: {0} · {1}", shown(nextEx.name), formatSet(nextSet, nextEx.type))
         } else {
-            "Time for your next set."
+            tr("Time for your next set.")
         }
 
         if (settings.restSoundEnabled) playRestBeep(context)

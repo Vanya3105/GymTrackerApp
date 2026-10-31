@@ -109,7 +109,7 @@ fun HistoryScreen(
             onDismissRequest = { pendingDelete = null },
             containerColor = P.bgElevated,
             title = { Text(tr("Delete this workout?"), style = AppType.headline, color = P.textPrimary) },
-            text = { Text(tr("{0} on {1} will be removed for good.", workout.splitTitle, DateUtils.shortDayYearOf(workout.displayDate, workout.id)), style = AppType.body, color = P.textSecondary) },
+            text = { Text(tr("{0} on {1} will be removed for good.", shown(workout.splitTitle), DateUtils.shortDayYearOf(workout.displayDate, workout.id)), style = AppType.body, color = P.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { onDeleteWorkout(workout.id); pendingDelete = null }) {
                     Text(tr("Delete"), color = P.dangerText, style = AppType.label)
@@ -180,7 +180,7 @@ private fun WeekView(
                 workoutList(
                     workouts, history, onOpen, onDelete, onViewPhoto,
                     emptyTitle = if (offset == 0) tr("No workouts yet this week") else tr("A rest week"),
-                    emptyText = if (offset == 0) history.firstOrNull()?.let { tr("Your last one was {0}, {1}.", it.splitTitle, relativeDay(it.id)) } ?: tr("Finished workouts show up here.")
+                    emptyText = if (offset == 0) history.firstOrNull()?.let { tr("Your last one was {0}, {1}.", shown(it.splitTitle), relativeDay(it.id)) } ?: tr("Finished workouts show up here.")
                     else tr("Nothing was logged that week.")
                 )
             }
@@ -351,7 +351,7 @@ fun WorkoutHistoryCard(
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpen) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text(workout.splitTitle, style = AppType.headline, color = P.textPrimary)
+                Text(shown(workout.splitTitle), style = AppType.headline, color = P.textPrimary)
                 Text(DateUtils.dateTimeOf(workout.displayDate, workout.id), style = AppType.caption, color = P.textSecondary)
             }
             if (workout.prsHit > 0) {
@@ -443,7 +443,7 @@ private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<Complete
         rows.take(SUMMARY_ROWS).forEach { (ex, best, isBest) ->
             Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("${ex.workSets.size} ×", style = AppType.caption.copy(fontFeatureSettings = "tnum"), color = P.textTertiary, modifier = Modifier.width(28.dp))
-                Text(ex.name, style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(shown(ex.name), style = AppType.label, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (isBest) {
                     Icon(Icons.Rounded.EmojiEvents, tr("New best"), tint = P.warningText, modifier = Modifier.padding(end = 4.dp).size(14.dp))
                 }

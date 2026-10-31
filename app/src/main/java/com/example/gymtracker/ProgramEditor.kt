@@ -160,8 +160,8 @@ fun ProgramEditorScreen(
                         DayNumber(i + 1, isDragging)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
-                            val sub = listOf(split.subtitle, if (count == 1) tr("1 exercise") else tr("{0} exercises", count)).filter { it.isNotBlank() }
+                            Text(shown(split.title), style = AppType.bodyStrong, color = P.textPrimary)
+                            val sub = listOf(shown(split.subtitle), if (count == 1) tr("1 exercise") else tr("{0} exercises", count)).filter { it.isNotBlank() }
                             Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         CircleIconButton(Icons.Rounded.Edit, tr("Rename day"), { renaming = split }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
@@ -229,7 +229,7 @@ fun ProgramEditorScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = P.bgElevated,
-            title = { Text(tr("Delete {0}?", program.name), style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Delete {0}?", shown(program.name)), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
                     tr("Your logged workouts and each day's exercises are kept.") + if (isActive) tr(" You'll switch back to a built-in program.") else "",
@@ -347,8 +347,8 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
         ) {
             item(key = "header") {
                 Column(Modifier.padding(bottom = 8.dp)) {
-                    Text(dayTitle, style = AppType.title, color = P.textPrimary)
-                    Text(tr("These start every {0} workout. Drag to reorder; tap one to set its sets and reps.", dayTitle), style = AppType.caption, color = P.textSecondary)
+                    Text(shown(dayTitle), style = AppType.title, color = P.textPrimary)
+                    Text(tr("These start every {0} workout. Drag to reorder; tap one to set its sets and reps.", shown(dayTitle)), style = AppType.caption, color = P.textSecondary)
                 }
             }
             if (items.isEmpty()) item(key = "empty") {
@@ -370,7 +370,7 @@ private fun DayExercisesSheet(dayTitle: String, haptics: Haptics, onDismiss: () 
                 ) {
                     DragGrip(isDragging, Modifier.dragHandle(dragState, name, enabled = items.size > 1, onStart = { haptics.pickUp() }))
                     Column(Modifier.weight(1f)) {
-                        Text(name, style = AppType.bodyStrong, color = P.textPrimary)
+                        Text(shown(name), style = AppType.bodyStrong, color = P.textPrimary)
                         val type = LocalStorage.exerciseType(context, name)
                         val sub = listOfNotNull(muscle.ifBlank { null }, type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label)
                         if (sub.isNotEmpty()) Text(sub.joinToString(" · "), style = AppType.caption, color = P.textSecondary)
@@ -453,7 +453,7 @@ private fun TargetDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = P.bgElevated,
-        title = { Text(name, style = AppType.headline, color = P.textPrimary) },
+        title = { Text(shown(name), style = AppType.headline, color = P.textPrimary) },
         text = {
             Column {
                 Text(

@@ -406,7 +406,7 @@ fun GymTrackerApp(
         activeSplit = null
         currentExercises = emptyList()
         if (saved != null) {
-            Toast.makeText(context, tr("{0} saved: {1}", saved.splitTitle, formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -865,8 +865,8 @@ private fun ForgottenWorkoutSheet(
             Text(tr("Still training?"), style = AppType.title, color = P.textPrimary)
             Spacer(Modifier.height(6.dp))
             Text(
-                (if (lastChangeMillis - startMillis < 60_000L) tr("{0} started at {1} and nothing has changed since.", splitTitle, whenText(startMillis))
-                else tr("{0} started at {1} and nothing has changed since {2}.", splitTitle, whenText(startMillis), lastText)) +
+                (if (lastChangeMillis - startMillis < 60_000L) tr("{0} started at {1} and nothing has changed since.", shown(splitTitle), whenText(startMillis))
+                else tr("{0} started at {1} and nothing has changed since {2}.", shown(splitTitle), whenText(startMillis), lastText)) +
                     if (doneSets == 0) tr(" No sets are ticked yet.") else "",
                 style = AppType.body,
                 color = P.textSecondary
@@ -908,7 +908,7 @@ fun newExerciseEntry(
     // nSuns' secondary lifts).
     val tm = LocalStorage.getTrainingMax(context, plan.trainingMaxOf)
     if (tm == null) {
-        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) tr("a training max (tap the name)") else tr("a {0} training max", plan.trainingMaxOf)
+        val whose = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(name)) tr("a training max (tap the name)") else tr("a {0} training max", shown(plan.trainingMaxOf))
         return newExerciseEntryDefault(context, splitTitle, name, muscle, history, settings)
             .copy(planNote = tr("Set {0} to get your {1} weights", whose, plan.scheme.label))
     }
@@ -1121,7 +1121,7 @@ private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>,
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(tr("{0} in progress", splitTitle), style = AppType.bodyStrong, color = P.textPrimary)
+                Text(tr("{0} in progress", shown(splitTitle)), style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
                     tr("{0} · {1} of {2} sets", formatClock((now - startTime) / 1000L), done, total),
                     style = AppType.caption.copy(fontFeatureSettings = "tnum"),

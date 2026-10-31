@@ -208,8 +208,8 @@ private fun UpNextCard(
         ) {
             Text(if (isInProgress) tr("In progress") else tr("Up next"), style = AppType.overline, color = P.accentPrimary)
             Spacer(Modifier.height(6.dp))
-            Text(split.title, style = AppType.display, color = P.textPrimary)
-            Text(split.subtitle, style = AppType.body, color = P.textSecondary)
+            Text(shown(split.title), style = AppType.display, color = P.textPrimary)
+            Text(shown(split.subtitle), style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(if (exerciseCount == 1) tr("1 exercise") else tr("{0} exercises", exerciseCount), container = P.bgCard.copy(alpha = 0.7f))
@@ -251,8 +251,8 @@ private fun WeekCard(
                 Text(
                     when {
                         done >= goal -> tr("All {0} done. Nice work.", goal)
-                        done == 0 -> tr("{0} workouts planned · {1}", goal, programName)
-                        else -> tr("{0} to go · {1}", goal - done, programName)
+                        done == 0 -> tr("{0} workouts planned · {1}", goal, shown(programName))
+                        else -> tr("{0} to go · {1}", goal - done, shown(programName))
                     },
                     style = AppType.caption,
                     color = P.textSecondary,
@@ -367,18 +367,18 @@ private fun SplitRow(
             ) {
                 if (doneThisWeek) Icon(Icons.Rounded.Check, tr("Done this week"), tint = P.successText, modifier = Modifier.size(22.dp))
                 // The day's place in the program; letters repeat too often (Push, Pull).
-                else Text(split.code.trimStart('0').ifBlank { split.title.take(1) }, style = AppType.headline.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
+                else Text(split.code.trimStart('0').ifBlank { shown(split.title).take(1) }, style = AppType.headline.copy(fontFeatureSettings = "tnum"), color = P.textSecondary)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(split.title, style = AppType.bodyStrong, color = P.textPrimary)
+                Text(shown(split.title), style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
-                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: split.subtitle,
+                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: shown(split.subtitle),
                     style = AppType.caption,
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )
             }
-            Icon(Icons.Rounded.PlayArrow, tr("Start {0}", split.title), tint = P.textTertiary, modifier = Modifier.size(22.dp))
+            Icon(Icons.Rounded.PlayArrow, tr("Start {0}", shown(split.title)), tint = P.textTertiary, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -447,7 +447,7 @@ private fun RecoverySheet(items: List<MuscleRecoveryItem>, onDismiss: () -> Unit
                 val color = recoveryColor(item.status, P)
                 Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, maxLines = 1)
+                        Text(shown(item.muscleGroup), style = AppType.body, color = P.textPrimary, maxLines = 1)
                         Text(
                             item.hoursSinceTrained?.let { h -> tr("Trained ") + when { h < 1 -> tr("just now"); h < 48 -> tr("{0}h ago", h); else -> tr("{0} days ago", h / 24) } } ?: tr("Not trained yet"),
                             style = AppType.caption,

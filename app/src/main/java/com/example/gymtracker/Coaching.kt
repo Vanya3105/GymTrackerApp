@@ -38,7 +38,7 @@ val RECOVERY_GROUPS = listOf(
 private val BASE_RECOVERY_HOURS = floatArrayOf(48f, 72f, 48f, 36f, 42f, 30f, 72f, 72f, 60f, 36f, 30f)
 
 /** Short names where the full one crowds a ring label. */
-fun recoveryLabel(group: String): String = if (group == "Hamstrings") "Hams" else group
+fun recoveryLabel(group: String): String = shown(if (group == "Hamstrings") "Hams" else group)
 
 /**
  * How much one set of an exercise works each group, in [RECOVERY_GROUPS] order: 1 for the

@@ -101,7 +101,7 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    tr("{0} · your {1} workout", data.title, ordinal(data.workoutNumber)) +
+                    tr("{0} · your {1} workout", shown(data.title), ordinal(data.workoutNumber)) +
                         if (data.weekStreak >= 2) tr(" · {0} weeks in a row", data.weekStreak) else "",
                     style = AppType.body,
                     color = P.textSecondary,
@@ -129,7 +129,7 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                     Text(tr("You lifted {0}.", thing), style = AppType.label, color = P.textSecondary, modifier = Modifier.padding(top = 12.dp))
                 }
                 data.volumeChangePct?.takeIf { it > 0 }?.let { pct ->
-                    Text(tr("{0}% more volume than your last {1}", pct, data.title), style = AppType.label, color = P.successText, modifier = Modifier.padding(top = 4.dp))
+                    Text(tr("{0}% more volume than your last {1}", pct, shown(data.title)), style = AppType.label, color = P.successText, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (bests.isNotEmpty()) {
                     Spacer(Modifier.height(18.dp))
@@ -140,7 +140,7 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                                 Icon(Icons.Rounded.EmojiEvents, null, tint = P.warningText, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(b.name, style = AppType.bodyStrong, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(shown(b.name), style = AppType.bodyStrong, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(b.before?.let { tr("Was {0}", it) } ?: tr("First time logged"), style = AppType.caption, color = P.textSecondary)
                                 }
                                 Text(b.set, style = AppType.bodyStrong.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)

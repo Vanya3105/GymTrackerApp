@@ -117,7 +117,7 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(tr("Your split"), style = AppType.caption, color = P.textSecondary)
-                Text(program.name, style = AppType.headline, color = P.textPrimary)
+                Text(shown(program.name), style = AppType.headline, color = P.textPrimary)
             }
             if (actionLabel != null && onAction != null) {
                 Text(
@@ -134,7 +134,7 @@ private fun CurrentSplitCard(program: SplitProgramInfo, actionLabel: String?, on
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             program.splits.forEach { day ->
                 Text(
-                    day.title,
+                    shown(day.title),
                     style = AppType.label,
                     color = P.textPrimary,
                     modifier = Modifier.clip(RoundedCornerShape(50)).background(P.bgControl).padding(horizontal = 10.dp, vertical = 5.dp)
@@ -316,9 +316,9 @@ private fun SplitRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(program.name, style = AppType.bodyStrong, color = if (selected) P.accentPrimary else P.textPrimary)
+            Text(shown(program.name), style = AppType.bodyStrong, color = if (selected) P.accentPrimary else P.textPrimary)
             Text(
-                "${daysLabel(program.weeklyGoal)} · ${program.splits.joinToString(", ") { it.title }}",
+                "${daysLabel(program.weeklyGoal)} · ${program.splits.joinToString(", ") { shown(it.title) }}",
                 style = AppType.caption,
                 color = P.textSecondary,
                 maxLines = 1,
@@ -326,7 +326,7 @@ private fun SplitRow(
             )
         }
         if (onEdit != null) {
-            CircleIconButton(Icons.Rounded.Edit, tr("Edit {0}", program.name), onEdit, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+            CircleIconButton(Icons.Rounded.Edit, tr("Edit {0}", shown(program.name)), onEdit, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
         }
         if (selected) {
             Box(Modifier.padding(horizontal = 6.dp).size(22.dp).clip(CircleShape).background(P.accentPrimary), contentAlignment = Alignment.Center) {

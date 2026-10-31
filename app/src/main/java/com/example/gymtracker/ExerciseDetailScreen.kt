@@ -115,8 +115,8 @@ fun ExerciseDetailScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ExerciseThumb(exerciseName, Modifier.padding(end = 14.dp), size = 64.dp, showEmpty = false)
                 Column {
-                    Text(exerciseName, style = AppType.display, color = P.textPrimary)
-                    val sub = listOfNotNull(muscle?.ifBlank { null }, info?.equipment).joinToString(" · ")
+                    Text(shown(exerciseName), style = AppType.display, color = P.textPrimary)
+                    val sub = listOfNotNull(muscle?.ifBlank { null }, info?.equipment).joinToString(" · ") { shown(it) }
                     if (sub.isNotEmpty()) Text(sub, style = AppType.body, color = P.textSecondary)
                 }
             }
@@ -401,7 +401,7 @@ private fun SessionCard(session: ExerciseSession) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(DateUtils.formatShortDayYear(Date(session.workoutId)), style = AppType.bodyStrong, color = P.textPrimary)
-                Text(session.splitTitle, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(shown(session.splitTitle), style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (session.isRecord) {
                 Pill(tr("Best yet"), color = P.warningText, container = P.warningSurface, icon = Icons.Rounded.EmojiEvents)
@@ -461,7 +461,7 @@ fun TrainingMaxRow(
     val P = LocalPalette.current
     val context = LocalContext.current
     val programs = programsUsingTrainingMaxOf(exerciseName).takeIf { it.isNotEmpty() } ?: return
-    val programNames = programs.joinToString(", ")
+    val programNames = programs.joinToString(", ") { shown(it) }
     var version by remember { mutableIntStateOf(0) }
     val tm = remember(exerciseName, version) { LocalStorage.getTrainingMax(context, exerciseName) }
     val currentKg = remember(tm, history) { tm?.let { currentTrainingMaxKg(exerciseName, it, history) } }
@@ -660,7 +660,7 @@ private fun MergePickerSheet(exerciseName: String, others: List<String>, onPick:
     }
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxHeight(0.8f).navigationBarsPadding().imePadding()) {
-            Text(tr("Merge {0} with…", exerciseName), style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 20.dp))
+            Text(tr("Merge {0} with…", shown(exerciseName)), style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 20.dp))
             Text(tr("Pick the exercise it's the same as. Next you choose which name to keep."), style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
@@ -679,7 +679,7 @@ private fun MergePickerSheet(exerciseName: String, others: List<String>, onPick:
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable(pressedScale = 0.98f) { onPick(name) }.padding(horizontal = 8.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(name, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+                        Text(shown(name), style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
                         if (name in likely) Text(tr("Looks the same"), style = AppType.caption, color = P.accentPrimary)
                     }
                 }
@@ -717,7 +717,7 @@ fun MergeExercisesDialog(a: String, b: String, history: List<CompletedWorkout>, 
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(tr("Keep “{0}”", name), style = AppType.bodyStrong, color = P.textPrimary)
+                            Text(tr("Keep “{0}”", shown(name)), style = AppType.bodyStrong, color = P.textPrimary)
                             Text(if (count == 1) tr("1 session") else tr("{0} sessions", count), style = AppType.caption, color = P.textSecondary)
                         }
                     }
@@ -751,7 +751,7 @@ private fun HowToCard(exerciseName: String, muscle: String, startOpen: Boolean) 
             Column(Modifier.weight(1f)) {
                 Text(if (guide != null) tr("How to do it") else tr("Muscles worked"), style = AppType.headline, color = P.textPrimary)
                 Text(
-                    listOfNotNull(main.joinToString(", ").ifEmpty { null }, helping.takeIf { it.isNotEmpty() }?.let { tr("helped by ") + it.joinToString(", ") })
+                    listOfNotNull(main.joinToString(", ") { shown(it) }.ifEmpty { null }, helping.takeIf { it.isNotEmpty() }?.let { tr("helped by ") + it.joinToString(", ") { m -> shown(m) } })
                         .joinToString(", "),
                     style = AppType.caption,
                     color = P.textSecondary

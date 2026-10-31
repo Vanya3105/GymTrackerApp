@@ -234,7 +234,7 @@ fun ActiveWorkoutScreen(
         haptics.confirm()
 
         if (isSetPersonalRecord(updatedSet, computeExerciseRecords(exercise.name, history), exercise.type)) {
-            banner = Banner(tr("New best: {0}, {1}", exercise.name, formatSet(updatedSet, exercise.type)), Icons.Rounded.EmojiEvents, isPr = true)
+            banner = Banner(tr("New best: {0}, {1}", shown(exercise.name), formatSet(updatedSet, exercise.type)), Icons.Rounded.EmojiEvents, isPr = true)
         }
         if (isEditingPastWorkout) return
 
@@ -297,7 +297,7 @@ fun ActiveWorkoutScreen(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WorkoutTopBar(
-                title = split.title,
+                title = shown(split.title),
                 isEditing = isEditingPastWorkout,
                 startTimeMillis = startTimeMillis,
                 doneSets = doneSets,
@@ -440,7 +440,7 @@ fun ActiveWorkoutScreen(
                             Text(tr("Skipped today"), style = AppType.headline, color = P.textPrimary)
                             skipped.forEach { (idx, ex) ->
                                 Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(ex.name, style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
+                                    Text(shown(ex.name), style = AppType.body, color = P.textSecondary, modifier = Modifier.weight(1f))
                                     SecondaryButton(tr("Bring back"), {
                                         haptics.tick()
                                         updateAt(idx) { it.copy(isSkipped = false) }
@@ -487,7 +487,7 @@ fun ActiveWorkoutScreen(
                     }
                     val next = nextField(ref, exercise)
                     SetKeypad(
-                        title = "${exercise.name} · $setName · $fieldName",
+                        title = "${shown(exercise.name)} · $setName · $fieldName",
                         field = ref.field,
                         stepText = stepLabel(ref.field, exercise.type, settings.weightStep),
                         hasNext = next != null,
@@ -574,12 +574,12 @@ fun ActiveWorkoutScreen(
         AlertDialog(
             onDismissRequest = { removeCandidate = null },
             containerColor = P.bgElevated,
-            title = { Text(tr("Remove {0}?", name), style = AppType.headline, color = P.textPrimary) },
+            title = { Text(tr("Remove {0}?", shown(name)), style = AppType.headline, color = P.textPrimary) },
             text = {
                 Text(
                     if (isEditingPastWorkout) tr("It will be removed from this logged workout.")
                     else if (split.title == QUICK_WORKOUT_TITLE) tr("It will be removed from this workout.")
-                    else tr("It won't show up in future {0} workouts. You can add it back any time.", split.title),
+                    else tr("It won't show up in future {0} workouts. You can add it back any time.", shown(split.title)),
                     style = AppType.body,
                     color = P.textSecondary
                 )
@@ -822,7 +822,7 @@ private fun ExerciseCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        exercise.name,
+                        shown(exercise.name),
                         style = AppType.headline,
                         color = P.textPrimary,
                         maxLines = if (collapsed) 1 else 2,
@@ -839,9 +839,9 @@ private fun ExerciseCard(
                 }
                 val sub = if (collapsed) {
                     val done = exercise.sets.count { it.isCompleted }
-                    listOfNotNull(exercise.targetMuscle.ifBlank { null }, tr("{0} of {1} sets", done, exercise.sets.size)).joinToString(" · ")
+                    listOfNotNull(exercise.targetMuscle.ifBlank { null }?.let(::shown), tr("{0} of {1} sets", done, exercise.sets.size)).joinToString(" · ")
                 } else buildList {
-                    if (exercise.targetMuscle.isNotBlank()) add(exercise.targetMuscle)
+                    if (exercise.targetMuscle.isNotBlank()) add(shown(exercise.targetMuscle))
                     exercise.target?.let { add(tr("Plan {0}", it.label)) }
                     records.bestSet?.let { add(tr("Best {0}", formatSet(it, exercise.type))) }
                 }.joinToString(" · ")
@@ -887,7 +887,7 @@ private fun ExerciseCard(
                         onClick = { menuOpen = false; onSkip() }
                     )
                     DropdownMenuItem(
-                        text = { Text(tr("Remove from {0}", splitTitle), style = AppType.body, color = P.dangerText) },
+                        text = { Text(tr("Remove from {0}", shown(splitTitle)), style = AppType.body, color = P.dangerText) },
                         leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = P.dangerText) },
                         onClick = { menuOpen = false; onRemove() }
                     )
@@ -1281,7 +1281,7 @@ private fun RestTimerBar(
     LaunchedEffect(visible) { onShowingChange(visible) }
     val next = remember(exercises) {
         exercises.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }?.let { ex ->
-            "${ex.name} · ${formatSet(ex.sets[ex.nextSetIndex()], ex.type)}"
+            "${shown(ex.name)} · ${formatSet(ex.sets[ex.nextSetIndex()], ex.type)}"
         }
     }
 
@@ -1398,7 +1398,7 @@ private fun FinishSheet(
                         color = P.textPrimary
                     )
                     Text(
-                        if (isEditing) split.title else tr("That's {0} done.", split.title),
+                        if (isEditing) shown(split.title) else tr("That's {0} done.", shown(split.title)),
                         style = AppType.body,
                         color = P.textSecondary
                     )
@@ -1433,9 +1433,9 @@ private fun FinishSheet(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         when {
-                            up -> tr("{0}% more volume than your last {1}", pct, split.title)
-                            pct < 0 -> tr("{0}% less volume than your last {1}", -pct, split.title)
-                            else -> tr("Same volume as your last {0}", split.title)
+                            up -> tr("{0}% more volume than your last {1}", pct, shown(split.title))
+                            pct < 0 -> tr("{0}% less volume than your last {1}", -pct, shown(split.title))
+                            else -> tr("Same volume as your last {0}", shown(split.title))
                         },
                         style = AppType.label,
                         color = if (up) P.successText else P.textSecondary
@@ -1453,7 +1453,7 @@ private fun FinishSheet(
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.EmojiEvents, null, tint = P.warningText, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(ex.name, style = AppType.body, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(shown(ex.name), style = AppType.body, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             Text(formatSet(set, ex.type), style = AppType.bodyStrong.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                         }
                     }
@@ -1463,7 +1463,7 @@ private fun FinishSheet(
             if (skipped.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(P.warningSurface).padding(14.dp)) {
-                    Text(tr("You skipped {0}: {1}", skipped.size, skipped.joinToString(", ") { it.name }), style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
+                    Text(tr("You skipped {0}: {1}", skipped.size, skipped.joinToString(", ") { shown(it.name) }), style = AppType.label.copy(fontWeight = FontWeight.Normal), color = P.textPrimary)
                     Text(
                         tr("Do them now"),
                         style = AppType.label,

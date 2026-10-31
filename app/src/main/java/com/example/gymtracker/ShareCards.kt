@@ -145,7 +145,7 @@ fun buildShareData(
         .let { it.get(Calendar.YEAR) == month.get(Calendar.YEAR) && it.get(Calendar.MONTH) == month.get(Calendar.MONTH) }
 
     return ShareData(
-        title = splitTitle,
+        title = shown(splitTitle),
         whenMillis = whenMillis,
         durationSeconds = durationSeconds,
         workSets = stats.workSets,
@@ -419,7 +419,7 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
         val namePaint = ink.type(ink.text, 42f, 450)
         val indent = if (lift.isBest) 40f else 0f
         if (lift.isBest) canvas.drawCircle(L + 12f, y - 14f, 10f, ink.fill(ink.accent))
-        canvas.drawText(namePaint.ellipsize(lift.name, R - L - indent - setPaint.measureText(lift.set) - 32f), L + indent, y, namePaint)
+        canvas.drawText(namePaint.ellipsize(shown(lift.name), R - L - indent - setPaint.measureText(lift.set) - 32f), L + indent, y, namePaint)
         canvas.drawText(lift.set, R, y, setPaint)
     }
     if (shown.size < d.lifts.size) {
@@ -454,7 +454,7 @@ private fun drawBests(canvas: Canvas, ink: Ink, d: ShareData) {
     shown.forEachIndexed { i, best ->
         if (i > 0) canvas.drawRect(L, y - 40f, R, y - 38f, ink.fill(ink.line))
         val name = ink.type(ink.muted, if (big) 48f else 42f, 550)
-        canvas.drawText(name.ellipsize(best.name, R - L), L, y + 30f, name)
+        canvas.drawText(name.ellipsize(shown(best.name), R - L), L, y + 30f, name)
         canvas.drawText(best.set, L, y + if (big) 140f else 106f, ink.type(ink.text, if (big) 104f else 72f, 800).fit(best.set, R - L))
         val before = best.before?.let { tr("Before: {0}", it) } ?: tr("First time logged")
         canvas.drawText(before, L, y + if (big) 200f else 150f, ink.type(ink.faint, if (big) 40f else 34f, 450).fit(before, R - L))

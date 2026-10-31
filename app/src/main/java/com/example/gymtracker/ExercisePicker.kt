@@ -123,7 +123,7 @@ fun ExercisePickerSheet(
                     val bg by animateColorAsState(if (selected) P.textPrimary else P.bgControl, label = "filter_bg")
                     val fg by animateColorAsState(if (selected) P.bgPrimary else P.textSecondary, label = "filter_fg")
                     Text(
-                        group ?: tr("All"),
+                        group?.let(::shown) ?: tr("All"),
                         style = AppType.label,
                         color = fg,
                         modifier = Modifier
@@ -144,9 +144,9 @@ fun ExercisePickerSheet(
                     val added = info.name.lowercase() in lowerExisting
                     val isOpen = open == info.name
                     PickerRow(
-                        title = info.name,
+                        title = shown(info.name),
                         addedLabel = addedLabel,
-                        subtitle = listOfNotNull(info.muscle, info.equipment, info.type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label).joinToString(" · "),
+                        subtitle = listOfNotNull(shown(info.muscle), shown(info.equipment), info.type.takeIf { it != ExerciseType.WEIGHT_REPS }?.label).joinToString(" · "),
                         added = added,
                         onClick = { if (!added) onPick(info) },
                         onRowClick = { focus.clearFocus(); open = if (isOpen) null else info.name },

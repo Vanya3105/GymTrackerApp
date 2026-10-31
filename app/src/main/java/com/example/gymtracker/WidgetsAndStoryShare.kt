@@ -287,11 +287,11 @@ fun buildWorkoutWidgetViews(
                 when {
                     live.isResting -> tr("Resting")
                     compact -> next.label
-                    else -> "${live.splitName} · ${next.label}"
+                    else -> "${shown(live.splitName)} · ${next.label}"
                 },
                 if (live.isResting) info else accent
             )
-            views.setTextViewText(R.id.widget_split_title, next.exerciseName)
+            views.setTextViewText(R.id.widget_split_title, shown(next.exerciseName))
             views.setTextViewText(
                 R.id.widget_subtitle,
                 if (live.isResting) tr("Next: {0}", next.summary)
@@ -316,7 +316,7 @@ fun buildWorkoutWidgetViews(
                 }
             }
         } else {
-            status(tr("{0} · done", live.splitName), p.successText.toArgb())
+            status(tr("{0} · done", shown(live.splitName)), p.successText.toArgb())
             views.setTextViewText(R.id.widget_split_title, tr("All sets done"))
             views.setTextViewText(R.id.widget_subtitle, tr("Open the app to save your workout"))
             views.setViewVisibility(R.id.widget_controls_row, View.GONE)
@@ -337,7 +337,7 @@ fun buildWorkoutWidgetViews(
         val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
         val split = programFor(profile.splitProgram).splits.find { it.title == week.recommendedSplit }
         status(tr("Up next"), accent)
-        views.setTextViewText(R.id.widget_split_title, week.recommendedSplit)
+        views.setTextViewText(R.id.widget_split_title, shown(week.recommendedSplit))
         views.setTextViewText(
             R.id.widget_subtitle,
             if (WIDGET_OPTION_WEEKLY in settings.options) tr("{0} of {1} done this week", week.completedCoreSplits.size, week.weeklyGoal)
@@ -422,12 +422,12 @@ private fun buildCompactWorkoutNotificationViews(context: Context, live: LiveSes
     val next = live.nextSet
     if (next == null) {
         views.setTextViewText(R.id.notif_title, tr("All sets done"))
-        views.setTextViewText(R.id.notif_text, tr("Open the app to save {0}", live.splitName))
+        views.setTextViewText(R.id.notif_text, tr("Open the app to save {0}", shown(live.splitName)))
         views.setViewVisibility(R.id.notif_done, View.GONE)
         views.setViewVisibility(R.id.notif_rest, View.GONE)
         return views
     }
-    views.setTextViewText(R.id.notif_title, "${next.exerciseName} · ${next.label}")
+    views.setTextViewText(R.id.notif_title, "${shown(next.exerciseName)} · ${next.label}")
     if (live.isResting) {
         views.setViewVisibility(R.id.notif_rest, View.VISIBLE)
         views.setChronometerCountDown(R.id.notif_rest, true)
@@ -745,7 +745,7 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
 
             var y = h - pad - footerH + 16 * s
             if (showNext) {
-                val nextText = tr("Next: {0}", week.recommendedSplit)
+                val nextText = tr("Next: {0}", shown(week.recommendedSplit))
                 canvas.drawText(nextText, cx, y, textPaint(p.accentPrimary.toArgb(), 12 * s, MEDIUM, Paint.Align.CENTER).fitTo(nextText, w - pad * 2))
                 y += 16 * s
             }

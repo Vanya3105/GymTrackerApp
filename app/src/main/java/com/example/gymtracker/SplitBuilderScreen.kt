@@ -177,8 +177,8 @@ fun SplitBuilderScreen(
         val missingExercises = titles.indices.firstOrNull { exercises[it].isEmpty() }
         val (label, enabled) = when (step) {
             0 -> tr("Continue") to true
-            1 -> if (missingMuscles != null) tr("Pick muscles for {0}", titles[missingMuscles]) to false else tr("Continue") to true
-            else -> if (missingExercises != null) tr("Add exercises to {0}", titles[missingExercises]) to false else tr("Create split") to true
+            1 -> if (missingMuscles != null) tr("Pick muscles for {0}", shown(titles[missingMuscles])) to false else tr("Continue") to true
+            else -> if (missingExercises != null) tr("Add exercises to {0}", shown(titles[missingExercises])) to false else tr("Create split") to true
         }
         PrimaryButton(
             text = label,
@@ -277,7 +277,7 @@ private fun ColumnScope.DaysStep(dayCount: Int, haptics: Haptics, onChange: (Int
     }
     Spacer(Modifier.height(24.dp))
     Text(
-        tr("Most people on {0} {1} run: {2}", dayCount, if (dayCount == 1) tr("day") else tr("days"), QuickLayout.suggestedFor(dayCount).label),
+        tr("Most people on {0} {1} run: {2}", dayCount, if (dayCount == 1) tr("day") else tr("days"), shown(QuickLayout.suggestedFor(dayCount).label)),
         style = AppType.caption,
         color = P.textTertiary,
         modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -302,7 +302,7 @@ private fun MusclesStep(
 
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         QuickLayout.entries.forEach { l ->
-            Chip(l.label, selected = l == layout, strong = true) { haptics.tick(); onLayout(l) }
+            Chip(shown(l.label), selected = l == layout, strong = true) { haptics.tick(); onLayout(l) }
         }
     }
     Spacer(Modifier.height(20.dp))
@@ -324,11 +324,11 @@ private fun MusclesStep(
                     modifier = Modifier.weight(1f),
                     label = "day_title"
                 ) { t -> Text(t, style = AppType.headline, color = P.textPrimary) }
-                CircleIconButton(Icons.Rounded.Edit, tr("Rename {0}", titles[i]), { onRename(i) }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
+                CircleIconButton(Icons.Rounded.Edit, tr("Rename {0}", shown(titles[i])), { onRename(i) }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
             }
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BUILDER_MUSCLES.forEach { m -> Chip(m, selected = m in day.muscles) { onToggle(i, m) } }
+                BUILDER_MUSCLES.forEach { m -> Chip(shown(m), selected = m in day.muscles) { onToggle(i, m) } }
             }
         }
     }
@@ -400,9 +400,9 @@ private fun ReviewStep(
             Modifier.fillMaxWidth().padding(bottom = 12.dp).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)),
             contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)
         ) {
-            Text(title, style = AppType.headline, color = P.textPrimary)
+            Text(shown(title), style = AppType.headline, color = P.textPrimary)
             val muscles = BUILDER_MUSCLES.filter { it in days[i] }.joinToString(", ")
-            val note = if (shared[i]) tr("You already have a {0} day: it keeps its exercises and history, and changes here apply to it everywhere", title) else null
+            val note = if (shared[i]) tr("You already have a {0} day: it keeps its exercises and history, and changes here apply to it everywhere", shown(title)) else null
             listOfNotNull(muscles.ifBlank { null }, note).forEach {
                 Text(it, style = AppType.caption, color = P.textSecondary)
             }
@@ -410,10 +410,10 @@ private fun ReviewStep(
             exercises[i].forEachIndexed { j, (exName, muscle) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
-                        Text(exName, style = AppType.body, color = P.textPrimary)
-                        if (muscle.isNotBlank()) Text(muscle, style = AppType.caption, color = P.textTertiary)
+                        Text(shown(exName), style = AppType.body, color = P.textPrimary)
+                        if (muscle.isNotBlank()) Text(shown(muscle), style = AppType.caption, color = P.textTertiary)
                     }
-                    CircleIconButton(Icons.Rounded.Close, tr("Remove {0}", exName), { onRemove(i, j) }, size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
+                    CircleIconButton(Icons.Rounded.Close, tr("Remove {0}", shown(exName)), { onRemove(i, j) }, size = 34.dp, container = Color.Transparent, tint = P.textTertiary)
                 }
             }
             Text(

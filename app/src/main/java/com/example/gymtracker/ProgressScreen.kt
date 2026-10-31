@@ -161,7 +161,7 @@ fun ProgressScreen(
                         ) {
                             ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
                             Column(Modifier.weight(1f)) {
-                                Text(lift.name, style = AppType.bodyStrong, color = P.textPrimary)
+                                Text(shown(lift.name), style = AppType.bodyStrong, color = P.textPrimary)
                                 Text(tr("Best set {0}", lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"), style = AppType.caption, color = P.textSecondary)
                             }
                             Column(horizontalAlignment = Alignment.End) {
@@ -359,7 +359,7 @@ private fun WeeklySetsCard(items: List<MuscleRecoveryItem>, modifier: Modifier =
         trained.forEach { item ->
             val inRange = item.weeklyWorkingSets in WEEKLY_SET_TARGET
             Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(item.muscleGroup, style = AppType.body, color = P.textPrimary, modifier = Modifier.width(96.dp), maxLines = 1)
+                Text(shown(item.muscleGroup), style = AppType.body, color = P.textPrimary, modifier = Modifier.width(96.dp), maxLines = 1)
                 Box(Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(P.bgControl)) {
                     // The target range, shaded behind the bar.
                     Box(
@@ -439,7 +439,7 @@ private fun DuplicateCard(a: String, b: String, onMerge: () -> Unit, onNotSame: 
     AppCard(modifier.fillMaxWidth()) {
         Text(tr("Same exercise?"), style = AppType.bodyStrong, color = P.textPrimary)
         Text(
-            tr("“{0}” and “{1}” look like one exercise logged under two names, so their history and records are split.", a, b),
+            tr("“{0}” and “{1}” look like one exercise logged under two names, so their history and records are split.", shown(a), shown(b)),
             style = AppType.caption,
             color = P.textSecondary,
             modifier = Modifier.padding(top = 2.dp)
