@@ -57,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.launch
@@ -153,6 +154,14 @@ fun SettingsScreen(
                     options = listOf(THEME_SYSTEM to "System", THEME_LIGHT to "Light", THEME_DARK to "Dark"),
                     selected = settings.themeChoice,
                     onSelect = { onUpdateSettings(settings.copy(themeChoice = it)) }
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(stringResource(R.string.settings_language), style = AppType.label, color = P.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                SegmentedControl(
+                    options = AppLanguage.entries.map { it to it.label },
+                    selected = remember { AppLanguage.current(context) },
+                    onSelect = { language -> context.findActivity()?.let { AppLanguage.set(it, language) } }
                 )
             }
         }

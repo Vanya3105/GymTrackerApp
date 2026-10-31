@@ -75,6 +75,10 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         // The app is ready almost at once, which would cut the logo animation off after a few
@@ -244,6 +248,8 @@ fun GymTrackerApp(
     val splits = activeProgram.splits
 
     var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
+    // Only on a new phone; saved so it survives the restart when the language changes.
+    var showWelcome by rememberSaveable { mutableStateOf(!userProfile.hasCompletedOnboarding) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
     // Exercise detail screen, shown over everything else (including a running workout).
@@ -747,6 +753,28 @@ fun GymTrackerApp(
                         LocalStorage.saveUserProfile(context, newProfile)
                         if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
                         showOnboarding = false
+                    }
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showWelcome,
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(250))
+        ) {
+            Box(Modifier.fillMaxSize().background(P.bgPrimary)) {
+                WelcomeScreen(
+                    activity = activity,
+                    haptics = haptics,
+                    onContinue = { showWelcome = false },
+                    onRestored = {
+                        history = LocalStorage.loadHistory(context)
+                        userProfile = LocalStorage.loadUserProfile(context)
+                        weightHistory = LocalStorage.loadWeightHistory(context)
+                        onUpdateSettings(LocalStorage.loadSettings(context))
+                        showOnboarding = !userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f
+                        showWelcome = false
                     }
                 )
             }

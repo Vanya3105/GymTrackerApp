@@ -6,4 +6,19 @@
     <string name="widget_desc_workout">Your next workout, or log sets without opening the app</string>
     <string name="widget_desc_recovery">How rested each muscle group is</string>
     <string name="widget_desc_weekly">Workouts done this week and what\'s next</string>
+
+    <!-- Welcome screen -->
+    <string name="welcome_tagline">Log your workouts, follow your program and watch your progress.</string>
+    <string name="welcome_language">Language</string>
+    <string name="welcome_google">Continue with Google</string>
+    <string name="welcome_signing_in">Signing in…</string>
+    <string name="welcome_no_account">Continue without an account</string>
+    <string name="welcome_google_why">Signing in backs up your workouts to your own Google Drive. You can also do it later in Profile.</string>
+    <string name="welcome_found_title">Welcome back</string>
+    <string name="welcome_found_body">There\'s a backup in your Google Drive from %1$s. Restore your workouts and settings?</string>
+    <string name="welcome_restore">Restore my data</string>
+    <string name="welcome_restoring">Restoring…</string>
+    <string name="welcome_start_fresh">Start fresh</string>
+    <string name="welcome_restore_failed">Couldn\'t restore that backup.</string>
+    <string name="settings_language">Language</string>
 </resources>

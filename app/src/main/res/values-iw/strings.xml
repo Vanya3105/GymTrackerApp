@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">GymTracker</string>
+    <string name="widget_label_workout">אימון</string>
+    <string name="widget_label_recovery">התאוששות</string>
+    <string name="widget_label_weekly">השבוע</string>
+    <string name="widget_desc_workout">האימון הבא, או תיעוד סטים בלי לפתוח את האפליקציה</string>
+    <string name="widget_desc_recovery">כמה כל קבוצת שרירים מנוחה</string>
+    <string name="widget_desc_weekly">אימונים שבוצעו השבוע ומה הבא בתור</string>
+
+    <!-- Welcome screen -->
+    <string name="welcome_tagline">תעדו אימונים, עקבו אחרי התוכנית וראו את ההתקדמות שלכם.</string>
+    <string name="welcome_language">שפה</string>
+    <string name="welcome_google">המשך עם Google</string>
+    <string name="welcome_signing_in">מתחברים…</string>
+    <string name="welcome_no_account">המשך ללא חשבון</string>
+    <string name="welcome_google_why">ההתחברות מגבה את האימונים שלכם ל-Google Drive שלכם. אפשר לעשות את זה גם מאוחר יותר בפרופיל.</string>
+    <string name="welcome_found_title">ברוכים השבים</string>
+    <string name="welcome_found_body">נמצא גיבוי ב-Google Drive שלכם מ-%1$s. לשחזר את האימונים וההגדרות?</string>
+    <string name="welcome_restore">שחזור הנתונים</string>
+    <string name="welcome_restoring">משחזרים…</string>
+    <string name="welcome_start_fresh">התחלה חדשה</string>
+    <string name="welcome_restore_failed">לא הצלחנו לשחזר את הגיבוי.</string>
+    <string name="settings_language">שפה</string>
+</resources>
