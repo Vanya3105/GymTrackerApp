@@ -17,6 +17,7 @@ When the user says "continue", that is what they mean.
 - Health Connect's own screens block screenshots; read them with `uiautomator dump`.
 - Owner's devices: Galaxy S26 Ultra + Galaxy Watch (Wear OS). Heart rate reaches the app through Samsung Health → Health Connect.
 - The owner tests each step on the phone and then asks to commit and push: push the phase branch after each tested step.
+- Release signing: the upload key is `C:\Users\evtus\keys\gymtracker-upload.jks`; `keystore.properties` (git-ignored, copy next to the key) points to it. Never commit either, never print the passwords.
 
 ## Commands (Git Bash, from repo root)
 - Unit tests: `./gradlew testDebugUnitTest`

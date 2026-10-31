@@ -13,7 +13,7 @@ Everything through **tab-transitions** is merged into `master` (2026-10-30, at t
 
 **Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30). **Drawn exercise figures** : all 294 exercises drawn in the app's style, replacing the photos; tested and merged (2026-10-31). **Photo code removed**: `ExercisePhotos` and its test are gone, `ExerciseThumb` now lives with the figures, and the app deletes the old downloaded photos once on start; tested and merged (2026-10-31).
 
-Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). Next: getting ready for the first Google Play release (add Android OAuth clients for the release and Play signing keys; consent screen to In production) (owner asked what's needed before creating the developer account): app name, privacy policy, store listing, signing key, release testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Next: Android OAuth client for the upload key, then privacy policy, store listing, consent screen to In production, internal testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -187,6 +187,17 @@ The app should also serve runners and people who train with bodyweight (calisthe
 - [x] New tip system (`Tips.kt`, replaces the spotlight in `Components.kt`): `rememberTipTour` + `Modifier.tipTarget` + `TipTourOverlay`. Seen ids in prefs, cleared by Profile → Show tips again. Steps whose target isn't on screen are skipped; screens scroll targets into view
 - [x] Animation: scrim and card fade/slide in and out; the hole snaps onto its first target (it used to fly in from the corner) then springs between targets; an accent outline with a breathing ring; the card glides between top and bottom; text slides the way you're going; progress dots; tap anywhere for next
 - [x] Content, in the order you use things. Workout tour (first workout): log a set, your next weight, the exercise page, set options + reordering, Finish (it opened with "Change the order" and never explained logging). Today tour: up next, your week, recovery, other workouts / empty workout. One-off tips when something first appears: rest timer (lock screen + watch), Previous column, History, Progress. Today's tour waits while a workout or onboarding covers it. Checked on the emulator
+
+## Google Play release (branch `play-release`)
+- [x] Upload key (2026-10-31): `C:\Users\evtus\keys\gymtracker-upload.jks`, alias `upload`, RSA 4096, valid 30 years, `CN=Vanya Evtushenko, O=GymTracker`. Its passwords are in `keystore.properties` (git-ignored; a copy sits next to the key). Release builds now sign with it. With Play App Signing, Google keeps the real app-signing key; if this upload key is lost, Play support can reset it. The owner backs up the key folder somewhere safe off this PC.
+  - SHA-1 `69:63:87:59:C1:ED:A8:F7:3B:49:9A:A6:90:C5:E2:14:AB:21:0F:A2`
+  - SHA-256 `B2:3F:22:F2:0F:9F:87:5E:47:24:EE:D5:70:36:5F:0E:86:44:25:32:B4:E0:68:8E:4B:AD:26:BA:BB:5C:45:A0`
+  - An app signed with one key can't update an install signed with another: moving the phone from a debug-signed install to a release one means back up, uninstall, install, restore.
+- [ ] Android OAuth client for the upload key's SHA-1 (Google sign-in in release builds), then one for the Play App Signing key once the app exists in Play Console (App integrity)
+- [ ] Privacy policy (what's stored on the phone, Health Connect, Google Drive backup) at a public URL
+- [ ] Store listing: name, short and full description, icon, feature graphic, screenshots, content rating, data safety form
+- [ ] OAuth consent screen to In production
+- [ ] Internal testing track, then production
 
 ## Google sign-in + Drive backup (branch `google-backup`)
 - [x] `DriveBackup.kt`: "Sign in with Google" (Identity AuthorizationClient, scopes drive.appdata + userinfo.email) → backups to the hidden appDataFolder of the user's own Drive through the Drive REST API (no server, no Google API client library). Same file, triggers (`AutoBackup.request`), change check and rotation as the folder backup; its own state (`AutoBackup.run(..., prefsName)`). Background backups get a token silently; if Google needs the user again, Profile says "Sign in again"
