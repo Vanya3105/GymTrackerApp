@@ -370,6 +370,13 @@ private fun DrawScope.drawFigure(f: Figure, b: Body, k: Frame, c: Palette, loads
     fun arm(l: Limb, far: Boolean) {
         val base = if (far && !front) c.far else c.near
         val dim = far && !front
+        // A thin gap in the background colour round the arm, so an arm across the body (same
+        // grey) still reads as an arm. Not at the shoulder, where it joins the body.
+        if (!far) {
+            seg(lerp(l.root, l.joint, 0.4f), l.joint, 6.2f + 2.4f, c.background)
+            seg(l.joint, l.end, 5.2f + 2.4f, c.background)
+            dot(l.end, 2.7f + 1.2f, c.background)
+        }
         seg(l.root, l.joint, 6.2f, base)
         seg(l.joint, l.end, 5.2f, base)
         heat(base, "Shoulders", dim)?.let { seg(l.root, lerp(l.root, l.joint, 0.3f), 6.2f, it) }
@@ -540,11 +547,12 @@ fun ExerciseFigure(name: String, modifier: Modifier = Modifier, moving: Boolean 
         else -> {
             val t = remember(name) { Animatable(0f) }
             LaunchedEffect(name) {
+                // Like a good rep: a brisk lift, a squeeze at the top, a slower controlled lowering.
                 while (true) {
-                    delay(600)
-                    t.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
                     delay(500)
-                    t.animateTo(0f, tween(1000, easing = FastOutSlowInEasing))
+                    t.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
+                    delay(450)
+                    t.animateTo(0f, tween(1300, easing = FastOutSlowInEasing))
                 }
             }
             t.asState()

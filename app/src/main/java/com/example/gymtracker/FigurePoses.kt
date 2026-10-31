@@ -388,8 +388,9 @@ private fun back() = listOf(
         parts = { listOf(pad(4f, 35f, -2f, 29f), knob(p(-26f, 15f), 3f, Role.Frame), strut(-28f, 0.8f, 0f, 30f, 2.4f)) }
     ),
     "Superman Hold" to Figure(
-        Pose(p(0f, 7f), 84f, -8f, hand = onBody(28f, 3f), foot = room(-40f, 11f), toe = 180f),
-        Pose(p(0f, 6.5f), 86f, -8f, hand = onBody(28f, 1f), foot = room(-40f, 8f), toe = 180f),
+        Pose(p(0f, 6.5f), 88f, -4f, hand = onBody(28f, 0f), foot = room(-40f, 6f), toe = 180f),
+        // Chest, arms and legs all clearly off the floor.
+        Pose(p(0f, 7f), 74f, -12f, hand = onBody(26f, 11f), foot = room(-39f, 16f), toe = 180f),
         elbow = p(0f, 1f), knee = p(0f, -1f)
     ),
     "Barbell Shrug" to shrug(Held.Barbell),
@@ -609,9 +610,12 @@ private fun arms() = listOf(
     ),
     "Ring Dips" to dips(rings = true),
     "Dumbbell Kickback" to Figure(
-        Pose(p(-9f, 38f), 70f, -40f, hand = onBody(-14f, -19f)),
-        Pose(p(-9f, 38f), 70f, -40f, hand = onBody(-27f, -10f)),
-        Held.Dumbbell, thumb = 1f, elbow = p(0f, 1f)
+        // Knee and hand on a bench, back flat, upper arm held along the body; the forearm swings
+        // from hanging down to straight back. The near knee is the one on the bench, so the arm
+        // shows against the far, standing leg.
+        Pose(p(-6f, 40f), 85f, -40f, hand = onBody(-14f, -19f), farHand = room(22f, 18f), foot = room(-24f, 21f), farFoot = room(4f, 3f), toe = 260f, knee = p(0.3f, -1f), farKnee = p(1f, 0.3f)),
+        Pose(p(-6f, 40f), 85f, -40f, hand = onBody(-26f, -12f), farHand = room(22f, 18f), foot = room(-24f, 21f), farFoot = room(4f, 3f), toe = 260f, knee = p(0.3f, -1f), farKnee = p(1f, 0.3f)),
+        Held.Dumbbell, oneHand = true, thumb = 1f, elbow = p(-1f, 1f), parts = { bench(-30f, 30f, 18f) }
     ),
     "Diamond Push-Up" to pushUp(),
     "Bodyweight Tricep Extension" to pushUp(feet = p(-52f, 7f), handY = 30f) { x -> listOf(strut(x, 0.8f, x, 30f), knob(p(x, 30f), 2.3f, front = true)) }
@@ -873,8 +877,9 @@ private fun hamstringsAndGlutes() = listOf(
     "Bodyweight Glute Bridge" to hipThrust(null, emptyList(), onFloor = true),
     "Single-Leg Glute Bridge" to hipThrust(null, emptyList(), farLeg = true, onFloor = true),
     "Cable Kickback" to Figure(
-        Pose(p(-3f, 43f), 20f, hand = room(22f, 58f), foot = onBody(1.5f, -40.5f), farFoot = room(-1.5f, 3f)),
-        Pose(p(-3f, 43f), 20f, hand = room(22f, 58f), foot = onBody(-26f, -30f), farFoot = room(-1.5f, 3f)),
+        Pose(p(-3f, 43f), 24f, hand = room(22f, 58f), foot = onBody(3f, -39f), farFoot = room(-1.5f, 3f), knee = p(1f, -0.2f)),
+        // Driven well back, past the line of the leaning body: the squeeze at the top.
+        Pose(p(-3f, 42f), 30f, hand = room(22f, 58f), foot = onBody(-33f, -23f), farFoot = room(-1.5f, 3f), knee = p(0.3f, -1f)),
         thumb = 1f, elbow = p(-0.3f, -1f), knee = p(1f, 0f),
         parts = { b -> listOf(strut(26f, 0.8f, 26f, 70f), strut(p(26f, 4f), b.leg.end, 1.1f, Role.Cable), knob(p(26f, 4f), 2.4f)) }
     ),
