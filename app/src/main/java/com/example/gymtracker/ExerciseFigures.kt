@@ -9,8 +9,18 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -20,6 +30,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
@@ -540,6 +552,24 @@ fun ExerciseFigure(name: String, modifier: Modifier = Modifier, moving: Boolean 
     }
     Canvas(modifier) {
         drawFigure(figure, figure.at(time.value), fit(bounds, size, figure.turn), palette, loads)
+    }
+}
+
+/**
+ * A small still of [name]'s figure for lists, or, for exercises without one (the user's own), a
+ * plain square with a dumbbell; only where [showEmpty], elsewhere nothing is drawn so those rows
+ * don't get a gap.
+ */
+@Composable
+fun ExerciseThumb(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp, showEmpty: Boolean = true) {
+    val P = LocalPalette.current
+    val shape = RoundedCornerShape(size * 0.24f)
+    if (ExerciseFigures.has(name)) {
+        ExerciseFigure(name, modifier.size(size).clip(shape).background(P.bgControl).padding(size * 0.1f), moving = false)
+    } else if (showEmpty) {
+        Box(modifier.size(size).clip(shape).background(P.bgControl), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.FitnessCenter, null, tint = P.textTertiary, modifier = Modifier.size(size * 0.42f))
+        }
     }
 }
 
