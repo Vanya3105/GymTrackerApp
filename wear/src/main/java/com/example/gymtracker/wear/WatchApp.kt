@@ -251,7 +251,7 @@ private fun WorkoutScreen(
     else SetScreen(state, note, bezel, onAction, onOpenOverview)
 }
 
-private fun buzz(context: Context) {
+internal fun buzz(context: Context) {
     context.getSystemService(Vibrator::class.java)
         ?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 300, 150, 300), -1))
 }

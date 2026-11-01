@@ -17,6 +17,11 @@ import androidx.core.content.ContextCompat
 class WatchActivity : ComponentActivity() {
     companion object {
         const val EXTRA_START = "start"
+
+        /** On screen: the app buzzes at rest's end itself, so [PhoneDataService] doesn't. */
+        @Volatile
+        var visible = false
+            private set
     }
 
     private lateinit var link: PhoneLink
@@ -48,10 +53,12 @@ class WatchActivity : ComponentActivity() {
     // and PhoneDataService handles changes while the app is closed.
     override fun onStart() {
         super.onStart()
+        visible = true
         link.start()
     }
 
     override fun onStop() {
+        visible = false
         link.stop()
         super.onStop()
     }

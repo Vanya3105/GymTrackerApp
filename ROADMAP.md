@@ -196,6 +196,9 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Quiet sets (branch `quiet-sets`)
+- [x] No "Set logged" or "Rest's over" notifications (owner: the ongoing workout bar is enough); their channels are deleted on start. Rest's end still buzzes the phone (unless on silent) and beeps if that's on; the watch buzzes itself when the phone clears a rest that ran out (`restOver`), unless the watch app is open, which buzzes on its own
+
 ## Watch redesign (branch `watch-redesign`, on top of `polish`)
 - [x] The watch follows the phone app's language: the phone sends `language`, translated workout/exercise names and `dayLabels` (days still start by their stored title); the watch's own words are in `WatchText` (Hebrew table, test that every `t("…")` has one) and its screens, tile and watch-face status go right to left in Hebrew
 - [x] Set names come from the set's kind and work-set number (`setKind`, `workSetNumber`/`workSetCount`), so "Set 2 of 3" no longer counts the warm-up and doesn't depend on English text
