@@ -128,6 +128,8 @@ fun ActiveWorkoutScreen(
     var showPicker by remember { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
     var showFinish by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    // A set ticked while earlier work sets of the same exercise aren't: (card, set, the earlier ones).
+    var tickingAhead by remember { mutableStateOf<Triple<Int, Int, List<Int>>?>(null) }
     var removeCandidate by remember { mutableStateOf<String?>(null) }
     var photoPath by remember { mutableStateOf(initialPhotoPath) }
     var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
@@ -218,13 +220,30 @@ fun ActiveWorkoutScreen(
         onUpdateExercises(list)
     }
 
-    fun toggleSet(pos: Int, setIdx: Int) {
+    /**
+     * Ticks or unticks a set. Ticking one while earlier work sets of the exercise are unticked asks
+     * first whether those were done too ([tickingAhead]): never blocked (supersets, a warm-up left
+     * out, logging afterwards), only a nudge so a forgotten set doesn't read as never done.
+     * Warm-ups don't count, they're often skipped on purpose. [alsoTick] are earlier sets to tick too.
+     */
+    fun toggleSet(pos: Int, setIdx: Int, alsoTick: List<Int>? = null) {
         val (exIdx, exercise) = active[pos]
         val setEntry = exercise.sets.getOrNull(setIdx) ?: return
         val nowDone = !setEntry.isCompleted
+        if (nowDone && alsoTick == null) {
+            val earlier = exercise.sets.indices.filter { it < setIdx && !exercise.sets[it].isCompleted && !exercise.sets[it].isWarmupSet }
+            if (earlier.isNotEmpty()) {
+                haptics.tick()
+                tickingAhead = Triple(pos, setIdx, earlier)
+                return
+            }
+        }
         val updatedSet = setEntry.copy(isCompleted = nowDone)
         val next = latestExercises.toMutableList()
-        next[exIdx] = exercise.copy(sets = exercise.sets.toMutableList().also { it[setIdx] = updatedSet })
+        next[exIdx] = exercise.copy(sets = exercise.sets.toMutableList().also { list ->
+            list[setIdx] = updatedSet
+            alsoTick.orEmpty().forEach { i -> list[i] = list[i].copy(isCompleted = true) }
+        })
         onUpdateExercises(next)
         if (!nowDone) {
             haptics.tick()
@@ -612,6 +631,36 @@ fun ActiveWorkoutScreen(
                 }
             },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(tr("Keep going"), color = P.textSecondary, style = AppType.label) } }
+        )
+    }
+
+    tickingAhead?.let { (pos, setIdx, earlier) ->
+        val sets = active.getOrNull(pos)?.value?.sets.orEmpty()
+        // Sets are numbered without warm-ups, as on the card.
+        fun number(i: Int) = sets.take(i + 1).count { !it.isWarmupSet }
+        val names = earlier.map(::number)
+        val one = names.size == 1
+        AlertDialog(
+            onDismissRequest = { tickingAhead = null },
+            containerColor = P.bgElevated,
+            title = {
+                Text(
+                    if (one) tr("Set {0} isn't ticked", names[0]) else tr("Sets {0} aren't ticked", names.joinToString(", ")),
+                    style = AppType.headline,
+                    color = P.textPrimary
+                )
+            },
+            text = { Text(if (one) tr("Did you do it too?") else tr("Did you do them too?"), style = AppType.body, color = P.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { tickingAhead = null; toggleSet(pos, setIdx, alsoTick = earlier) }) {
+                    Text(if (one) tr("Tick both") else tr("Tick them all"), color = P.accentPrimary, style = AppType.label)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { tickingAhead = null; toggleSet(pos, setIdx, alsoTick = emptyList()) }) {
+                    Text(tr("Just this one"), color = P.textSecondary, style = AppType.label)
+                }
+            }
         )
     }
 
