@@ -289,6 +289,15 @@ fun SettingsScreen(
                     checked = settings.targetFps >= 120,
                     onCheckedChange = { onUpdateSettings(settings.copy(targetFps = if (it) 120 else 60)) }
                 )
+                if (CrashReports.available(context)) {
+                    var crashReports by remember { mutableStateOf(CrashReports.isOn(context)) }
+                    ToggleRow(
+                        title = tr("Send crash reports"),
+                        subtitle = tr("If the app crashes, what went wrong and the phone model go to the developer, so it can be fixed. Never your workouts."),
+                        checked = crashReports,
+                        onCheckedChange = { crashReports = it; CrashReports.set(context, it) }
+                    )
+                }
             }
         }
     }

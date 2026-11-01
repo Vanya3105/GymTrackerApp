@@ -9,7 +9,7 @@ package com.example.gymtracker
  */
 internal object HebrewText {
     private val ui: Map<String, String> by lazy {
-        HashMap<String, String>(1612).apply { ui1(this); ui2(this); ui3(this) }
+        HashMap<String, String>(1616).apply { ui1(this); ui2(this); ui3(this) }
     }
     private val names: Map<String, String> by lazy {
         HashMap<String, String>(856).apply { names1(this); names2(this) }
@@ -277,6 +277,7 @@ internal object HebrewText {
         m["How many of this week's workouts are done. A filled day is a day you trained; tap for your history."] = "כמה מאימוני השבוע בוצעו. יום מלא הוא יום שבו התאמנתם; הקישו להיסטוריה."
         m["How old are you?"] = "בני כמה אתם?"
         m["How to do it"] = "איך עושים את זה"
+        m["If the app crashes, what went wrong and the phone model go to the developer, so it can be fixed. Never your workouts."] = "אם האפליקציה קורסת, מה השתבש ודגם הטלפון נשלחים למפתח כדי שאפשר יהיה לתקן. אף פעם לא האימונים שלכם."
         m["Import from Strong or Hevy"] = "ייבוא מ-Strong או מ-Hevy"
         m["Import from {0}"] = "ייבוא מ-{0}"
         m["In progress"] = "בתהליך"
@@ -372,10 +373,10 @@ internal object HebrewText {
         m["New workouts start with this many sets."] = "אימונים חדשים מתחילים עם מספר הסטים הזה."
         m["Newest · "] = "החדש ביותר · "
         m["Next"] = "הבא"
-        m["Next month"] = "החודש הבא"
     }
 
     private fun ui2(m: HashMap<String, String>) {
+        m["Next month"] = "החודש הבא"
         m["Next week"] = "השבוע הבא"
         m["Next workout"] = "האימון הבא"
         m["Next: {0}"] = "הבא: {0}"
@@ -512,6 +513,7 @@ internal object HebrewText {
         m["Seat height, grip, pin…"] = "גובה מושב, אחיזה, פין…"
         m["See all"] = "הצגת הכול"
         m["Selected"] = "נבחר"
+        m["Send crash reports"] = "שליחת דוחות קריסה"
         m["Session"] = "אימון"
         m["Sessions"] = "אימונים"
         m["Set"] = "סט"
@@ -724,11 +726,11 @@ internal object HebrewText {
         m["and {0} more"] = "ועוד {0}"
         m["assist"] = "סיוע"
         m["city buses"] = "אוטובוסים עירוניים"
-        m["day"] = "יום"
-        m["day a week"] = "יום בשבוע"
     }
 
     private fun ui3(m: HashMap<String, String>) {
+        m["day"] = "יום"
+        m["day a week"] = "יום בשבוע"
         m["days"] = "ימים"
         m["days a week"] = "ימים בשבוע"
         m["distance"] = "מרחק"

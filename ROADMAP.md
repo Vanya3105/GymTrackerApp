@@ -196,6 +196,13 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Crash reports (branch `crash-reports`, on top of `onboarding-polish`)
+- [x] Firebase Crashlytics wired in (`CrashReports.kt`, Firebase BoM 35.1.0, plugins applied only when `app/google-services.json` exists, so the app builds and runs without it); Profile → Advanced → "Send crash reports" (on by default, shown only when Firebase is set up)
+- [x] Release fix: Firebase made R8 split Kotlin's SequencesKt parts across packages and the release build crashed on start; `app/keep-rules.pro` keeps Kotlin's packages whole
+- [x] Privacy policy: a "Crash reports" section (what's in a report, 90-day retention, how to turn it off); published
+- [ ] Owner: create the Firebase project, add the Android app `com.vanyaevtushenko.gymtracker`, put google-services.json in app/; then a test crash to see it in the dashboard; Play Data safety: crash logs and diagnostics, not linked to the user
+- [ ] Later: crash reports from the watch app too
+
 ## Setup polish (branch `onboarding-polish`, on top of `tick-earlier-sets`)
 - [x] Progress: best lifts first, then sets per muscle, then body weight and weigh-ins (lifting is what the tab is for). Profile: your training and split, then backups, workouts, Health Connect, bringing in data, appearance, help, advanced
 - [x] "Anything to go easy on?" moved from the crowded week step to the muscle step, now "Your body"; the last step is "Your plan" ("Made from your answers…"); the first step says what the questions are for
