@@ -73,6 +73,17 @@ class WorkoutLogicTest {
     }
 
     @Test
+    fun finishedWorkout_anExerciseWithOnlyItsWarmUpTickedIsSkipped() {
+        val exercises = listOf(
+            ExerciseEntry("Bench", sets = listOf(set("60", "8"))),
+            ExerciseEntry("Press", sets = listOf(set("20", "8", warmup = true), set("40", "8", done = false)))
+        )
+        val saved = buildCompletedWorkout(workout(5, "Push"), exercises, emptyList())
+        assertEquals(listOf("Bench"), saved.exercises.map { it.name })
+        assertEquals(listOf("Press"), saved.skippedExercises)
+    }
+
+    @Test
     fun finishedWorkout_withNothingTickedKeepsEverything() {
         val exercises = listOf(ExerciseEntry("Bench", sets = listOf(set("60", "8", done = false), set("60", "8", done = false))))
         assertEquals(2, buildCompletedWorkout(workout(5, "Push"), exercises, emptyList()).exercises.single().sets.size)

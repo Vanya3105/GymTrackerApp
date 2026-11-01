@@ -115,7 +115,8 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CountUpTile(data.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f), delayMillis = 550)
+                    if (data.volumeKg > 0) CountUpTile(data.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f), delayMillis = 550)
+                    else CountUpTile(data.reps.toFloat(), { "${it.roundToInt()}" }, tr("Reps"), Modifier.weight(1f), delayMillis = 550)
                     // No "0 new bests": without one, the tile counts exercises.
                     if (bests.isNotEmpty()) CountUpTile(
                         bests.size.toFloat(), { "${it.roundToInt()}" }, if (bests.size == 1) tr("New best") else tr("New bests"), Modifier.weight(1f),

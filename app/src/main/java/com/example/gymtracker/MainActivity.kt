@@ -190,6 +190,11 @@ enum class AppTab(val label: String, val icon: ImageVector, val idleIcon: ImageV
 private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
     toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
 
+private fun needsSetup(p: UserProfile) = !p.hasCompletedOnboarding || p.currentWeightKg <= 0f
+
+/** Set up before the training questions existed and not asked them yet. */
+private fun needsTrainingQuestions(p: UserProfile) = p.hasCompletedOnboarding && p.experience == null && !p.trainingAsked
+
 /** Builds the logbook entry; PRs are judged only against workouts logged before this one. */
 internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>, editing: Boolean = false): CompletedWorkout {
     // An edit keeps what is there: a set added to an old workout is rarely ticked.
@@ -237,10 +242,11 @@ fun GymTrackerApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val P = LocalPalette.current
 
+    // Once, before the first frame (not in an effect): Profile shouldn't show "off" for a frame and then jump.
     remember {
         LocalStorage.reconcileProfileWeight(context)
-        // Read before Profile first draws, so it doesn't show "off" for a frame and then jump.
         AutoBackup.refreshStatus(context)
+        true
     }
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }
@@ -249,7 +255,9 @@ fun GymTrackerApp(
     val activeProgram = programFor(userProfile.splitProgram)
     val splits = activeProgram.splits
 
-    var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
+    var showOnboarding by remember { mutableStateOf(needsSetup(userProfile) || needsTrainingQuestions(userProfile)) }
+    // 1 when it opens on the training questions (from Profile, or once for people set up before they existed).
+    var onboardingStart by remember { mutableIntStateOf(if (!needsSetup(userProfile) && needsTrainingQuestions(userProfile)) 1 else 0) }
     // Only on a new phone; saved so it survives the restart when the language changes.
     var showWelcome by rememberSaveable { mutableStateOf(!userProfile.hasCompletedOnboarding) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
@@ -498,9 +506,12 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                             weightHistory = LocalStorage.loadWeightHistory(context)
                             onUpdateSettings(LocalStorage.loadSettings(context))
+                            // The workout on screen is the one from before the restore: take the backup's, or none.
+                            reloadFromDisk.value()
                         },
                         onEditProgram = { haptics.tick(); editingProgramId = it },
-                        onBuildSplit = { haptics.tick(); buildingSplit = it }
+                        onBuildSplit = { haptics.tick(); buildingSplit = it },
+                        onEditTraining = { haptics.tick(); onboardingStart = 1; showOnboarding = true }
                     )
                 }
             }
@@ -748,14 +759,26 @@ fun GymTrackerApp(
                     onSelectUnit = { onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) },
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
-                    onBack = { showOnboarding = false },
+                    onBack = {
+                        // Asked once; Profile can bring the questions back.
+                        if (needsTrainingQuestions(userProfile)) {
+                            userProfile = userProfile.copy(trainingAsked = true)
+                            LocalStorage.saveUserProfile(context, userProfile)
+                        }
+                        showOnboarding = false; onboardingStart = 0
+                    },
                     onBuildSplit = { haptics.tick(); buildingSplit = it },
+                    startStep = onboardingStart,
                     onSaveProfile = { newProfile ->
                         val weightChanged = newProfile.currentWeightKg != userProfile.currentWeightKg
+                        val old = userProfile
                         userProfile = newProfile
                         LocalStorage.saveUserProfile(context, newProfile)
+                        LocalStorage.refitBuiltInDays(context, old, newProfile)
+                        if (newProfile.splitProgram == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, newProfile)
                         if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
                         showOnboarding = false
+                        onboardingStart = 0
                     }
                 )
             }
@@ -776,7 +799,9 @@ fun GymTrackerApp(
                         userProfile = LocalStorage.loadUserProfile(context)
                         weightHistory = LocalStorage.loadWeightHistory(context)
                         onUpdateSettings(LocalStorage.loadSettings(context))
-                        showOnboarding = !userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f
+                        reloadFromDisk.value()
+                        showOnboarding = needsSetup(userProfile) || needsTrainingQuestions(userProfile)
+                        onboardingStart = if (!needsSetup(userProfile) && needsTrainingQuestions(userProfile)) 1 else 0
                         showWelcome = false
                     }
                 )
@@ -949,10 +974,14 @@ private fun newExerciseEntryDefault(
     settings: AppSettings
 ): ExerciseEntry {
     val type = LocalStorage.exerciseType(context, name)
-    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    // Sets, reps and rest from the setup answers when the day has no target of its own.
+    val prescription = prescriptionFor(TrainingProfile.current, name)?.takeIf { type.usesReps }
+    // A rest the owner chose in Settings wins over the recommended one.
+    val restFallback = prescription?.restSeconds?.takeIf { settings.restTimerSeconds == AppSettings().restTimerSeconds } ?: settings.restTimerSeconds
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, restFallback)
     val target = LocalStorage.getTarget(context, splitTitle, name)
-    val workSetCount = target?.sets
-    val targetReps = target?.repMax?.toString()
+    val workSetCount = target?.sets ?: prescription?.sets
+    val targetReps = target?.repMax?.toString() ?: prescription?.repMin?.toString()
 
     if (!type.hasWeightSuggestions) {
         // No weight to suggest: start from your own last session, else plain defaults.
@@ -985,7 +1014,9 @@ private fun newExerciseEntryDefault(
             sets = List(workSetCount ?: 3) { i -> SetEntry(i + 1, weight = added, reps = targetReps ?: "8", restSeconds = rest) }
         )
     }
-    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
+    val workWeight = suggestion?.suggestedWeight?.ifBlank { null }
+        ?: startingWeightKg(TrainingProfile.current, name)?.let { kg -> unit.stored(kotlin.math.round(unit.fromKg(kg) / unit.defaultStep).coerceAtLeast(1f) * unit.defaultStep) }
+        ?: unit.stored(unit.defaultWorkWeight)
     // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
     val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
     val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)
@@ -1038,7 +1069,7 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
                     .offset(x = pillX)
                     .size(pillWidth, 34.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(P.accentSoft)
+                    .background(P.bgControl)
             )
             Row(Modifier.fillMaxWidth()) {
                 AppTab.entries.forEach { tab ->

@@ -202,19 +202,31 @@ private fun mix(a: Target, b: Target, t: Float): Target {
 
 private fun dot(a: Offset, b: Offset) = a.x * b.x + a.y * b.y
 
-/** Two-bone reach from [root] towards [target], bending the middle joint the [bend] way. */
+/**
+ * Two-bone reach from [root] towards [target], the middle joint towards [bend].
+ *
+ * The joint can sit on either side of the line to the target. Picking one outright made elbows
+ * and knees jump across whenever the hand or foot passed the bend direction (an upright row, a
+ * clean, a fly). Instead it moves across gradually: the more the bend lines up with the limb, the
+ * nearer the line the joint sits, the way an elbow looks while it turns towards or away from the
+ * viewer (the hand falls a little short then, as if the arm were foreshortened).
+ */
 private fun reach(root: Offset, target: Offset, upper: Float, lower: Float, bend: Offset): Limb {
     val v = target - root
     val d = v.getDistance().coerceIn(abs(upper - lower) + 0.01f, upper + lower - 0.01f)
     val base = atan2(v.y, v.x)
     val spread = acos(((upper * upper + d * d - lower * lower) / (2 * upper * d)).coerceIn(-1f, 1f))
-    val a = root + Offset(cos(base + spread), sin(base + spread)) * upper
-    val b = root + Offset(cos(base - spread), sin(base - spread)) * upper
-    val joint = if (dot(a - root, bend) >= dot(b - root, bend)) a else b
+    // How far the bend points to the side the joint turns towards (+spread), not along the limb.
+    val across = v.getDistance().takeIf { it > 0.001f }?.let { len -> (v.x * bend.y - v.y * bend.x) / len } ?: 1f
+    val side = (across / BEND_EASE).coerceIn(-1f, 1f)
+    val joint = root + Offset(cos(base + spread * side), sin(base + spread * side)) * upper
     val rest = target - joint
     val len = rest.getDistance()
-    return Limb(root, joint, if (len < 0.001f) joint else joint + rest / len * lower)
+    return Limb(root, joint, if (len < 0.001f) joint else joint + rest / len * minOf(lower, len))
 }
+
+/** How far off the limb's line (as a sine) the bend must point for the joint to sit fully to one side. */
+private const val BEND_EASE = 0.35f
 
 /** The body at [time] (0–1): along the movement, or round the loop for [Figure.loop] ones. */
 internal fun Figure.at(time: Float): Body {

@@ -262,6 +262,8 @@ private fun repGoal(exercise: ExerciseEntry, recent: List<Session>): RepGoal {
     // No plan, but even sets of 5 or fewer (5×5, 3×3) twice running: strength work, not a miss.
     // Misses look different: the reps tail off from set to set.
     if (recent.size >= 2 && recent.take(2).all { it.firstReps in 1..5 && it.minReps == it.firstReps }) return RepGoal(3, 5)
+    // From the setup answers (experience and goal), when there are any.
+    prescriptionFor(TrainingProfile.current, exercise.name)?.let { return RepGoal(it.repMin, it.repMax) }
     // Ranges 4–5 reps wide leave room to progress for a few weeks between jumps.
     return if (isCompoundLift(exercise.name)) RepGoal(6, 10) else RepGoal(8, 12)
 }

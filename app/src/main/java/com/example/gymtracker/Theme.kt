@@ -19,7 +19,8 @@ import androidx.compose.ui.unit.sp
 
 // ============================================================================
 // COLORS
-// Two palettes: warm graphite (dark) and warm paper (light), one ember accent.
+// Two palettes of neutral greys (no warm tint, which read soft and homely) and one orange
+// accent kept for actions and progress. Tinted surfaces are only for what's selected or new.
 // ============================================================================
 
 @Immutable
@@ -50,18 +51,18 @@ data class GymPalette(
 
 val DarkPalette = GymPalette(
     isDark = true,
-    bgPrimary = Color(0xFF111113),
-    bgCard = Color(0xFF1B1B1E),
-    bgElevated = Color(0xFF232327),
-    bgControl = Color(0xFF2A2A2F),
-    textPrimary = Color(0xFFF3F2F0),
-    textSecondary = Color(0xFFA3A1A8),
-    textTertiary = Color(0xFF6E6C74),
-    borderSubtle = Color(0xFF28282D),
-    borderStrong = Color(0xFF3B3B42),
-    accentPrimary = Color(0xFFFF7A4D),
-    onAccentPrimary = Color(0xFF1C0C05),
-    accentSoft = Color(0xFF3A2219),
+    bgPrimary = Color(0xFF09090B),
+    bgCard = Color(0xFF151518),
+    bgElevated = Color(0xFF1C1C20),
+    bgControl = Color(0xFF26262B),
+    textPrimary = Color(0xFFF4F4F5),
+    textSecondary = Color(0xFFA1A1AA),
+    textTertiary = Color(0xFF71717A),
+    borderSubtle = Color(0xFF232328),
+    borderStrong = Color(0xFF3F3F46),
+    accentPrimary = Color(0xFFFF6A2B),
+    onAccentPrimary = Color(0xFF140701),
+    accentSoft = Color(0xFF2B1910),
     accentSecondary = Color(0xFF6CB0F2),
     accentSecondarySoft = Color(0xFF1B2836),
     successSurface = Color(0xFF16271E),
@@ -75,18 +76,18 @@ val DarkPalette = GymPalette(
 
 val LightPalette = GymPalette(
     isDark = false,
-    bgPrimary = Color(0xFFF5F3EF),
+    bgPrimary = Color(0xFFF4F4F5),
     bgCard = Color(0xFFFFFFFF),
     bgElevated = Color(0xFFFFFFFF),
-    bgControl = Color(0xFFF0EDE7),
-    textPrimary = Color(0xFF1C1B1A),
-    textSecondary = Color(0xFF6B6863),
-    textTertiary = Color(0xFFA19D96),
-    borderSubtle = Color(0xFFE8E4DD),
-    borderStrong = Color(0xFFD5D0C7),
-    accentPrimary = Color(0xFFD9512A),
+    bgControl = Color(0xFFF0F0F2),
+    textPrimary = Color(0xFF18181B),
+    textSecondary = Color(0xFF5F5F68),
+    textTertiary = Color(0xFF9F9FA8),
+    borderSubtle = Color(0xFFE4E4E7),
+    borderStrong = Color(0xFFD4D4D8),
+    accentPrimary = Color(0xFFE5501B),
     onAccentPrimary = Color(0xFFFFFFFF),
-    accentSoft = Color(0xFFFCE8E0),
+    accentSoft = Color(0xFFFDEEE7),
     accentSecondary = Color(0xFF2563C9),
     accentSecondarySoft = Color(0xFFE3ECFA),
     successSurface = Color(0xFFE3F2E9),
@@ -95,7 +96,7 @@ val LightPalette = GymPalette(
     warningText = Color(0xFF94600F),
     dangerSurface = Color(0xFFFBE7E4),
     dangerText = Color(0xFFB4372C),
-    shadow = Color(0xFF5A4A3A)
+    shadow = Color(0xFF18181B)
 )
 
 fun isSystemDark(context: Context): Boolean =

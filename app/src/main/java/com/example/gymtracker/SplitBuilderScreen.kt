@@ -81,7 +81,7 @@ fun SplitBuilderScreen(
     // Days that already exist (a built-in day or one the user has) keep their exercises and history.
     val existing = titles.map { LocalStorage.existingTemplateForSplit(context, it) }
     val exercises = titles.indices.map { i ->
-        editedExercises[dayKey(i)] ?: existing[i] ?: starterExercises(days[i].muscles, variantOf(titles[i]))
+        editedExercises[dayKey(i)] ?: existing[i] ?: personalize(starterExercises(days[i].muscles, variantOf(titles[i])), TrainingProfile.current)
     }
 
     fun setDays(count: Int) {

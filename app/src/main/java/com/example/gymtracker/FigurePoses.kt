@@ -831,9 +831,11 @@ private fun quads() = listOf(
     ),
     "Snatch" to Figure(
         Pose(p(-13f, 25f), 60f, -30f, hand = room(6f, 11f), foot = room(0f, 3f)),
-        Pose(p(-10f, 28f), 18f, -5f, hand = room(-1f, 82f), foot = room(0f, 3f)),
+        // Elbows turn up under the bar as it goes overhead.
+        Pose(p(-10f, 28f), 18f, -5f, hand = room(-1f, 82f), foot = room(0f, 3f), elbow = p(0f, 1f)),
         Held.Barbell, thumb = 1f, elbow = p(-1f, 0f),
-        mid = SECOND_PULL.copy(hand = room(3f, 44f))
+        // A little in front of the hips, so the bar's way up passes the face and not through the shoulder.
+        mid = SECOND_PULL.copy(hand = room(9f, 44f))
     )
 )
 
@@ -1137,9 +1139,11 @@ private fun core() = listOf(
         Held.Dumbbell, oneHand = true, front = true, thumb = 1f
     ),
     "Landmine Rotation" to Figure(
-        Pose(hand = room(-22f, 70f), farHand = room(-22f, 70f), foot = room(8f, 3f)),
-        Pose(hand = room(22f, 70f), farHand = room(22f, 70f), foot = room(8f, 3f)),
+        // The bar end swings in an arc over the head from side to side, not straight across the shoulders.
+        Pose(hand = room(-22f, 64f), farHand = room(-22f, 64f), foot = room(8f, 3f)),
+        Pose(hand = room(22f, 64f), farHand = room(22f, 64f), foot = room(8f, 3f)),
         front = true, elbow = p(0f, -1f),
+        mid = Pose(hand = room(0f, 90f), farHand = room(0f, 90f), foot = room(8f, 3f)),
         parts = { b -> listOf(strut(p(0f, 1f), b.arm.end, 2.4f, Role.Gear, front = true), knob(b.arm.end, 6f, front = true)) }
     ),
     "Medicine Ball Slam" to Figure(

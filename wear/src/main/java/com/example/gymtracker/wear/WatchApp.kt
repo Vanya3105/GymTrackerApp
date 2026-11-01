@@ -5,7 +5,9 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -42,9 +45,15 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.ScalingLazyListScope
@@ -66,17 +75,38 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.SwipeToDismissBox
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import androidx.wear.compose.material.Typography
+import com.example.gymtracker.watchlink.SetKind
 import com.example.gymtracker.watchlink.WatchAction
 import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-private val Orange = Color(0xFFFF6B1A)
-private val Muted = Color(0xFF9A9A9A)
-private val Control = Color(0xFF262626)
+// The phone app's dark palette, so the two read as one product.
+private val Orange = Color(0xFFFF6A2B)
+private val Muted = Color(0xFFA1A1AA)
+private val Control = Color(0xFF26262B)
 
-/** A tap the phone hasn't acknowledged after this long shows "Waiting for phone…". */
+/** Inter, as on the phone (Hebrew falls back to the system font, which has it). */
+private val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold)
+)
+private val InterDisplay = FontFamily(Font(R.font.inter_display_bold, FontWeight.Bold))
+
+private val WatchTypography = Typography(defaultFontFamily = Inter).let { t ->
+    t.copy(
+        display2 = t.display2.copy(fontFamily = InterDisplay, fontWeight = FontWeight.Bold),
+        display3 = t.display3.copy(fontFamily = InterDisplay, fontWeight = FontWeight.Bold),
+        title2 = t.title2.copy(fontWeight = FontWeight.SemiBold),
+        title3 = t.title3.copy(fontWeight = FontWeight.SemiBold),
+        button = t.button.copy(fontWeight = FontWeight.SemiBold)
+    )
+}
+
+/** A tap the phone hasn't acknowledged after this long shows t("Waiting for phone…"). */
 private const val SLOW_PHONE_MS = 1_500L
 
 /** The "Saved" screen shows for this long after a workout is saved, unless dismissed. */
@@ -163,25 +193,28 @@ internal fun WatchScreen(
         }
     }
 
-    MaterialTheme(colors = Colors(primary = Orange, onPrimary = Color.Black, secondary = Orange, background = Color.Black)) {
+    WatchText.follow(state)
+    val direction = if (WatchText.hebrew) LayoutDirection.Rtl else LayoutDirection.Ltr
+    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+    MaterialTheme(colors = Colors(primary = Orange, onPrimary = Color.Black, secondary = Orange, background = Color.Black), typography = WatchTypography) {
         val restEnd = state?.restEndsAtMillis ?: 0L
         val onSetScreen = active && !overview && !confirmFinish && restEnd <= now && state?.exerciseName != null
         // The set screen needs the top of the display for the exercise name.
         Scaffold(Modifier.background(Color.Black), timeText = { if (!onSetScreen) TimeText() }) {
             val note = when {
-                !phoneConnected -> "Phone not connected"
-                waitingForPhone -> "Waiting for phone…"
+                !phoneConnected -> t("Phone not connected")
+                waitingForPhone -> t("Waiting for phone…")
                 else -> null
             }
             val saved = state?.lastWorkout?.takeIf { now - it.finishedAtMillis in 0 until SAVED_SCREEN_MS && it.finishedAtMillis != dismissedSaved }
             when {
                 state == null -> Message(
-                    if (phoneConnected) "Connecting…" else "Phone not connected",
-                    "Keep your phone nearby with GymTracker installed"
+                    if (phoneConnected) t("Connecting…") else t("Phone not connected"),
+                    t("Keep your phone nearby with GymTracker installed")
                 )
                 !state.active && saved != null -> SavedScreen(saved) { dismissedSaved = saved.finishedAtMillis }
-                !state.active && state.days.isNotEmpty() -> StartScreen(state.days, note, onStart, onOpenOnPhone)
-                !state.active -> Message("No workout", "Start one on your phone", onOpenOnPhone)
+                !state.active && state.days.isNotEmpty() -> StartScreen(state.days, state.days.indices.map(state::dayLabel), note, onStart, onOpenOnPhone)
+                !state.active -> Message(t("No workout"), t("Start one on your phone"), onOpenOnPhone)
                 confirmFinish -> ConfirmFinish(
                     state,
                     onConfirm = { confirmFinish = false; overview = false; onAction(WatchAction.FINISH_WORKOUT) },
@@ -199,6 +232,7 @@ internal fun WatchScreen(
                 else -> WorkoutScreen(state, now, note, onAction, onOpenOverview = { overview = true })
             }
         }
+    }
     }
 }
 
@@ -267,9 +301,9 @@ private fun Message(title: String, body: String, onOpenOnPhone: (() -> Unit)? = 
 @Composable
 private fun OpenOnPhone(opened: Boolean, onClick: () -> Unit) {
     if (opened) {
-        Text("Check your phone", style = MaterialTheme.typography.caption1, color = Orange)
+        Text(t("Check your phone"), style = MaterialTheme.typography.caption1, color = Orange)
     } else {
-        CompactChip(onClick = onClick, label = { Text("Open on phone") }, colors = ChipDefaults.secondaryChipColors())
+        CompactChip(onClick = onClick, label = { Text(t("Open on phone")) }, colors = ChipDefaults.secondaryChipColors())
     }
 }
 
@@ -291,18 +325,18 @@ private fun WatchList(content: ScalingLazyListScope.() -> Unit) {
 
 /** No workout: the program's days, the one that's up next first. */
 @Composable
-private fun StartScreen(days: List<String>, note: String?, onStart: (String) -> Unit, onOpenOnPhone: () -> Unit) {
+private fun StartScreen(days: List<String>, labels: List<String>, note: String?, onStart: (String) -> Unit, onOpenOnPhone: () -> Unit) {
     var starting by remember { mutableStateOf<String?>(null) }
     var opened by remember { mutableStateOf(false) }
     WatchList {
-        item { ListHeader { Text("Start a workout", color = Muted) } }
+        item { ListHeader { Text(t("Start a workout"), color = Muted) } }
         itemsIndexed(days) { i, day ->
             Chip(
                 onClick = { if (starting == null) { starting = day; onStart(day) } },
-                label = { Text(day, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = { Text(labels.getOrNull(i) ?: day, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 secondaryLabel = when {
-                    starting == day -> { { Text(note ?: "Starting…") } }
-                    i == 0 -> { { Text("Up next") } }
+                    starting == day -> { { Text(note ?: t("Starting…")) } }
+                    i == 0 -> { { Text(t("Up next")) } }
                     else -> null
                 },
                 colors = if (i == 0) ChipDefaults.primaryChipColors() else ChipDefaults.secondaryChipColors(),
@@ -318,7 +352,7 @@ private fun StartScreen(days: List<String>, note: String?, onStart: (String) -> 
 
 /**
  * Everything for the set fits on a 40 mm watch without scrolling: one-line name, the set,
- * two -/+ rows and "Set done", kept inside the round edge. The bezel moves the outlined value;
+ * two -/+ rows and t("Set done"), kept inside the round edge. The bezel moves the outlined value;
  * tap the other value to move that one instead. Tap the name for the workout overview.
  */
 @Composable
@@ -343,16 +377,10 @@ private fun SetScreen(state: WatchState, note: String?, bezel: Boolean, onAction
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(
-                Modifier.padding(horizontal = 34.dp).clickable(onClickLabel = "Workout overview", onClick = onOpenOverview),
+                Modifier.padding(horizontal = 34.dp).clickable(onClickLabel = t("Workout overview"), onClick = onOpenOverview),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    state.exerciseName.orEmpty(),
-                    style = MaterialTheme.typography.button,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                ScrollingName(state.exerciseName.orEmpty(), MaterialTheme.typography.button)
                 Text(
                     note ?: setTitle(state),
                     style = MaterialTheme.typography.caption2,
@@ -376,20 +404,43 @@ private fun SetScreen(state: WatchState, note: String?, bezel: Boolean, onAction
             Spacer(Modifier.height(4.dp))
             CompactChip(
                 onClick = { onAction(WatchAction.COMPLETE_SET) },
-                label = { Text("Set done") },
+                label = { Text(t("Set done")) },
                 colors = ChipDefaults.primaryChipColors()
             )
         }
     }
 }
 
-/** "Set 2 of 4 ›", or the phone's label for warm-ups and drop sets. The arrow hints at the overview. */
+/** "Set 2 of 4 ›", "Warm-up ›", "Drop set ›". The arrow hints at the overview. */
 private fun setTitle(state: WatchState): String {
-    val label = if (state.setCount > 0 && state.setLabel.startsWith("Set ")) "Set ${state.setNumber} of ${state.setCount}" else state.setLabel
-    return if (state.exercises.isEmpty()) "$label · ${state.setsLeft} left" else "$label  ›"
+    val label = when {
+        state.setKind == SetKind.WARMUP -> t("Warm-up")
+        state.setKind == SetKind.DROP -> t("Drop set")
+        state.workSetCount > 0 -> t("Set {0} of {1}", state.workSetNumber, state.workSetCount)
+        // From a phone app older than the set kinds: its own label.
+        else -> state.setLabel
+    }
+    // "›" is mirrored by the text itself in right-to-left, so it points forward either way.
+    return if (state.exercises.isEmpty()) "$label · ${t("{0} left", state.setsLeft)}" else "$label  ›"
 }
 
-/** The whole workout's progress as a thin arc along the bottom edge. */
+/**
+ * One line that scrolls sideways when it doesn't fit (long exercise names), rather than being
+ * cut off with "…". Pauses at the start before each pass.
+ */
+@Composable
+private fun ScrollingName(text: String, style: TextStyle, color: Color = Color.White) {
+    Text(
+        text,
+        style = style,
+        color = color,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_500, repeatDelayMillis = 2_000, spacing = MarqueeSpacing(24.dp))
+    )
+}
+
+/** The whole workout's progress as a thin ring round the edge, from the top. */
 @Composable
 private fun WorkoutProgressArc(state: WatchState) {
     val total = state.exercises.sumOf { it.total }
@@ -397,8 +448,6 @@ private fun WorkoutProgressArc(state: WatchState) {
     CircularProgressIndicator(
         progress = state.exercises.sumOf { it.done }.toFloat() / total,
         modifier = Modifier.fillMaxSize().padding(2.dp),
-        startAngle = 125f,
-        endAngle = 55f,
         indicatorColor = Orange,
         trackColor = Control,
         strokeWidth = 3.dp
@@ -415,7 +464,7 @@ private fun Stepper(value: String, label: String, selected: Boolean, onSelect: (
             Modifier
                 .width(84.dp)
                 .border(1.5.dp, if (selected) Orange.copy(alpha = 0.7f) else Color.Transparent, RoundedCornerShape(12.dp))
-                .clickable(onClickLabel = "Turn the bezel to change $label", onClick = onSelect),
+                .clickable(onClickLabel = t("Turn the bezel to change {0}", label), onClick = onSelect),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(value, style = MaterialTheme.typography.title3, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -449,18 +498,17 @@ private fun RestScreen(state: WatchState, remainingMillis: Long, note: String?, 
             note?.let { Text(it, style = MaterialTheme.typography.caption1, color = Muted) }
             Text(clock(remainingMillis), style = MaterialTheme.typography.display2)
             Column(
-                Modifier.padding(horizontal = 14.dp).clickable(onClickLabel = "Workout overview", onClick = onOpenOverview),
+                Modifier.padding(horizontal = 14.dp).clickable(onClickLabel = t("Workout overview"), onClick = onOpenOverview),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    state.exerciseName?.let { "Next: $it" } ?: "Last set done",
-                    style = MaterialTheme.typography.caption2,
-                    color = Muted,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (state.exerciseName != null) Text(state.summary, style = MaterialTheme.typography.caption1, maxLines = 1)
+                val next = state.exerciseName
+                if (next != null) {
+                    Text(t("Next"), style = MaterialTheme.typography.caption3, color = Orange)
+                    ScrollingName(next, MaterialTheme.typography.caption1)
+                    Text(state.summary, style = MaterialTheme.typography.caption2, color = Muted, maxLines = 1)
+                } else {
+                    Text(t("Last set done"), style = MaterialTheme.typography.caption2, color = Muted)
+                }
             }
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -469,13 +517,13 @@ private fun RestScreen(state: WatchState, remainingMillis: Long, note: String?, 
                         onClick = { onAction(WatchAction.UNDO_SET) },
                         colors = ButtonDefaults.buttonColors(backgroundColor = Control, contentColor = Color.White)
                     ) {
-                        Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo set", Modifier.size(18.dp))
+                        Icon(painterResource(R.drawable.ic_undo), contentDescription = t("Undo set"), Modifier.size(18.dp))
                     }
                 }
                 // Slightly narrower than standard so three controls fit inside the ring on a 40 mm watch.
                 val padding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                CompactChip(onClick = { onAction(WatchAction.ADD_REST) }, label = { Text("+15s") }, colors = ChipDefaults.secondaryChipColors(), contentPadding = padding)
-                CompactChip(onClick = { onAction(WatchAction.SKIP_REST) }, label = { Text("Skip") }, colors = ChipDefaults.primaryChipColors(), contentPadding = padding)
+                CompactChip(onClick = { onAction(WatchAction.ADD_REST) }, label = { Text(t("+15s")) }, colors = ChipDefaults.secondaryChipColors(), contentPadding = padding)
+                CompactChip(onClick = { onAction(WatchAction.SKIP_REST) }, label = { Text(t("Skip")) }, colors = ChipDefaults.primaryChipColors(), contentPadding = padding)
             }
         }
     }
@@ -488,16 +536,16 @@ private fun AllDone(state: WatchState, note: String?, onAction: (WatchAction) ->
         item { CheckBadge() }
         item {
             Text(
-                "All sets done",
+                t("All sets done"),
                 style = MaterialTheme.typography.title3,
-                modifier = Modifier.clickable(onClickLabel = "Workout overview", onClick = onOpenOverview)
+                modifier = Modifier.clickable(onClickLabel = t("Workout overview"), onClick = onOpenOverview)
             )
         }
         item { Text(note ?: state.workoutName, style = MaterialTheme.typography.caption1, color = Muted) }
         item {
             Chip(
                 onClick = onFinish,
-                label = { Text("Finish workout") },
+                label = { Text(t("Finish workout")) },
                 colors = ChipDefaults.primaryChipColors(),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -510,7 +558,7 @@ private fun AllDone(state: WatchState, note: String?, onAction: (WatchAction) ->
 private fun UndoChip(onAction: (WatchAction) -> Unit) {
     Chip(
         onClick = { onAction(WatchAction.UNDO_SET) },
-        label = { Text("Undo last set") },
+        label = { Text(t("Undo last set")) },
         icon = { Icon(painterResource(R.drawable.ic_undo), contentDescription = null, Modifier.size(ChipDefaults.IconSize)) },
         colors = ChipDefaults.secondaryChipColors(),
         modifier = Modifier.fillMaxWidth()
@@ -539,7 +587,7 @@ private fun Overview(state: WatchState, now: Long, onAction: (WatchAction) -> Un
                     Text(
                         listOfNotNull(
                             state.startedAtMillis.takeIf { it > 0L }?.let { clock(elapsedNow - it) },
-                            "$done of $total sets"
+                            t("{0} of {1} sets", done, total)
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.caption1,
                         color = Muted
@@ -567,7 +615,7 @@ private fun Overview(state: WatchState, now: Long, onAction: (WatchAction) -> Un
                     )
                     Spacer(Modifier.width(6.dp))
                     if (finished) {
-                        Icon(painterResource(R.drawable.ic_check), contentDescription = "Done", tint = Orange, modifier = Modifier.size(16.dp))
+                        Icon(painterResource(R.drawable.ic_check), contentDescription = t("Done"), tint = Orange, modifier = Modifier.size(16.dp))
                     } else {
                         Text("${ex.done}/${ex.total}", style = MaterialTheme.typography.caption1, color = if (current) Orange else Muted)
                     }
@@ -577,13 +625,13 @@ private fun Overview(state: WatchState, now: Long, onAction: (WatchAction) -> Un
                 if (done > 0) {
                     Chip(
                         onClick = onFinish,
-                        label = { Text("Finish workout") },
+                        label = { Text(t("Finish workout")) },
                         colors = ChipDefaults.primaryChipColors(),
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     )
                 } else {
                     Text(
-                        "Tick a set to finish here, or discard on your phone",
+                        t("Tick a set to finish here, or discard on your phone"),
                         style = MaterialTheme.typography.caption2,
                         color = Muted,
                         textAlign = TextAlign.Center,
@@ -607,11 +655,14 @@ private fun ConfirmFinish(state: WatchState, onConfirm: () -> Unit, onCancel: ()
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Finish ${state.workoutName}?", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center, maxLines = 2)
+        Text(t("Finish {0}?", state.workoutName), style = MaterialTheme.typography.title3, textAlign = TextAlign.Center, maxLines = 2)
         Spacer(Modifier.height(4.dp))
         Text(
-            if (left > 0) "$left ${if (left == 1) "set isn't" else "sets aren't"} ticked. It's saved as it is."
-            else "It's saved to your history.",
+            when {
+                left == 1 -> t("1 set isn't ticked. It's saved as it is.")
+                left > 1 -> t("{0} sets aren't ticked. It's saved as it is.", left)
+                else -> t("It's saved to your history.")
+            },
             style = MaterialTheme.typography.caption1,
             color = Muted,
             textAlign = TextAlign.Center
@@ -619,10 +670,10 @@ private fun ConfirmFinish(state: WatchState, onConfirm: () -> Unit, onCancel: ()
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Button(onClick = onCancel, colors = ButtonDefaults.secondaryButtonColors()) {
-                Icon(painterResource(R.drawable.ic_close), contentDescription = "Keep going")
+                Icon(painterResource(R.drawable.ic_close), contentDescription = t("Keep going"))
             }
             Button(onClick = onConfirm, colors = ButtonDefaults.primaryButtonColors()) {
-                Icon(painterResource(R.drawable.ic_check), contentDescription = "Finish and save")
+                Icon(painterResource(R.drawable.ic_check), contentDescription = t("Finish and save"))
             }
         }
     }
@@ -633,7 +684,7 @@ private fun ConfirmFinish(state: WatchState, onConfirm: () -> Unit, onCancel: ()
 private fun SavedScreen(saved: WatchFinished, onDone: () -> Unit) {
     WatchList {
         item { CheckBadge() }
-        item { Text("Workout saved", style = MaterialTheme.typography.title3) }
+        item { Text(t("Workout saved"), style = MaterialTheme.typography.title3) }
         item {
             Text(
                 "${saved.workoutName} · ${minutes(saved.durationSeconds)}",
@@ -645,14 +696,14 @@ private fun SavedScreen(saved: WatchFinished, onDone: () -> Unit) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Stat("${saved.sets}", if (saved.sets == 1) "set" else "sets")
-                saved.volume?.let { Stat(it, "volume") }
+                Stat("${saved.sets}", if (saved.sets == 1) t("set") else t("sets"))
+                saved.volume?.let { Stat(it, t("volume")) }
             }
         }
         if (saved.newBests > 0) {
             item {
                 Text(
-                    if (saved.newBests == 1) "1 new best" else "${saved.newBests} new bests",
+                    if (saved.newBests == 1) t("1 new best") else t("{0} new bests", saved.newBests),
                     style = MaterialTheme.typography.caption1,
                     color = Orange
                 )
@@ -661,7 +712,7 @@ private fun SavedScreen(saved: WatchFinished, onDone: () -> Unit) {
         item {
             Chip(
                 onClick = onDone,
-                label = { Text("Done") },
+                label = { Text(t("Done")) },
                 colors = ChipDefaults.secondaryChipColors(),
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             )
@@ -702,5 +753,5 @@ internal fun clock(millis: Long): String {
 /** 3 120 s → "52 min", 4 500 s → "1 h 15 min". */
 internal fun minutes(seconds: Long): String {
     val m = (seconds + 30) / 60
-    return if (m >= 60) "${m / 60} h ${m % 60} min" else "$m min"
+    return if (m >= 60) t("{0} h {1} min", m / 60, m % 60) else t("{0} min", m)
 }

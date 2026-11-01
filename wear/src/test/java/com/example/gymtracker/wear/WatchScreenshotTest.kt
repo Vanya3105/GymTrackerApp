@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
+import com.example.gymtracker.watchlink.SetKind
 import com.example.gymtracker.watchlink.WatchExercise
 import com.example.gymtracker.watchlink.WatchFinished
 import com.example.gymtracker.watchlink.WatchState
@@ -34,7 +35,7 @@ class WatchScreenshotTest {
             WatchExercise("Barbell Bench Press", 4, 4), WatchExercise("Incline Dumbbell Bench Press", 1, 3),
             WatchExercise("Cable Fly", 0, 3), WatchExercise("Overhead Press", 0, 3), WatchExercise("Triceps Pushdown", 0, 3)
         ),
-        currentExercise = 1, setNumber = 2, setCount = 3, canUndo = true
+        currentExercise = 1, setNumber = 2, setCount = 3, canUndo = true, workSetNumber = 2, workSetCount = 3
     )
     private val resting = set.copy(restEndsAtMillis = now + 75_000, restTotalMillis = 120_000)
 
@@ -70,7 +71,7 @@ class WatchScreenshotTest {
     @Test fun noWorkout() = shot("no-workout-small", WatchState(active = false))
     @Test fun allDone() = shot("all-done-small", set.copy(exerciseName = null, currentExercise = -1))
     @Test fun noPhone() = shot("no-phone-small", null, connected = false)
-    @Test fun warmUp() = shot("warm-up-small", set.copy(setLabel = "Warm-up", setNumber = 1))
+    @Test fun warmUp() = shot("warm-up-small", set.copy(setLabel = "Warm-up", setNumber = 1, setKind = SetKind.WARMUP))
     @Test fun start() = shot("start-small", idle)
     @Test fun startLarge() = shot("start-large", idle, large = true)
     @Test fun overview() = shot("overview-small", set, overview = true)
@@ -79,4 +80,16 @@ class WatchScreenshotTest {
     @Test fun saved() = shot("saved-small", saved)
     @Test fun savedLarge() = shot("saved-large", saved, large = true)
     @Test fun restLastSet() = shot("rest-last-set-small", resting.copy(exerciseName = null))
+
+    // The phone app in Hebrew: names come translated, the watch's own words follow, right to left.
+    private val hebrewSet = set.copy(
+        language = "he", workoutName = "דחיפה", exerciseName = "לחיצת חזה בשיפוע עם משקולות יד",
+        primary = "102.5 ק״ג", primaryLabel = "משקל", secondaryLabel = "חזרות", summary = "102.5 ק״ג × 10",
+        exercises = listOf(WatchExercise("לחיצת חזה במוט", 4, 4), WatchExercise("לחיצת חזה בשיפוע עם משקולות יד", 1, 3), WatchExercise("פרפר בכבל", 0, 3))
+    )
+    @Test fun setHebrew() = shot("hebrew-set-small", hebrewSet)
+    @Test fun restHebrew() = shot("hebrew-rest-small", hebrewSet.copy(restEndsAtMillis = now + 75_000, restTotalMillis = 120_000))
+    @Test fun startHebrew() = shot("hebrew-start-small", idle.copy(language = "he", dayLabels = listOf("דחיפה", "משיכה", "רגליים", "עליון", "תחתון")))
+    @Test fun overviewHebrew() = shot("hebrew-overview-small", hebrewSet, overview = true)
+    @Test fun savedHebrew() = shot("hebrew-saved-small", saved.copy(language = "he", lastWorkout = saved.lastWorkout!!.copy(workoutName = "דחיפה")))
 }

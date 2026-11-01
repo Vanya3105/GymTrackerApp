@@ -38,6 +38,9 @@ enum class WatchAction {
     FINISH_WORKOUT
 }
 
+/** What kind of set is next, so the watch can name it in its own language. */
+enum class SetKind { WORK, WARMUP, DROP }
+
 /** One row of the watch's workout overview: [done] of [total] sets ticked. */
 data class WatchExercise(val name: String, val done: Int, val total: Int)
 
@@ -84,8 +87,22 @@ data class WatchState(
     /** No workout: the active program's days, the one that's up next first. */
     val days: List<String> = emptyList(),
     /** No workout: the last workout, when it was saved recently. */
-    val lastWorkout: WatchFinished? = null
+    val lastWorkout: WatchFinished? = null,
+    /**
+     * The phone app's language ("en", "he"); the watch follows it. Names (workout, exercises,
+     * days) come already in it; [days] stay as they are stored, for starting one.
+     */
+    val language: String = "en",
+    /** [days] as shown, in [language]; empty from an older phone app. */
+    val dayLabels: List<String> = emptyList(),
+    val setKind: SetKind = SetKind.WORK,
+    /** "Set 2 of 3" counting work sets only (warm-ups have no number); 0 when unknown. */
+    val workSetNumber: Int = 0,
+    val workSetCount: Int = 0
 ) {
+    /** How [days] reads on screen. */
+    fun dayLabel(i: Int): String = dayLabels.getOrNull(i)?.takeIf { it.isNotBlank() } ?: days[i]
+
     fun toJson(): String = JSONObject().apply {
         put("v", 2)
         put("active", active)
@@ -109,6 +126,11 @@ data class WatchState(
         put("setCount", setCount)
         put("canUndo", canUndo)
         put("days", JSONArray(days))
+        put("lang", language)
+        put("dayLabels", JSONArray(dayLabels))
+        put("setKind", setKind.name)
+        put("workSet", workSetNumber)
+        put("workSets", workSetCount)
         lastWorkout?.let { w ->
             put("last", JSONObject().apply {
                 put("workout", w.workoutName)
@@ -147,6 +169,11 @@ data class WatchState(
                 setCount = o.optInt("setCount"),
                 canUndo = o.optBoolean("canUndo"),
                 days = o.optJSONArray("days")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+                language = o.optString("lang", "en").ifBlank { "en" },
+                dayLabels = o.optJSONArray("dayLabels")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+                setKind = SetKind.entries.find { it.name == o.optString("setKind") } ?: SetKind.WORK,
+                workSetNumber = o.optInt("workSet"),
+                workSetCount = o.optInt("workSets"),
                 lastWorkout = o.optJSONObject("last")?.let { w ->
                     WatchFinished(
                         workoutName = w.optString("workout"),

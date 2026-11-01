@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -192,30 +191,29 @@ private fun UpNextCard(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val plannedCount = remember(split.title, isInProgress) {
+    // History is a new list after a restore, so the count is read again then too.
+    val plannedCount = remember(split.title, isInProgress, history) {
         if (isInProgress) 0 else LocalStorage.loadTemplateForSplit(context, split.title).size
     }
     val exerciseCount = if (isInProgress) activeExerciseCount else plannedCount
     val last = history.firstOrNull { it.splitTitle == split.title }
 
     AppCard(modifier = modifier.fillMaxWidth(), elevated = true, contentPadding = PaddingValues(0.dp)) {
-        // A warm accent wash across the top gives the card some depth without being loud.
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(P.accentSoft, P.bgElevated)))
                 .padding(20.dp)
         ) {
             Text(if (isInProgress) tr("In progress") else tr("Up next"), style = AppType.overline, color = P.accentPrimary)
             Spacer(Modifier.height(6.dp))
             Text(shown(split.title), style = AppType.display, color = P.textPrimary)
-            Text(shown(split.subtitle), style = AppType.body, color = P.textSecondary)
+            Text(daySubtitle(split), style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill(if (exerciseCount == 1) tr("1 exercise") else tr("{0} exercises", exerciseCount), container = P.bgCard.copy(alpha = 0.7f))
+                Pill(if (exerciseCount == 1) tr("1 exercise") else tr("{0} exercises", exerciseCount), container = P.bgControl)
                 Pill(
                     last?.let { tr("Last done {0}", relativeDay(it.id)) } ?: tr("Not done yet"),
-                    container = P.bgCard.copy(alpha = 0.7f)
+                    container = P.bgControl
                 )
             }
             Spacer(Modifier.height(18.dp))
@@ -373,7 +371,7 @@ private fun SplitRow(
             Column(Modifier.weight(1f)) {
                 Text(shown(split.title), style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
-                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: shown(split.subtitle),
+                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: daySubtitle(split),
                     style = AppType.caption,
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )

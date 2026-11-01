@@ -177,7 +177,7 @@ private class PressScaleNode(
 // SURFACES
 // ============================================================================
 
-val CardShape = RoundedCornerShape(20.dp)
+val CardShape = RoundedCornerShape(16.dp)
 
 /**
  * The app's base card. Light mode lifts it with a soft warm shadow; dark mode separates it with a
@@ -196,11 +196,12 @@ fun AppCard(
     val P = LocalPalette.current
     val bg = color ?: if (elevated) P.bgElevated else P.bgCard
     val shadowed = if (!P.isDark) {
+        // Cards sit on a grey page; a hairline shadow is enough to lift them.
         modifier.shadow(
-            elevation = if (elevated) 10.dp else 4.dp,
+            elevation = if (elevated) 3.dp else 1.dp,
             shape = shape,
-            ambientColor = P.shadow.copy(alpha = 0.10f),
-            spotColor = P.shadow.copy(alpha = 0.14f)
+            ambientColor = P.shadow.copy(alpha = 0.06f),
+            spotColor = P.shadow.copy(alpha = 0.08f)
         )
     } else modifier
     Column(
@@ -225,16 +226,11 @@ fun PrimaryButton(
 ) {
     val P = LocalPalette.current
     val shape = RoundedCornerShape(16.dp)
-    val bg = if (enabled) {
-        Brush.verticalGradient(listOf(P.accentPrimary, P.accentPrimary.darken(0.08f)))
-    } else SolidColor(P.bgControl)
+    // Flat and solid: a gradient and a coloured glow made it look like a toy.
+    val bg = SolidColor(if (enabled) P.accentPrimary else P.bgControl)
     Row(
         modifier = modifier
             .height(height)
-            .then(
-                if (enabled && !P.isDark) Modifier.shadow(8.dp, shape, spotColor = P.accentPrimary.copy(alpha = 0.35f))
-                else Modifier
-            )
             .clip(shape)
             .background(bg)
             .pressable(enabled = enabled, onClick = onClick)
@@ -368,22 +364,15 @@ fun StatTile(value: String, label: String, modifier: Modifier = Modifier, valueC
     }
 }
 
-/** A small drawn scene rather than an icon in a grey circle: soft rings, the icon, a few sparks. */
+/** An icon in a quiet ring, a title and a line under it. */
 @Composable
 fun EmptyState(icon: ImageVector, title: String, body: String, modifier: Modifier = Modifier) {
     val P = LocalPalette.current
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val c = center
-                drawCircle(P.borderSubtle, size.minDimension / 2 - 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
                 drawCircle(P.bgControl, size.minDimension * 0.34f, c)
-                // Sparks at fixed spots on the outer ring.
-                listOf(-40f to 4.dp, 200f to 3.dp, 110f to 2.5.dp).forEach { (deg, r) ->
-                    val a = Math.toRadians(deg.toDouble())
-                    val ring = size.minDimension / 2 - 1.dp.toPx()
-                    drawCircle(P.accentPrimary.copy(alpha = 0.55f), r.toPx(), Offset(c.x + ring * kotlin.math.cos(a).toFloat(), c.y + ring * kotlin.math.sin(a).toFloat()))
-                }
             }
             Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(30.dp))
         }

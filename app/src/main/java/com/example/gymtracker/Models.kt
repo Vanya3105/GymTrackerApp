@@ -8,7 +8,17 @@ data class UserProfile(
     val hasCompletedOnboarding: Boolean = false,
     val age: Int = 0,
     val currentWeightKg: Float = 0f,
-    val splitProgram: String = "PPL_ARNOLD"
+    val splitProgram: String = "PPL_ARNOLD",
+    // Setup answers for recommendations (Recommendations.kt); null / empty when never answered.
+    val experience: Experience? = null,
+    val goal: TrainingGoal? = null,
+    val equipment: Equipment? = null,
+    val daysPerWeek: Int = 0,
+    val limits: Set<Limit> = emptySet(),
+    /** Muscle groups (as in [BUILDER_MUSCLES]) the user doesn't want to train. */
+    val skipMuscles: Set<String> = emptySet(),
+    /** The training questions were shown once to someone set up before they existed. */
+    val trainingAsked: Boolean = false
 )
 
 @Immutable
@@ -173,11 +183,18 @@ data class WorkoutStats(
 fun performedExercises(exercises: List<ExerciseEntry>): List<ExerciseEntry> {
     val kept = exercises.filter { !it.isSkipped }
     if (kept.none { ex -> ex.sets.any { it.isCompleted } }) return kept
-    return kept.mapNotNull { ex ->
+    fun ticked(warmUpsCount: Boolean) = kept.mapNotNull { ex ->
         val done = ex.sets.filter { it.isCompleted }
-        if (done.isEmpty()) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+        if (done.none { warmUpsCount || !it.isWarmupSet }) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
     }
+    // Only a warm-up ticked: the exercise wasn't really done (History would show "0 ×" for it),
+    // unless warm-ups are all there is, which still makes a workout.
+    return ticked(warmUpsCount = false).ifEmpty { ticked(warmUpsCount = true) }
 }
+
+/** Reps of all work sets: the total to show instead of volume when nothing was lifted with weight. */
+fun totalWorkReps(exercises: List<ExerciseEntry>): Int =
+    exercises.filter { !it.isSkipped }.sumOf { ex -> ex.sets.filter { it.isValidWorkSet(ex.type) }.sumOf { it.repCount } }
 
 fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): WorkoutStats {
     var workSets = 0

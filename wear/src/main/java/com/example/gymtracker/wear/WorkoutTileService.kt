@@ -27,8 +27,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.util.Date
 
 private const val RESOURCES_VERSION = "1"
-private const val ORANGE = 0xFFFF6B1A.toInt()
-private const val MUTED = 0xFF9A9A9A.toInt()
+private const val ORANGE = 0xFFFF6A2B.toInt()
+private const val MUTED = 0xFFA1A1AA.toInt()
 private const val WHITE = 0xFFFFFFFF.toInt()
 private const val BLACK = 0xFF000000.toInt()
 
@@ -73,16 +73,17 @@ internal fun workoutTile(context: Context, state: WatchState?, device: DevicePar
 }
 
 private fun tileLayout(context: Context, state: WatchState?, device: DeviceParameters, now: Long): LayoutElementBuilders.LayoutElement {
+    WatchText.follow(state)
     val upNext = state?.days?.firstOrNull()?.takeIf { !state.active }
     val (label, title, detail) = when {
-        upNext != null -> Triple("Up next", upNext, "Tap Start to begin")
-        state == null || !state.active -> Triple("GymTracker", "No workout", "Start one on your phone")
+        upNext != null -> Triple(t("Up next"), state.dayLabel(0), t("Tap Start to begin"))
+        state == null || !state.active -> Triple("GymTracker", t("No workout"), t("Start one on your phone"))
         state.restEndsAtMillis > now -> Triple(
-            state.workoutName, "Resting",
-            "Until ${DateFormat.getTimeFormat(context).format(Date(state.restEndsAtMillis))}" +
-                (state.exerciseName?.let { "\nNext: $it" } ?: "")
+            state.workoutName, t("Resting"),
+            t("Until {0}", DateFormat.getTimeFormat(context).format(Date(state.restEndsAtMillis))) +
+                (state.exerciseName?.let { "\n" + t("Next: {0}", it) } ?: "")
         )
-        state.exerciseName == null -> Triple(state.workoutName, "All sets done", "Open to finish it")
+        state.exerciseName == null -> Triple(state.workoutName, t("All sets done"), t("Open to finish it"))
         else -> Triple(state.workoutName, state.exerciseName.orEmpty(), "${state.setLabel} · ${state.summary}")
     }
 
@@ -113,7 +114,7 @@ private fun tileLayout(context: Context, state: WatchState?, device: DeviceParam
                 .build()
         )
         .setPrimaryChipContent(
-            CompactChip.Builder(context, if (upNext != null) "Start" else "Open", open, device)
+            CompactChip.Builder(context, if (upNext != null) t("Start") else t("Open"), open, device)
                 .setChipColors(ChipColors(ORANGE, BLACK))
                 .build()
         )

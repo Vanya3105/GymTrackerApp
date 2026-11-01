@@ -24,6 +24,7 @@ object WorkoutOngoing {
     private const val NOTIFICATION_ID = 1
 
     fun update(context: Context, state: WatchState) {
+        WatchText.follow(state)
         val nm = NotificationManagerCompat.from(context)
         if (!state.active) {
             nm.cancel(NOTIFICATION_ID)
@@ -33,7 +34,7 @@ object WorkoutOngoing {
 
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             // Low importance: the watch shouldn't buzz on every update, only show it.
-            NotificationChannel(CHANNEL_ID, "Workout in progress", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_ID, t("Workout in progress"), NotificationManager.IMPORTANCE_LOW)
         )
         val open = PendingIntent.getActivity(
             context, 0,
@@ -43,8 +44,8 @@ object WorkoutOngoing {
         val now = System.currentTimeMillis()
         val resting = state.restEndsAtMillis > now
         val text = when {
-            resting -> "Resting"
-            state.exerciseName == null -> "All sets done"
+            resting -> t("Resting")
+            state.exerciseName == null -> t("All sets done")
             else -> "${state.exerciseName} · ${state.setLabel}"
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -60,7 +61,7 @@ object WorkoutOngoing {
         val status = if (resting) {
             // Ongoing timers count on the elapsed-realtime clock, not wall time.
             val zero = SystemClock.elapsedRealtime() + (state.restEndsAtMillis - now)
-            Status.Builder().addTemplate("Rest #time#").addPart("time", Status.TimerPart(zero)).build()
+            Status.Builder().addTemplate(t("Rest #time#")).addPart("time", Status.TimerPart(zero)).build()
         } else {
             Status.Builder().addTemplate(text).build()
         }

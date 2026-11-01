@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -238,12 +239,21 @@ object LocalStorage {
         // The profile names a program that may be one of the user's own: make sure they're loaded.
         data(context)
         val obj = root(context).optJSONObject("userProfile") ?: return UserProfile()
+        fun <T : Enum<T>> enumOf(values: List<T>, key: String): T? = obj.optString(key, "").let { v -> values.find { it.name == v } }
+        val limits = obj.optJSONArray("limits")
         return UserProfile(
             hasCompletedOnboarding = obj.optBoolean("hasCompletedOnboarding", false),
             age = obj.optInt("age", 0),
             currentWeightKg = obj.optDouble("currentWeightKg", 0.0).toFloat(),
-            splitProgram = obj.optString("splitProgram", "PPL_ARNOLD")
-        )
+            splitProgram = obj.optString("splitProgram", "PPL_ARNOLD"),
+            experience = enumOf(Experience.entries, "experience"),
+            goal = enumOf(TrainingGoal.entries, "goal"),
+            equipment = enumOf(Equipment.entries, "equipment"),
+            daysPerWeek = obj.optInt("daysPerWeek", 0),
+            limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet(),
+            skipMuscles = obj.optJSONArray("skipMuscles").let { a -> (0 until (a?.length() ?: 0)).map { a!!.optString(it) }.filter { it in BUILDER_MUSCLES }.toSet() },
+            trainingAsked = obj.optBoolean("trainingAsked", false)
+        ).also { TrainingProfile.current = it }
     }
 
     fun saveUserProfile(context: Context, profile: UserProfile) = edit(context) { root ->
@@ -252,7 +262,15 @@ object LocalStorage {
             put("age", profile.age)
             put("currentWeightKg", profile.currentWeightKg.toDouble())
             put("splitProgram", profile.splitProgram)
+            profile.experience?.let { put("experience", it.name) }
+            profile.goal?.let { put("goal", it.name) }
+            profile.equipment?.let { put("equipment", it.name) }
+            if (profile.daysPerWeek > 0) put("daysPerWeek", profile.daysPerWeek)
+            if (profile.limits.isNotEmpty()) put("limits", JSONArray(profile.limits.map { it.name }))
+            if (profile.skipMuscles.isNotEmpty()) put("skipMuscles", JSONArray(profile.skipMuscles.toList()))
+            if (profile.trainingAsked) put("trainingAsked", true)
         })
+        TrainingProfile.current = profile
     }
 
     /** Newest first. */
@@ -459,7 +477,7 @@ object LocalStorage {
 
     fun importJsonBackupString(context: Context, jsonContent: String): Boolean {
         val parsed = try {
-            JSONObject(jsonContent.removePrefix("﻿").trim())
+            JSONObject(jsonContent.removePrefix("\uFEFF").trim())
         } catch (e: Exception) {
             return false
         }
@@ -498,7 +516,7 @@ object LocalStorage {
      */
     fun addBackupJsonString(context: Context, jsonContent: String): CombineResult? {
         val parsed = try {
-            JSONObject(jsonContent.removePrefix("﻿").trim())
+            JSONObject(jsonContent.removePrefix("\uFEFF").trim())
         } catch (e: Exception) {
             return null
         }
@@ -697,11 +715,58 @@ object LocalStorage {
 
     fun loadTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>> =
         data(context).templates[splitTitle]
-            ?: defaultTemplateForSplit(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
+            ?: builtInDay(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
 
     /** The exercises a day of this name already has (saved or built-in), without saving anything; null if none. */
     fun existingTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>>? =
-        (data(context).templates[splitTitle] ?: defaultTemplateForSplit(splitTitle)).takeIf { it.isNotEmpty() }
+        (data(context).templates[splitTitle] ?: builtInDay(splitTitle)).takeIf { it.isNotEmpty() }
+
+    /** A built-in day's exercises, fitted to the setup answers. */
+    private fun builtInDay(splitTitle: String) = personalize(defaultTemplateForSplit(splitTitle), TrainingProfile.current)
+
+    /**
+     * Saves the split made for [profile]'s muscles (see [generatedPlan]) under its fixed id,
+     * replacing an earlier one. Each day keeps the exercises it already has if its name is taken by
+     * a day the user saved with something else, it gets a new name instead.
+     */
+    fun saveGeneratedPlan(context: Context, profile: UserProfile): SplitProgramInfo? {
+        val plan = generatedPlan(profile) ?: return null
+        val saved = data(context).templates
+        val previous = data(context).programs.find { it.id == RECOMMENDED_PLAN_ID }?.splits.orEmpty().map { it.title }.toSet()
+        val used = HashSet<String>()
+        val days = plan.splits.mapIndexed { i, day ->
+            val exercises = planDayExercises(day, profile, i)
+            var title = day.title
+            var n = 2
+            // A day of the user's own (not an earlier version of this plan) keeps its name and exercises.
+            while (!used.add(title.lowercase(Locale.US)) ||
+                (title !in previous && saved[title] != null && saved[title] != exercises && saved[title] != builtInDay(title))
+            ) title = "${day.title} ${n++}"
+            saveTemplateForSplit(context, title, exercises)
+            day.copy(title = title)
+        }
+        val program = plan.copy(splits = days)
+        saveProgram(context, program)
+        return program
+    }
+
+    /**
+     * After the setup answers change: built-in days nobody has edited (still exactly what the old
+     * answers gave) are fitted to the new ones. Days the user changed are left alone.
+     */
+    fun refitBuiltInDays(context: Context, old: UserProfile, new: UserProfile) {
+        val templates = data(context).templates
+        val titles = SPLIT_PROGRAMS.values.flatMap { p -> p.splits.map { it.title } }.distinct()
+        for (title in titles) {
+            val saved = templates[title] ?: continue
+            val base = defaultTemplateForSplit(title)
+            if (base.isEmpty()) continue
+            if (saved == base || saved == personalize(base, old)) {
+                val fitted = personalize(base, new)
+                if (fitted != saved) saveTemplateForSplit(context, title, fitted)
+            }
+        }
+    }
 
     /** Replaces a day's exercise list. Targets of exercises that stay on it are kept. */
     fun saveTemplateForSplit(context: Context, splitTitle: String, list: List<Pair<String, String>>) {
