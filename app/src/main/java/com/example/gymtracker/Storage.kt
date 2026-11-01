@@ -250,6 +250,7 @@ object LocalStorage {
             goal = enumOf(TrainingGoal.entries, "goal"),
             equipment = enumOf(Equipment.entries, "equipment"),
             daysPerWeek = obj.optInt("daysPerWeek", 0),
+            sessionMinutes = obj.optInt("sessionMinutes", 0),
             limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet(),
             skipMuscles = obj.optJSONArray("skipMuscles").let { a -> (0 until (a?.length() ?: 0)).map { a!!.optString(it) }.filter { it in BUILDER_MUSCLES }.toSet() },
             trainingAsked = obj.optBoolean("trainingAsked", false)
@@ -266,6 +267,7 @@ object LocalStorage {
             profile.goal?.let { put("goal", it.name) }
             profile.equipment?.let { put("equipment", it.name) }
             if (profile.daysPerWeek > 0) put("daysPerWeek", profile.daysPerWeek)
+            if (profile.sessionMinutes > 0) put("sessionMinutes", profile.sessionMinutes)
             if (profile.limits.isNotEmpty()) put("limits", JSONArray(profile.limits.map { it.name }))
             if (profile.skipMuscles.isNotEmpty()) put("skipMuscles", JSONArray(profile.skipMuscles.toList()))
             if (profile.trainingAsked) put("trainingAsked", true)
@@ -725,17 +727,19 @@ object LocalStorage {
     private fun builtInDay(splitTitle: String) = personalize(defaultTemplateForSplit(splitTitle), TrainingProfile.current)
 
     /**
-     * Saves the split made for [profile]'s muscles (see [generatedPlan]) under its fixed id,
-     * replacing an earlier one. Each day keeps the exercises it already has if its name is taken by
-     * a day the user saved with something else, it gets a new name instead.
+     * Saves the plan made for [profile] ([planWeek]) under its fixed id, replacing an earlier one,
+     * with each exercise's planned sets and reps as its target. A day whose name is taken by a day
+     * the user saved with something else gets a new name instead of overwriting it.
      */
     fun saveGeneratedPlan(context: Context, profile: UserProfile): SplitProgramInfo? {
         val plan = generatedPlan(profile) ?: return null
+        val week = planWeek(profile)
         val saved = data(context).templates
         val previous = data(context).programs.find { it.id == RECOMMENDED_PLAN_ID }?.splits.orEmpty().map { it.title }.toSet()
         val used = HashSet<String>()
         val days = plan.splits.mapIndexed { i, day ->
-            val exercises = planDayExercises(day, profile, i)
+            val planned = week[i].exercises
+            val exercises = planned.map { it.name to it.muscle }
             var title = day.title
             var n = 2
             // A day of the user's own (not an earlier version of this plan) keeps its name and exercises.
@@ -743,6 +747,7 @@ object LocalStorage {
                 (title !in previous && saved[title] != null && saved[title] != exercises && saved[title] != builtInDay(title))
             ) title = "${day.title} ${n++}"
             saveTemplateForSplit(context, title, exercises)
+            planned.forEach { setTarget(context, title, it.name, it.target) }
             day.copy(title = title)
         }
         val program = plan.copy(splits = days)

@@ -60,24 +60,31 @@ fun OnboardingScreen(
     var days by remember { mutableIntStateOf(initialProfile.daysPerWeek.takeIf { it > 0 } ?: 3) }
     var limits by remember { mutableStateOf(initialProfile.limits) }
     var skip by remember { mutableStateOf(initialProfile.skipMuscles) }
+    var minutes by remember { mutableIntStateOf(initialProfile.sessionMinutes.takeIf { it > 0 } ?: 60) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // Picked by hand on the last step, so a recommendation no longer replaces it.
-    var splitChosen by remember { mutableStateOf(initialProfile.hasCompletedOnboarding) }
+    var splitChosen by remember { mutableStateOf(false) }
     fun answers() = initialProfile.copy(
         hasCompletedOnboarding = true,
         age = age.toIntOrNull() ?: 0,
         currentWeightKg = weightKg.toFloatOrNull() ?: 0f,
         splitProgram = program,
         experience = experience, goal = goal, equipment = equipment, daysPerWeek = days, limits = limits,
-        skipMuscles = skip, trainingAsked = true
+        skipMuscles = skip, trainingAsked = true, sessionMinutes = minutes
     )
+    // Someone already set up keeps their split unless they changed an answer: then the plan follows.
+    val answersChanged = answers().let { a ->
+        a.experience != initialProfile.experience || a.goal != initialProfile.goal || a.equipment != initialProfile.equipment ||
+            a.daysPerWeek != initialProfile.daysPerWeek || a.limits != initialProfile.limits || a.skipMuscles != initialProfile.skipMuscles ||
+            a.sessionMinutes != initialProfile.sessionMinutes
+    }
     val recommended = recommendedProgram(answers())
     // A split made for these muscles is saved as the user's own, so it can be picked and shown.
-    val plan = remember(experience, goal, equipment, days, limits, skip) { generatedPlan(answers()) }
+    val plan = remember(experience, goal, equipment, days, limits, skip, minutes) { generatedPlan(answers()) }
     LaunchedEffect(step) {
         if (step != LAST_STEP) return@LaunchedEffect
         if (recommended?.first == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, answers())
-        if (!splitChosen) recommended?.let { program = it.first }
+        if (!splitChosen && (!initialProfile.hasCompletedOnboarding || answersChanged)) recommended?.let { program = it.first }
     }
     val back: () -> Unit = { if (step > startStep) step-- else onBack() }
 
@@ -184,6 +191,14 @@ fun OnboardingScreen(
                         options = (2..6).map { it to "$it" },
                         selected = days,
                         onSelect = { haptics.tick(); days = it }
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Text(tr("How long can a workout be?"), style = AppType.label, color = P.textSecondary)
+                    Spacer(Modifier.height(8.dp))
+                    SegmentedControl(
+                        options = listOf(30, 45, 60, 90).map { it to tr("{0} min", it) },
+                        selected = minutes,
+                        onSelect = { haptics.tick(); minutes = it }
                     )
                     Spacer(Modifier.height(20.dp))
                     Text(tr("Where do you train?"), style = AppType.label, color = P.textSecondary)

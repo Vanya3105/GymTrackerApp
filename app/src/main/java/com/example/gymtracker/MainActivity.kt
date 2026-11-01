@@ -1020,14 +1020,17 @@ private fun newExerciseEntryDefault(
     // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
     val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
     val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)
+    // With a plan from the setup answers, only compound lifts get a warm-up set: a raise or a curl
+    // after the big lifts is warm already, and the set would only lengthen the session.
+    val warmup = if (prescription != null && !isCompound(name)) emptyList()
+    else listOf(SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest)))
     return ExerciseEntry(
         name = name,
         targetMuscle = muscle,
         restSeconds = rest,
         type = type,
         target = target,
-        sets = listOf(SetEntry(1, weight = warmupWeight, reps = "8", isWarmup = true, intensityType = "WARMUP", restSeconds = minOf(60, rest))) +
-            List(workSetCount ?: 2) { i -> SetEntry(i + 2, weight = workWeight, reps = targetReps ?: "8", restSeconds = rest) }
+        sets = warmup + List(workSetCount ?: 2) { i -> SetEntry(warmup.size + i + 1, weight = workWeight, reps = targetReps ?: "8", restSeconds = rest) }
     )
 }
 

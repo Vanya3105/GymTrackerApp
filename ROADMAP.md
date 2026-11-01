@@ -196,6 +196,13 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Smart plans (branch `smart-plans`, on top of `quiet-sets`)
+- [x] The recommended split is always built from the answers (`planWeek` in Recommendations.kt), not picked from the built-in ones: days and experience/goal choose the layout (full body, upper/lower, upper/lower/full, upper/lower + PPL, PPL), every big muscle at least twice a week; experience and goal set weekly hard sets per muscle (size 10/14/18, strength 8/10/12, fitness 6/8/10; arms, calves, core 60%), shared over the days, at most ~10 a session; goal picks the exercise lists, experience steps them up (goblet → back squat, pulldown → pull-up…), equipment / limits / skipped muscles fit them; a compound first, then the other kind (back: a pull-up and a row, leading in turn); each exercise gets its sets and reps as the day's target
+- [x] New question: session length (30/45/60/90 min), which caps exercises (about 4 to 9) and trims in order of what matters least
+- [x] The reason says the layout, times a week, weekly sets and session length; changing answers in Profile switches to the new plan; warm-up sets only for compound lifts in a plan
+- [x] Tests: every combination of experience, goal, equipment, days and length gets a plan that trains every big muscle twice, no one-muscle days, no repeats, fits the equipment; different answers give different plans; more experience means more sets for size; shorter sessions mean fewer exercises
+- Sources: Schoenfeld et al. 2016 (frequency), 2017 (volume), Pelland et al. (volume and frequency meta-regressions), ACSM 2026 position stand, Maeo et al. 2021/2023
+
 ## Quiet sets (branch `quiet-sets`)
 - [x] No "Set logged" or "Rest's over" notifications (owner: the ongoing workout bar is enough); their channels are deleted on start. Rest's end still buzzes the phone (unless on silent) and beeps if that's on; the watch buzzes itself when the phone clears a rest that ran out (`restOver`), unless the watch app is open, which buzzes on its own
 

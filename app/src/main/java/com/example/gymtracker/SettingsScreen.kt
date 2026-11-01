@@ -136,6 +136,7 @@ fun SettingsScreen(
                         listOfNotNull(
                             p.experience.label, p.goal.label,
                             p.daysPerWeek.takeIf { it > 0 }?.let { tr("{0} days a week", it) },
+                            p.sessionMinutes.takeIf { it > 0 }?.let { tr("{0} min", it) },
                             p.equipment?.label
                         ).joinToString(" · "),
                         style = AppType.bodyStrong,

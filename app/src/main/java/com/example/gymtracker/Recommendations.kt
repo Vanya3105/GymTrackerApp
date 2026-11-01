@@ -60,42 +60,13 @@ object TrainingProfile {
 
 // --- Split ---
 
-/** The split that fits [profile]'s days, experience, goal and equipment, with why. */
+/**
+ * The split for [profile]: always one built from the answers ([planWeek]), so a different answer
+ * gives a different week. The built-in programs stay there to pick by hand. With why.
+ */
 fun recommendedProgram(profile: UserProfile): Pair<String, String>? {
     if (!profile.answered) return null
-    // Built-in splits train everything; without some of the big muscles a split is made instead.
-    if (profile.skipMuscles.any { it in MAJOR_MUSCLES }) return RECOMMENDED_PLAN_ID to planReason(profile)
-    val level = profile.experience!!
-    val goal = profile.goal!!
-    val days = profile.daysPerWeek.takeIf { it > 0 } ?: if (level == Experience.BEGINNER) 3 else 4
-    // Percentage programs need a barbell and a rack.
-    val barbell = profile.equipment == null || profile.equipment == Equipment.GYM
-    val strength = goal == TrainingGoal.STRENGTH && barbell && level != Experience.BEGINNER
-    val id = when {
-        days <= 2 -> "FULL_BODY_2"
-        days == 3 -> "FULL_BODY"
-        level == Experience.BEGINNER -> if (days >= 4) "UPPER_LOWER" else "FULL_BODY"
-        days == 4 -> when {
-            strength && level == Experience.ADVANCED -> "WENDLER_531"
-            strength -> "GZCLP"
-            goal == TrainingGoal.MUSCLE && level == Experience.ADVANCED && barbell -> "PHUL"
-            else -> "UPPER_LOWER"
-        }
-        strength && days == 5 -> "NSUNS_5"
-        else -> "PPL_6"
-    }
-    val why = when (id) {
-        "FULL_BODY_2" -> tr("Two full-body days still train every muscle twice a week.")
-        "FULL_BODY" -> if (level == Experience.BEGINNER) tr("Three full-body days: the best start, every muscle twice or more a week, with practice on the main lifts.")
-        else tr("Three full-body days train every muscle about three times a week.")
-        "UPPER_LOWER" -> tr("Four days of upper and lower body: every muscle twice a week, with time to recover.")
-        "GZCLP" -> tr("Heavy main lifts that go up each week, with lighter work for size: made for getting stronger.")
-        "WENDLER_531" -> tr("Monthly waves on the four big lifts: steady strength for experienced lifters.")
-        "PHUL" -> tr("Two heavy days and two muscle-building days: strength and size together.")
-        "NSUNS_5" -> tr("High-volume percentage work five days a week: fast strength gains if you recover well.")
-        else -> tr("Push, pull and legs twice a week: lots of volume for every muscle.")
-    }
-    return id to why
+    return RECOMMENDED_PLAN_ID to planReason(profile)
 }
 
 // --- Sets, reps and rest ---
@@ -270,6 +241,7 @@ internal val ALTERNATIVES: Map<String, List<String>> = mapOf(
 /** Harder versions a new lifter gets an easier step of. */
 internal val BEGINNER_EASIER = mapOf(
     "Weighted Pull-Up" to "Lat Pulldown",
+    "Pull-Up" to "Lat Pulldown",
     "Weighted Dips" to "Machine Chest Press",
     "Dips" to "Machine Chest Press",
     "Pendlay Row" to "Chest-Supported Row",
@@ -344,7 +316,7 @@ fun daySubtitle(split: WorkoutSplit, profile: UserProfile = TrainingProfile.curr
     return fitted.map { it.second }.distinct().take(4).joinToString(", ") { shown(it) }
 }
 
-// --- A split for the muscles someone trains ---
+// --- The plan: a week built from the answers ---
 
 const val RECOMMENDED_PLAN_ID = "recommended-plan"
 
@@ -353,70 +325,312 @@ internal val MAJOR_MUSCLES = setOf("Chest", "Back", "Shoulders", "Biceps", "Tric
 private val PUSH_MUSCLES = setOf("Chest", "Shoulders", "Triceps")
 private val PULL_MUSCLES = setOf("Back", "Biceps", "Forearms")
 private val LEG_MUSCLES = setOf("Quads", "Hamstrings", "Glutes", "Calves")
+/** Muscles that also work hard in other muscles' lifts (presses, rows, squats), so need fewer sets of their own. */
+private val SMALL_MUSCLES = setOf("Biceps", "Triceps", "Forearms", "Calves", "Core")
 
 fun trainedMuscles(profile: UserProfile): Set<String> = BUILDER_MUSCLES.filter { it !in profile.skipMuscles }.toSet()
 
+/** How the week is laid out. */
+internal enum class Layout(val label: String) {
+    FULL_BODY(tr("full body every day")),
+    UPPER_LOWER(tr("upper / lower")),
+    UPPER_LOWER_FULL(tr("upper, lower and full body")),
+    UPPER_LOWER_PPL(tr("upper / lower, then push / pull / legs")),
+    PUSH_PULL_LEGS(tr("push / pull / legs")),
+    PUSH_PULL(tr("push / pull"))
+}
+
 /**
- * The muscles of each day of a [days]-day week that trains [muscles], aiming at every muscle
- * about twice a week (the frequency the research supports, see the top):
- * - up to 3 days, or one kind of muscle only: the same muscles every day (full body);
- * - push and pull muscles only: push and pull days, alternating;
- * - one upper kind and legs: the two, alternating;
- * - upper and legs on 4 days: upper / lower twice; on 5: upper, lower, push, pull, legs; on 6: push, pull, legs twice.
- * Core goes with the leg days, or the pull days when there are none.
+ * The layout for [days] a week:
+ * - 2 days, or a new lifter on 3: full body, every muscle at each session.
+ * - 3 days: full body for strength and fitness (strength gains more from training a lift often,
+ *   Pelland et al.); upper / lower / full for size once past the first months.
+ * - 4 days: upper / lower twice.
+ * - 5 days: upper / lower / full twice-ish for new lifters, strength and fitness; upper / lower
+ *   then push / pull / legs for size (more sets fit when each day covers fewer muscles).
+ * - 6 days: push / pull / legs twice for size; otherwise upper / lower / full twice.
+ * Every muscle ends up trained at least twice a week (Schoenfeld et al. 2016).
  */
-internal fun planDays(trained: Set<String>, days: Int): List<Set<String>> {
+internal fun layoutFor(days: Int, level: Experience, goal: TrainingGoal): Layout = when {
+    days <= 2 -> Layout.FULL_BODY
+    days == 3 -> if (level != Experience.BEGINNER && goal == TrainingGoal.MUSCLE) Layout.UPPER_LOWER_FULL else Layout.FULL_BODY
+    days == 4 -> Layout.UPPER_LOWER
+    goal == TrainingGoal.MUSCLE && level != Experience.BEGINNER -> if (days == 5) Layout.UPPER_LOWER_PPL else Layout.PUSH_PULL_LEGS
+    else -> Layout.UPPER_LOWER_FULL
+}
+
+/** The muscles of each day: [layout] over [days], fitted to the muscles that are trained. */
+internal fun weekMuscles(trained: Set<String>, days: Int, layout: Layout): List<Set<String>> {
     // Rows, pull-ups and curls already work the grip hard; forearms get their own work only without them.
     val muscles = if ("Back" in trained || "Biceps" in trained) trained - "Forearms" else trained
-    val push = muscles intersect PUSH_MUSCLES
-    val pull = muscles intersect PULL_MUSCLES
-    val legs = muscles intersect LEG_MUSCLES
-    val kinds = listOf(push, pull, legs).filter { it.isNotEmpty() }
-    if (kinds.size <= 1 || days <= 3) return List(days) { muscles }
-    val upper = push + pull
-    val week = when {
-        legs.isEmpty() -> listOf(push, pull)
-        kinds.size == 2 -> listOf(kinds[0], legs)
-        days == 4 -> listOf(upper, legs)
-        days == 5 -> listOf(upper, legs, push, pull, legs)
-        else -> listOf(push, pull, legs)
+    var push = muscles intersect PUSH_MUSCLES
+    var pull = muscles intersect PULL_MUSCLES
+    var legs = muscles intersect LEG_MUSCLES
+    // Forearms alone aren't worth a day: without back and biceps they ride along on another one.
+    if ("Back" !in pull && "Biceps" !in pull && pull.isNotEmpty()) {
+        if (push.isNotEmpty()) push = push + pull else legs = legs + pull
+        pull = emptySet()
     }
-    val coreWith = if (legs.isNotEmpty()) legs else pull
-    return List(days) { i -> week[i % week.size].let { d -> if ("Core" in muscles && d == coreWith) d + "Core" else d } }
+    val upper = push + pull
+    val kinds = listOf(push, pull, legs).count { it.isNotEmpty() }
+    if (kinds <= 1) return List(days) { muscles }
+    val core = if ("Core" in muscles) setOf("Core") else emptySet()
+    val lower = if (legs.isNotEmpty()) legs + core else legs
+    val full = muscles
+    // Without legs, "lower" days don't exist: push and pull days take their place.
+    val week: List<Set<String>> = if (legs.isEmpty()) {
+        when (layout) {
+            Layout.FULL_BODY -> listOf(full)
+            Layout.UPPER_LOWER_FULL -> listOf(push + core, pull, full)
+            else -> listOf(push, pull + core)
+        }
+    } else if (upper.isEmpty()) {
+        listOf(lower)
+    } else when (layout) {
+        Layout.FULL_BODY -> listOf(full)
+        Layout.UPPER_LOWER -> listOf(upper, lower)
+        Layout.UPPER_LOWER_FULL -> if (days == 6) listOf(upper, lower, full) else if (days == 5) listOf(upper, lower, full, upper, lower) else listOf(upper, lower, full)
+        Layout.UPPER_LOWER_PPL -> listOf(upper, lower, push, pull, lower)
+        Layout.PUSH_PULL_LEGS -> listOf(push, pull, lower)
+        Layout.PUSH_PULL -> listOf(push, pull + core)
+    }
+    // A day whose muscles are all skipped (push days without chest, shoulders and triceps) goes.
+    val kept = week.filter { it.isNotEmpty() }.ifEmpty { listOf(muscles) }
+    return List(days) { kept[it % kept.size] }
 }
 
-private fun planReason(profile: UserProfile): String {
-    val days = profile.daysPerWeek.takeIf { it > 0 } ?: 3
-    val split = planDays(trainedMuscles(profile), days)
-    return if (split.distinct().size == 1) tr("Made for the muscles you train: all of them each day, so each one gets {0} sessions a week.", days)
-    else tr("Made for the muscles you train: split over the week so each one gets about two sessions.")
+/**
+ * Hard sets a week for [muscle]. Growth keeps rising with weekly sets, with diminishing returns
+ * (Schoenfeld et al. 2017; Pelland et al.), and trained lifters need more than beginners; strength
+ * levels off much sooner; for health and fitness modest amounts give most of the benefit (ACSM
+ * 2026). Arms, calves and core get less of their own: presses, rows and squats work them too.
+ */
+internal fun weeklySets(profile: UserProfile, muscle: String): Int {
+    val level = profile.experience ?: Experience.INTERMEDIATE
+    val base = when (profile.goal ?: TrainingGoal.GENERAL) {
+        TrainingGoal.MUSCLE -> when (level) { Experience.BEGINNER -> 10; Experience.INTERMEDIATE -> 14; Experience.ADVANCED -> 18 }
+        TrainingGoal.STRENGTH -> when (level) { Experience.BEGINNER -> 8; Experience.INTERMEDIATE -> 10; Experience.ADVANCED -> 12 }
+        TrainingGoal.GENERAL -> when (level) { Experience.BEGINNER -> 6; Experience.INTERMEDIATE -> 8; Experience.ADVANCED -> 10 }
+    }
+    return if (muscle in SMALL_MUSCLES) (base * 0.6f).toInt().coerceAtLeast(3) else base
 }
 
-/** A split for the muscles [profile] trains, when it skips big ones; null otherwise. Day exercises come from [planDayExercises]. */
-fun generatedPlan(profile: UserProfile): SplitProgramInfo? {
-    if (!profile.answered || profile.skipMuscles.none { it in MAJOR_MUSCLES }) return null
-    val muscles = trainedMuscles(profile).ifEmpty { return null }
+/**
+ * Exercises per muscle, best first, for each goal. For size, ones that load the muscle long
+ * (incline curls, overhead extensions, seated leg curls: Maeo et al.); for strength, the barbell
+ * lifts being trained and their helpers; for fitness, simple compound moves that are easy to learn.
+ * Equipment, limits and experience are fitted afterwards ([personalize]).
+ */
+private val PICKS: Map<TrainingGoal, Map<String, List<String>>> = mapOf(
+    TrainingGoal.MUSCLE to mapOf(
+        "Chest" to listOf("Incline Dumbbell Press", "Barbell Bench Press", "Cable Fly", "Machine Chest Press", "Dips", "Pec Deck"),
+        "Back" to listOf("Lat Pulldown", "Chest-Supported Row", "Pull-Up", "Seated Cable Row", "Barbell Row", "Close-Grip Lat Pulldown"),
+        "Shoulders" to listOf("Cable Lateral Raise", "Seated Dumbbell Shoulder Press", "Lateral Raise", "Rear Delt Fly", "Face Pull"),
+        "Biceps" to listOf("Incline Dumbbell Curl", "Bayesian Cable Curl", "Preacher Curl", "Hammer Curl"),
+        "Triceps" to listOf("Overhead Cable Tricep Extension", "Skull Crusher", "Tricep Pushdown", "Overhead Dumbbell Extension"),
+        "Quads" to listOf("Hack Squat", "Back Squat", "Leg Extension", "Leg Press", "Bulgarian Split Squat"),
+        "Hamstrings" to listOf("Seated Leg Curl", "Romanian Deadlift", "Lying Leg Curl", "Stiff-Leg Deadlift"),
+        "Glutes" to listOf("Hip Thrust", "Bulgarian Split Squat", "Hip Abduction Machine", "Cable Kickback"),
+        "Calves" to listOf("Standing Calf Raise", "Seated Calf Raise"),
+        "Core" to listOf("Cable Crunch", "Hanging Leg Raise", "Ab Wheel Rollout"),
+        "Forearms" to listOf("Wrist Curl", "Reverse Curl")
+    ),
+    TrainingGoal.STRENGTH to mapOf(
+        "Chest" to listOf("Barbell Bench Press", "Close-Grip Bench Press", "Incline Barbell Bench Press", "Weighted Dips"),
+        "Back" to listOf("Barbell Row", "Weighted Pull-Up", "Lat Pulldown", "Pendlay Row", "Chest-Supported Row"),
+        "Shoulders" to listOf("Overhead Press", "Push Press", "Lateral Raise", "Face Pull"),
+        "Biceps" to listOf("Barbell Curl", "Hammer Curl"),
+        "Triceps" to listOf("Close-Grip Bench Press", "Skull Crusher", "Tricep Pushdown"),
+        "Quads" to listOf("Back Squat", "Front Squat", "Leg Press", "Bulgarian Split Squat"),
+        "Hamstrings" to listOf("Deadlift", "Romanian Deadlift", "Lying Leg Curl"),
+        "Glutes" to listOf("Hip Thrust", "Bulgarian Split Squat"),
+        "Calves" to listOf("Standing Calf Raise", "Seated Calf Raise"),
+        "Core" to listOf("Ab Wheel Rollout", "Hanging Leg Raise", "Plank"),
+        "Forearms" to listOf("Farmer's Carry", "Wrist Curl")
+    ),
+    TrainingGoal.GENERAL to mapOf(
+        "Chest" to listOf("Dumbbell Bench Press", "Machine Chest Press", "Incline Dumbbell Press", "Push-Up"),
+        "Back" to listOf("Lat Pulldown", "Seated Cable Row", "Dumbbell Row", "Inverted Row"),
+        "Shoulders" to listOf("Seated Dumbbell Shoulder Press", "Lateral Raise", "Face Pull"),
+        "Biceps" to listOf("Dumbbell Curl", "Hammer Curl"),
+        "Triceps" to listOf("Tricep Pushdown", "Overhead Dumbbell Extension"),
+        "Quads" to listOf("Goblet Squat", "Leg Press", "Reverse Lunge", "Step-Up"),
+        "Hamstrings" to listOf("Romanian Deadlift", "Seated Leg Curl"),
+        "Glutes" to listOf("Hip Thrust", "Glute Bridge", "Reverse Lunge"),
+        "Calves" to listOf("Standing Calf Raise", "Single-Leg Calf Raise"),
+        "Core" to listOf("Plank", "Dead Bug", "Pallof Press", "Side Plank"),
+        "Forearms" to listOf("Farmer's Carry", "Dead Hang")
+    )
+)
+
+/**
+ * Harder versions for lifters past their first months: free-weight and bodyweight compounds that
+ * need more skill and stability, which a new lifter does better to learn on a machine or a
+ * dumbbell first. Intermediate lifters get the first group, experienced ones both.
+ */
+private val INTERMEDIATE_STEP_UP = mapOf(
+    "Goblet Squat" to "Back Squat",
+    "Dead Bug" to "Hanging Knee Raise",
+    "Machine Chest Press" to "Incline Dumbbell Press",
+    "Dumbbell Curl" to "Incline Dumbbell Curl"
+)
+private val ADVANCED_STEP_UP = mapOf(
+    "Lat Pulldown" to "Pull-Up",
+    "Dumbbell Bench Press" to "Barbell Bench Press",
+    "Dumbbell Row" to "Barbell Row",
+    "Reverse Lunge" to "Bulgarian Split Squat",
+    "Plank" to "Ab Wheel Rollout",
+    "Hanging Knee Raise" to "Hanging Leg Raise",
+    "Leg Press" to "Front Squat",
+    "Seated Dumbbell Shoulder Press" to "Overhead Press",
+    "Incline Dumbbell Press" to "Incline Barbell Bench Press",
+    "Chest-Supported Row" to "Pendlay Row",
+    "Hack Squat" to "Back Squat"
+)
+
+private fun steppedUp(name: String, level: Experience): String = when (level) {
+    Experience.BEGINNER -> name
+    Experience.INTERMEDIATE -> INTERMEDIATE_STEP_UP[name] ?: name
+    Experience.ADVANCED -> INTERMEDIATE_STEP_UP[name]?.let { ADVANCED_STEP_UP[it] ?: it } ?: ADVANCED_STEP_UP[name] ?: name
+}
+
+/** The order muscles are trained in a day: big compound work first, while fresh; arms, calves and core last. */
+private val TRAINING_ORDER = listOf("Quads", "Chest", "Back", "Hamstrings", "Glutes", "Shoulders", "Triceps", "Biceps", "Calves", "Core", "Forearms")
+
+/** One exercise of a planned day, with the sets and reps it's planned for. */
+data class PlannedExercise(val name: String, val muscle: String, val target: ExerciseTarget)
+
+/** One day of a plan. */
+data class PlannedDay(val title: String, val muscles: Set<String>, val exercises: List<PlannedExercise>)
+
+/** Roughly how long [exercises] take: each set plus its rest, and a minute to set up each exercise. */
+internal fun minutesFor(exercises: List<PlannedExercise>, profile: UserProfile): Int =
+    exercises.sumOf { e -> 60 + e.target.sets * ((prescriptionFor(profile, e.name)?.restSeconds ?: 90) + 40) } / 60
+
+/**
+ * The whole week for [profile]: days, their exercises, and sets and reps for each. Each muscle's
+ * weekly sets ([weeklySets]) are shared over the days that train it, no more than about ten in one
+ * session (more add little, Pelland et al.), as whole exercises of the planned sets each, choosing
+ * further down the muscle's list on each later day so repeated days differ. A day longer than the
+ * session time drops its smallest-muscle work first.
+ */
+fun planWeek(profile: UserProfile): List<PlannedDay> {
+    if (!profile.answered) return emptyList()
+    val level = profile.experience!!
+    val goal = profile.goal!!
     val days = profile.daysPerWeek.takeIf { it > 0 } ?: 3
-    val dayMuscles = planDays(muscles, days)
-    // Named by the main muscles: core riding along on pull days shouldn't turn "Pull" into "Upper".
+    val trained = trainedMuscles(profile).ifEmpty { return emptyList() }
+    val layout = layoutFor(days, level, goal)
+    val dayMuscles = weekMuscles(trained, days, layout)
     val titles = uniqueDayTitles(dayMuscles.mapIndexed { i, m -> dayTitleFor((m - "Core").ifEmpty { m }, i) })
+    val minutes = profile.sessionMinutes.takeIf { it > 0 } ?: 60
+    val picks = PICKS.getValue(goal)
+    val timesSeen = HashMap<String, Int>()
+    val perSessionCap = if (goal == TrainingGoal.STRENGTH) 6 else 10
+
+    return dayMuscles.mapIndexed { d, muscles ->
+        val chosen = ArrayList<PlannedExercise>()
+        for (muscle in TRAINING_ORDER.filter { it in muscles }) {
+            val frequency = dayMuscles.count { muscle in it }.coerceAtLeast(1)
+            val sets = (weeklySets(profile, muscle).toFloat() / frequency).let { kotlin.math.round(it).toInt() }.coerceIn(2, perSessionCap)
+            val seen = timesSeen.getOrDefault(muscle, 0)
+            timesSeen[muscle] = seen + 1
+            val list = picks[muscle].orEmpty().map { steppedUp(it, level) }.distinct()
+            if (list.isEmpty()) continue
+            // A compound lift first (rotating through them day to day), then, for more sets, an
+            // isolation one: bench then flyes, not two kinds of squat. For back the two kinds are
+            // the two directions of pulling: a pull-up or pulldown, and a row.
+            fun kind(name: String) = if (muscle == "Back") !name.contains("Row") else isCompound(name)
+            val compounds = list.filter(::kind)
+            val isolations = list.filterNot(::kind)
+            val first = compounds.indices.map { compounds[(seen + it) % compounds.size] }
+            val second = isolations.indices.map { isolations[(seen + it) % isolations.size] }
+            // Back days take turns leading with a pull-up and with a row, so a short session that
+            // only fits one still trains both directions over the week.
+            val order = (if (muscle == "Back" && seen % 2 == 1) second + first else first + second).ifEmpty { list }
+            var left = sets
+            var firstWasCompound: Boolean? = null
+            for (candidate in order) {
+                if (left <= 0) break
+                val fitted = personalize(listOf(candidate to muscle), profile).firstOrNull() ?: continue
+                if (chosen.any { exerciseKey(it.name) == exerciseKey(fitted.first) }) continue
+                // The second exercise of a muscle is the other kind when there is one.
+                if (firstWasCompound != null && kind(fitted.first) == firstWasCompound &&
+                    order.any { c -> kind(c) != firstWasCompound && personalize(listOf(c to muscle), profile).isNotEmpty() }
+                ) continue
+                val p = prescriptionFor(profile, fitted.first) ?: continue
+                // One more set on this exercise (up to four) rather than a second exercise for a single set.
+                val n = if (left - p.sets == 1) (p.sets + 1).coerceAtMost(4).coerceAtLeast(p.sets) else minOf(p.sets, left).coerceAtLeast(2)
+                // Counted for the muscle being planned: a deadlift for hamstrings is listed under back.
+                chosen += PlannedExercise(fitted.first, muscle, ExerciseTarget(n, p.repMin, p.repMax))
+                if (firstWasCompound == null) firstWasCompound = kind(fitted.first)
+                left -= n
+            }
+        }
+        // Too long, or too many exercises for the session (about 4 at 30 min to 9 at 90): cut in
+        // order of what matters least: a small muscle's second exercise, sets above three, a big
+        // muscle's second exercise, small-muscle work, sets above two, then the last exercise.
+        // Fewer exercises done properly beat many done once or twice.
+        val maxExercises = ((minutes + 15) / 10).coerceIn(4, 9)
+        // Extra exercises of a muscle, the muscle with the most first (so a third chest exercise
+        // goes before the only row).
+        fun seconds() = chosen.groupBy { it.muscle }.values.filter { it.size > 1 }
+            .sortedWith(compareBy<List<PlannedExercise>>({ it.size }, { g -> g.sumOf { e -> e.target.sets } })).map { it.last() }
+        fun shave(floor: Int): Boolean {
+            val biggest = chosen.filter { it.target.sets > floor }.maxByOrNull { it.target.sets } ?: return false
+            chosen[chosen.indexOf(biggest)] = biggest.copy(target = biggest.target.copy(sets = biggest.target.sets - 1))
+            return true
+        }
+        while (chosen.size > 3 && (chosen.size > maxExercises || minutesFor(chosen, profile) > minutes)) {
+            val tooMany = chosen.size > maxExercises
+            seconds().lastOrNull { it.muscle in SMALL_MUSCLES }?.let { chosen.remove(it); continue }
+            if (!tooMany && shave(3)) continue
+            seconds().lastOrNull()?.let { chosen.remove(it); continue }
+            chosen.lastOrNull { it.muscle in SMALL_MUSCLES }?.let { chosen.remove(it); continue }
+            // A lift down to two sets does little: drop the last exercise first while there are plenty.
+            if (chosen.size > 4 || tooMany || !shave(2)) chosen.removeAt(chosen.lastIndex)
+        }
+        PlannedDay(titles[d], muscles, chosen)
+    }
+}
+
+/** Why this plan: the layout, how often and how much each muscle is trained, and how long a session is. */
+fun planReason(profile: UserProfile): String {
+    val week = planWeek(profile)
+    if (week.isEmpty()) return ""
+    val level = profile.experience!!
+    val goal = profile.goal!!
+    val layout = layoutFor(week.size, level, goal)
+    val perMuscle = week.flatMap { it.exercises }.filter { it.muscle in MAJOR_MUSCLES }
+        .groupBy { it.muscle }.mapValues { (_, e) -> e.sumOf { it.target.sets } }
+    val typicalSets = perMuscle.values.sorted().let { if (it.isEmpty()) 0 else it[it.size / 2] }
+    val times = week.flatMap { it.muscles }.groupingBy { it }.eachCount().filterKeys { it in MAJOR_MUSCLES }.values.minOrNull() ?: 1
+    val minutes = week.maxOf { minutesFor(it.exercises, profile) }
+    val first = tr("{0} days of {1}: each muscle {2} times a week, about {3} hard sets weekly.", week.size, layout.label, times, typicalSets)
+    val second = when (goal) {
+        TrainingGoal.MUSCLE -> when (level) {
+            Experience.BEGINNER -> tr("Enough to grow fast while you learn the lifts.")
+            Experience.INTERMEDIATE -> tr("A middle dose: growth keeps rising with sets, with smaller returns.")
+            Experience.ADVANCED -> tr("Experienced lifters need more sets to keep growing.")
+        }
+        TrainingGoal.STRENGTH -> tr("Heavy main lifts first and often; strength needs fewer sets than size.")
+        TrainingGoal.GENERAL -> tr("A moderate dose of simple compound moves gives most of the health benefit.")
+    }
+    return "$first $second " + tr("About {0} min a session.", minutes)
+}
+
+/** The plan as a program, its days named and listing their muscles; null without answers. */
+fun generatedPlan(profile: UserProfile): SplitProgramInfo? {
+    val week = planWeek(profile).ifEmpty { return null }
     return SplitProgramInfo(
         id = RECOMMENDED_PLAN_ID,
         name = "Your plan",
         tagline = "",
-        weeklyGoal = days,
-        splits = titles.mapIndexed { i, t -> WorkoutSplit(t, BUILDER_MUSCLES.filter { it in dayMuscles[i] }.joinToString(", "), "%02d".format(i + 1)) }
+        weeklyGoal = week.size,
+        splits = week.mapIndexed { i, d -> WorkoutSplit(d.title, BUILDER_MUSCLES.filter { it in d.muscles }.joinToString(", "), "%02d".format(i + 1)) }
     )
 }
 
-/**
- * A plan day's exercises: the built-in day of that name when there is one and it still covers the
- * day's muscles once fitted, else starter exercises for them.
- */
-fun planDayExercises(day: WorkoutSplit, profile: UserProfile, index: Int): List<Pair<String, String>> {
-    val muscles = day.subtitle.split(", ").filter { it.isNotBlank() }.toSet()
-    val builtIn = personalize(defaultTemplateForSplit(day.title), profile)
-    if (builtIn.isNotEmpty() && muscles.all { m -> m == "Core" || builtIn.any { it.second == m } }) return builtIn
-    val variant = day.title.substringAfterLast(' ', "").singleOrNull()?.takeIf { it in 'A'..'G' }?.let { it - 'A' } ?: 0
-    return personalize(starterExercises(muscles, variant), profile).ifEmpty { personalize(starterExercises(muscles, index), profile) }
-}
+/** A plan day's exercises (name to muscle). */
+fun planDayExercises(profile: UserProfile, index: Int): List<Pair<String, String>> =
+    planWeek(profile).getOrNull(index)?.exercises.orEmpty().map { it.name to it.muscle }
