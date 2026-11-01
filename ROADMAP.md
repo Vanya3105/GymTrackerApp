@@ -13,7 +13,7 @@ Everything through **tab-transitions** is merged into `master` (2026-10-30, at t
 
 **Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30). **Drawn exercise figures** : all 294 exercises drawn in the app's style, replacing the photos; tested and merged (2026-10-31). **Photo code removed**: `ExercisePhotos` and its test are gone, `ExerciseThumb` now lives with the figures, and the app deletes the old downloaded photos once on start; tested and merged (2026-10-31).
 
-Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Privacy policy live; consent screen In production (owner, 2026-10-31). **Hebrew + welcome screen**, the **widgets redesign**, the **bigger finish celebration**, **fixes** (ticked-sets count, sheet scroll) and **figures polish** (every exercise's animation reviewed) are tested on the owner's phone and merged (2026-11-01). **Smart recommendations** (branch `smart-recommendations`) the **design refresh** (branch `design-refresh`, on top of it) **polish** (branch `polish`, on top of that) and the **watch redesign** (branch `watch-redesign`, on top of that) wait for the owner to test; next: then the watch in Hebrew, then the friends' release APK; later for Play: store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
+Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Privacy policy live; consent screen In production (owner, 2026-10-31). **Hebrew + welcome screen**, the **widgets redesign**, the **bigger finish celebration**, **fixes** (ticked-sets count, sheet scroll) and **figures polish** (every exercise's animation reviewed) are tested on the owner's phone and merged (2026-11-01). **Smart recommendations**, the **design refresh**, **polish** and the **watch redesign** are tested on the owner's phone and watch and merged (2026-11-01). Quiet sets, smart plans, switching workouts, ticking ahead, setup polish, crash reports (waiting for the owner's google-services.json) and split focus are merged too; v3.7.0 released on GitHub (2026-11-01). next: then the watch in Hebrew, then the friends' release APK; later for Play: store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -196,11 +196,43 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Split focus (branch `split-focus`, on top of `crash-reports`)
+- [x] New question on "Your body": anything to focus on (balanced, upper body, arms, legs and glutes). Priority muscles get about a third more weekly sets (arms: as much as a big muscle), go first in each session (exercise order: Simão et al. 2012, Nunes et al. 2021) and are cut last when a session runs long
+- [x] New layouts from 4 days a week: upper / lower with an extra upper day, lower / upper with an extra lower day, torso / arms and legs (arms trained fresh), and chest & back / shoulders & arms / legs for 6 days; up to 3 days stays full body (the only way to train everything twice)
+- [x] Tests: every focus × days gives more sets for the priority muscles, starts their days with them, and (outside chest & back / shoulders & arms / legs) trains them more often from 4 days
+
+## Crash reports (branch `crash-reports`, on top of `onboarding-polish`)
+- [x] Firebase Crashlytics wired in (`CrashReports.kt`, Firebase BoM 35.1.0, plugins applied only when `app/google-services.json` exists, so the app builds and runs without it); Profile → Advanced → "Send crash reports" (on by default, shown only when Firebase is set up)
+- [x] Release fix: Firebase made R8 split Kotlin's SequencesKt parts across packages and the release build crashed on start; `app/keep-rules.pro` keeps Kotlin's packages whole
+- [x] Privacy policy: a "Crash reports" section (what's in a report, 90-day retention, how to turn it off); published
+- [ ] Owner: create the Firebase project, add the Android app `com.vanyaevtushenko.gymtracker`, put google-services.json in app/; then a test crash to see it in the dashboard; Play Data safety: crash logs and diagnostics, not linked to the user
+- [ ] Later: crash reports from the watch app too
+
+## Setup polish (branch `onboarding-polish`, on top of `tick-earlier-sets`)
+- [x] Progress: best lifts first, then sets per muscle, then body weight and weigh-ins (lifting is what the tab is for). Profile: your training and split, then backups, workouts, Health Connect, bringing in data, appearance, help, advanced
+- [x] "Anything to go easy on?" moved from the crowded week step to the muscle step, now "Your body"; the last step is "Your plan" ("Made from your answers…"); the first step says what the questions are for
+
+## Ticking ahead (branch `tick-earlier-sets`, on top of `switch-workout`)
+- [x] Ticking a set while earlier work sets of the exercise are unticked asks "Set 2 isn't ticked. Did you do it too?" — Tick both / Just this one. Never blocked (supersets, logging afterwards, busy equipment); warm-ups don't count. Ticking during rest stays allowed (owner asked; a rest is advice and ticking starts the next rest anyway)
+
+## Switching workouts (branch `switch-workout`, on top of `smart-plans`)
+- [x] Starting another day (or an empty workout) while one runs asks first: save it and start the new one (only when a set is ticked), discard it and start the new one, or keep it. Starting the day that's already running just opens it (it used to open the running one whatever was tapped)
+
+## Smart plans (branch `smart-plans`, on top of `quiet-sets`)
+- [x] The recommended split is always built from the answers (`planWeek` in Recommendations.kt), not picked from the built-in ones: days and experience/goal choose the layout (full body, upper/lower, upper/lower/full, upper/lower + PPL, PPL), every big muscle at least twice a week; experience and goal set weekly hard sets per muscle (size 10/14/18, strength 8/10/12, fitness 6/8/10; arms, calves, core 60%), shared over the days, at most ~10 a session; goal picks the exercise lists, experience steps them up (goblet → back squat, pulldown → pull-up…), equipment / limits / skipped muscles fit them; a compound first, then the other kind (back: a pull-up and a row, leading in turn); each exercise gets its sets and reps as the day's target
+- [x] New question: session length (30/45/60/90 min), which caps exercises (about 4 to 9) and trims in order of what matters least
+- [x] The reason says the layout, times a week, weekly sets and session length; changing answers in Profile switches to the new plan; warm-up sets only for compound lifts in a plan
+- [x] Tests: every combination of experience, goal, equipment, days and length gets a plan that trains every big muscle twice, no one-muscle days, no repeats, fits the equipment; different answers give different plans; more experience means more sets for size; shorter sessions mean fewer exercises
+- Sources: Schoenfeld et al. 2016 (frequency), 2017 (volume), Pelland et al. (volume and frequency meta-regressions), ACSM 2026 position stand, Maeo et al. 2021/2023
+
+## Quiet sets (branch `quiet-sets`)
+- [x] No "Set logged" or "Rest's over" notifications (owner: the ongoing workout bar is enough); their channels are deleted on start. Rest's end still buzzes the phone (unless on silent) and beeps if that's on; the watch buzzes itself when the phone clears a rest that ran out (`restOver`), unless the watch app is open, which buzzes on its own
+
 ## Watch redesign (branch `watch-redesign`, on top of `polish`)
 - [x] The watch follows the phone app's language: the phone sends `language`, translated workout/exercise names and `dayLabels` (days still start by their stored title); the watch's own words are in `WatchText` (Hebrew table, test that every `t("…")` has one) and its screens, tile and watch-face status go right to left in Hebrew
 - [x] Set names come from the set's kind and work-set number (`setKind`, `workSetNumber`/`workSetCount`), so "Set 2 of 3" no longer counts the warm-up and doesn't depend on English text
 - [x] Design: the phone's Inter font and dark palette; long exercise names scroll instead of being cut; the workout progress is an even ring from the top; the rest screen shows "Next", the name and the set on their own lines; shorter Hebrew rest buttons that fit the round edge
-- [ ] Owner to try it on the Galaxy Watch (screens only checked as rendered screenshots, no watch emulator here)
+- [x] Tried on the owner's Galaxy Watch (2026-11-01)
 
 ## Polish (branch `polish`, on top of `design-refresh`)
 - [x] Figures: elbows and knees no longer snap to the other side mid-movement (117 jumps in about 60 exercises: upright rows, cleans, flyes, raises, clap push-ups…). The joint now drifts across as the bend lines up with the limb, like an elbow turning towards the viewer. Landmine rotation swings in an arc over the head, the snatch's bar passes in front of the face with the elbows turning up. `FigureMotionTest` plays every figure in 400 steps and fails on any jump

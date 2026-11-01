@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -59,7 +58,6 @@ fun ProgressScreen(
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
     val bestLifts = remember(history) { computeBestLifts(history) }
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val tour = rememberTipTour(
         Tips.PROGRESS,
         listOf(TutorialStepInfo("LIFTS", tr("Your lifts"), tr("Tap any exercise for its chart, records and every session. Your estimated 1-rep max shows how strong you're getting, even when your reps change."))),
@@ -82,11 +80,66 @@ fun ProgressScreen(
         }
 
         item {
+            SectionHeader(
+                tr("Best lifts"),
+                action = if (bestLifts.size > 6) (if (showAllLifts) tr("Show less") else tr("See all")) else null,
+                onAction = { showAllLifts = !showAllLifts }
+            )
+        }
+        if (bestLifts.isEmpty()) {
+            item { EmptyState(Icons.Rounded.EmojiEvents, tr("No lifts yet"), tr("Finish a workout and your best sets show up here.")) }
+        } else {
+            item {
+                AppCard(
+                    Modifier.fillMaxWidth().enterAnimation(0).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)).tipTarget(tour, "LIFTS"),
+                    contentPadding = PaddingValues(vertical = 6.dp)
+                ) {
+                    (if (showAllLifts) bestLifts else bestLifts.take(6)).forEachIndexed { i, lift ->
+                        if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
+                        Row(
+                            Modifier.fillMaxWidth().pressable { onOpenExercise(lift.name) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
+                            Column(Modifier.weight(1f)) {
+                                Text(shown(lift.name), style = AppType.bodyStrong, color = P.textPrimary)
+                                Text(tr("Best set {0}", lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"), style = AppType.caption, color = P.textSecondary)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(lift.headline, style = AppType.number, color = P.textPrimary)
+                                Text(lift.headlineLabel, style = AppType.caption, color = P.textTertiary)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        }
+        duplicate?.let { (a, b) ->
+            item(key = "duplicate") {
+                DuplicateCard(
+                    a, b,
+                    onMerge = { haptics.tick(); merging = a to b },
+                    onNotSame = {
+                        haptics.tick()
+                        LocalStorage.markNotDuplicates(context, a, b)
+                        notSame = LocalStorage.notDuplicates(context)
+                    },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+
+        item { SectionHeader(tr("Sets per muscle")) }
+        item { WeeklySetsCard(recovery, Modifier.enterAnimation(1)) }
+
+        item {
             BodyWeightCard(
                 current = userProfile.currentWeightKg,
                 weightHistory = weightHistory,
                 onLog = { haptics.tick(); showLogSheet = true },
-                modifier = Modifier.enterAnimation(0)
+                modifier = Modifier.enterAnimation(2)
             )
         }
 
@@ -120,64 +173,8 @@ fun ProgressScreen(
             }
         }
 
-        item { SectionHeader(tr("Sets per muscle")) }
-        item { WeeklySetsCard(recovery, Modifier.enterAnimation(1)) }
-
-        duplicate?.let { (a, b) ->
-            item(key = "duplicate") {
-                DuplicateCard(
-                    a, b,
-                    onMerge = { haptics.tick(); merging = a to b },
-                    onNotSame = {
-                        haptics.tick()
-                        LocalStorage.markNotDuplicates(context, a, b)
-                        notSame = LocalStorage.notDuplicates(context)
-                    },
-                    modifier = Modifier.animateItem()
-                )
-            }
-        }
-
-        item {
-            SectionHeader(
-                tr("Best lifts"),
-                action = if (bestLifts.size > 6) (if (showAllLifts) tr("Show less") else tr("See all")) else null,
-                onAction = { showAllLifts = !showAllLifts }
-            )
-        }
-        if (bestLifts.isEmpty()) {
-            item { EmptyState(Icons.Rounded.EmojiEvents, tr("No lifts yet"), tr("Finish a workout and your best sets show up here.")) }
-        } else {
-            item {
-                AppCard(
-                    Modifier.fillMaxWidth().enterAnimation(2).animateContentSize(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow)).tipTarget(tour, "LIFTS"),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) {
-                    (if (showAllLifts) bestLifts else bestLifts.take(6)).forEachIndexed { i, lift ->
-                        if (i > 0) Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(P.borderSubtle))
-                        Row(
-                            Modifier.fillMaxWidth().pressable { onOpenExercise(lift.name) }.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
-                            Column(Modifier.weight(1f)) {
-                                Text(shown(lift.name), style = AppType.bodyStrong, color = P.textPrimary)
-                                Text(tr("Best set {0}", lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"), style = AppType.caption, color = P.textSecondary)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(lift.headline, style = AppType.number, color = P.textPrimary)
-                                Text(lift.headlineLabel, style = AppType.caption, color = P.textTertiary)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
-            }
-        }
     }
-    // Best lifts sits below weigh-ins and recovery: scroll it into view first.
-    TipTourOverlay(tour, onShowStep = { scope.launch { listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) } })
+    TipTourOverlay(tour)
     }
 
     merging?.let { (a, b) ->

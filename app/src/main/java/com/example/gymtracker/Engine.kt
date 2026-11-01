@@ -21,6 +21,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.LruCache
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.mutableStateOf
@@ -402,30 +404,29 @@ fun applyDisplayRefreshRate(activity: Activity, targetHz: Int) {
 // NOTIFICATIONS
 // ============================================================================
 
-const val REST_NOTIFICATION_CHANNEL_ID = "gym_rest_timer_channel"
-const val SET_DONE_NOTIFICATION_CHANNEL_ID = "gym_set_done_channel"
+private const val OLD_REST_CHANNEL_ID = "gym_rest_timer_channel"
+private const val OLD_SET_DONE_CHANNEL_ID = "gym_set_done_channel"
+private const val OLD_REST_NOTIFICATION_ID = 1001
+private const val OLD_SET_DONE_NOTIFICATION_ID = 1002
 
 fun hasNotificationPermission(context: Context): Boolean {
     return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 }
 
-fun ensureNotificationChannelCreated(context: Context) {
+/**
+ * Removes the old "Rest timer" and "Logged sets" channels: a card for every set and rest was noise
+ * next to the workout's own ongoing notification, which already shows both. Rest's end still buzzes
+ * (see [RestAlarmScheduler.triggerRestFinishedAlert]).
+ */
+fun removeOldAlertChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     try {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(REST_NOTIFICATION_CHANNEL_ID, tr("Rest timer"), NotificationManager.IMPORTANCE_HIGH).apply {
-                description = tr("Lets you know when your rest between sets is over")
-                enableVibration(true)
-            }
-        )
-        manager.createNotificationChannel(
-            NotificationChannel(SET_DONE_NOTIFICATION_CHANNEL_ID, tr("Logged sets"), NotificationManager.IMPORTANCE_HIGH).apply {
-                description = tr("Confirms each set you finish")
-                enableVibration(true)
-            }
-        )
+        manager.cancel(OLD_REST_NOTIFICATION_ID)
+        manager.cancel(OLD_SET_DONE_NOTIFICATION_ID)
+        manager.deleteNotificationChannel(OLD_REST_CHANNEL_ID)
+        manager.deleteNotificationChannel(OLD_SET_DONE_CHANNEL_ID)
     } catch (_: Exception) {}
 }
 
@@ -444,41 +445,6 @@ fun openAppPendingIntent(context: Context, requestCode: Int): PendingIntent {
     return PendingIntent.getActivity(
         context, requestCode, intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-}
-
-private fun postAlert(context: Context, id: Int, channelId: String, icon: Int, title: String, text: String, requestCode: Int) {
-    if (!hasNotificationPermission(context)) return
-    try {
-        ensureNotificationChannelCreated(context)
-        val notification = notificationBuilder(context, channelId)
-            .setSmallIcon(icon)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setContentIntent(openAppPendingIntent(context, requestCode))
-            .setAutoCancel(true)
-            .build()
-        context.getSystemService(NotificationManager::class.java).notify(id, notification)
-    } catch (_: Exception) {}
-}
-
-/** [setText] is the set in words, e.g. from [formatSet]. */
-fun sendSetDoneNotification(context: Context, exerciseName: String, setText: String, restSeconds: Int) {
-    val restMsg = if (restSeconds > 0) tr(" · Rest {0}", formatRestShort(restSeconds)) else ""
-    postAlert(
-        context, id = 1002, channelId = SET_DONE_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_workout,
-        title = tr("Set logged · {0}", shown(exerciseName)), text = "$setText$restMsg", requestCode = 1
-    )
-}
-
-fun sendRestFinishedNotification(
-    context: Context,
-    splitTitle: String,
-    detailText: String = tr("Time for your next set.")
-) {
-    postAlert(
-        context, id = 1001, channelId = REST_NOTIFICATION_CHANNEL_ID, icon = R.drawable.ic_stat_timer,
-        title = tr("Rest's over · {0}", shown(splitTitle)), text = detailText, requestCode = 0
     )
 }
 
@@ -791,19 +757,18 @@ object RestAlarmScheduler {
         if (LocalStorage.getRestEndTimeMillis(context) <= 0L) return
 
         val settings = LocalStorage.loadSettings(context)
-        val active = LocalStorage.loadActiveSession(context)
         LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
-
-        val nextEx = active?.second?.firstOrNull { ex -> !ex.isSkipped && ex.sets.any { !it.isCompleted } }
-        val nextSet = nextEx?.let { it.sets.getOrNull(it.nextSetIndex()) }
-        val detailLine = if (nextEx != null && nextSet != null) {
-            tr("Next: {0} · {1}", shown(nextEx.name), formatSet(nextSet, nextEx.type))
-        } else {
-            tr("Time for your next set.")
-        }
-
         if (settings.restSoundEnabled) playRestBeep(context)
-        sendRestFinishedNotification(context, active?.first ?: tr("Workout"), detailLine)
+        buzzRestOver(context)
+    }
+
+    /** Two short pulses, unless the phone is on silent. The watch buzzes by itself when it hears. */
+    private fun buzzRestOver(context: Context) {
+        try {
+            if (context.getSystemService(AudioManager::class.java).ringerMode == AudioManager.RINGER_MODE_SILENT) return
+            context.getSystemService(Vibrator::class.java)
+                ?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 250, 150, 250), -1))
+        } catch (_: Exception) {}
     }
 
     /** Short alarm beep that ducks (rather than stops) any music that's playing. */

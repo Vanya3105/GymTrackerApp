@@ -563,7 +563,6 @@ class GymWidgetProvider : AppWidgetProvider() {
 
             if (action == ACTION_COMPLETE_SET) {
                 val restSec = target.restSeconds.takeIf { it >= 0 } ?: settings.restTimerSeconds
-                sendSetDoneNotification(context, currentEx.name, formatSet(target, type), restSec)
                 val restEnd = if (restSec > 0) System.currentTimeMillis() + restSec * 1000L else 0L
                 LocalStorage.setRestEndTimeMillis(context, restEnd, fromWidget = true)
             }

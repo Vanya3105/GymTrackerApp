@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.androidx.room)
 }
 
+// Crash reports (Firebase Crashlytics) switch on once the Firebase project's google-services.json
+// is in app/; without it the app builds and runs as before, sending nothing.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 // Release signing keys live in keystore.properties (git-ignored). Without it, release builds
 // fall back to the debug key so the project still builds on any machine.
 val keystoreProps = Properties().apply {
@@ -23,8 +30,8 @@ android {
         applicationId = "com.vanyaevtushenko.gymtracker"
         minSdk = 26
         targetSdk = 37
-        versionCode = 36
-        versionName = "3.6.0"
+        versionCode = 37
+        versionName = "3.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,6 +50,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            proguardFiles("keep-rules.pro")
             optimization {
                 enable = true
                 packageScope = setOf(
@@ -94,6 +102,8 @@ dependencies {
     implementation(libs.androidx.health.connect)
     implementation(libs.play.services.wearable)
     implementation(libs.play.services.auth)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
     implementation(project(":watchlink"))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

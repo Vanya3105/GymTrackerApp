@@ -60,24 +60,32 @@ fun OnboardingScreen(
     var days by remember { mutableIntStateOf(initialProfile.daysPerWeek.takeIf { it > 0 } ?: 3) }
     var limits by remember { mutableStateOf(initialProfile.limits) }
     var skip by remember { mutableStateOf(initialProfile.skipMuscles) }
+    var focus by remember { mutableStateOf(initialProfile.focus ?: Focus.BALANCED) }
+    var minutes by remember { mutableIntStateOf(initialProfile.sessionMinutes.takeIf { it > 0 } ?: 60) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // Picked by hand on the last step, so a recommendation no longer replaces it.
-    var splitChosen by remember { mutableStateOf(initialProfile.hasCompletedOnboarding) }
+    var splitChosen by remember { mutableStateOf(false) }
     fun answers() = initialProfile.copy(
         hasCompletedOnboarding = true,
         age = age.toIntOrNull() ?: 0,
         currentWeightKg = weightKg.toFloatOrNull() ?: 0f,
         splitProgram = program,
         experience = experience, goal = goal, equipment = equipment, daysPerWeek = days, limits = limits,
-        skipMuscles = skip, trainingAsked = true
+        skipMuscles = skip, trainingAsked = true, sessionMinutes = minutes, focus = focus
     )
+    // Someone already set up keeps their split unless they changed an answer: then the plan follows.
+    val answersChanged = answers().let { a ->
+        a.experience != initialProfile.experience || a.goal != initialProfile.goal || a.equipment != initialProfile.equipment ||
+            a.daysPerWeek != initialProfile.daysPerWeek || a.limits != initialProfile.limits || a.skipMuscles != initialProfile.skipMuscles ||
+            a.sessionMinutes != initialProfile.sessionMinutes || a.focus != (initialProfile.focus ?: Focus.BALANCED)
+    }
     val recommended = recommendedProgram(answers())
     // A split made for these muscles is saved as the user's own, so it can be picked and shown.
-    val plan = remember(experience, goal, equipment, days, limits, skip) { generatedPlan(answers()) }
+    val plan = remember(experience, goal, equipment, days, limits, skip, minutes, focus) { generatedPlan(answers()) }
     LaunchedEffect(step) {
         if (step != LAST_STEP) return@LaunchedEffect
         if (recommended?.first == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, answers())
-        if (!splitChosen) recommended?.let { program = it.first }
+        if (!splitChosen && (!initialProfile.hasCompletedOnboarding || answersChanged)) recommended?.let { program = it.first }
     }
     val back: () -> Unit = { if (step > startStep) step-- else onBack() }
 
@@ -123,7 +131,7 @@ fun OnboardingScreen(
                     Text(tr("Welcome"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        tr("A couple of quick questions so the app can track your progress and suggest weights."),
+                        tr("A few questions, so the app can build your plan and suggest your weights."),
                         style = AppType.body,
                         color = P.textSecondary
                     )
@@ -186,12 +194,36 @@ fun OnboardingScreen(
                         onSelect = { haptics.tick(); days = it }
                     )
                     Spacer(Modifier.height(20.dp))
+                    Text(tr("How long can a workout be?"), style = AppType.label, color = P.textSecondary)
+                    Spacer(Modifier.height(8.dp))
+                    SegmentedControl(
+                        options = listOf(30, 45, 60, 90).map { it to tr("{0} min", it) },
+                        selected = minutes,
+                        onSelect = { haptics.tick(); minutes = it }
+                    )
+                    Spacer(Modifier.height(20.dp))
                     Text(tr("Where do you train?"), style = AppType.label, color = P.textSecondary)
                     Spacer(Modifier.height(8.dp))
                     Equipment.entries.forEach { e ->
                         OptionCard(e.label, e.detail, equipment == e) { haptics.tick(); equipment = e }
                     }
-                    Spacer(Modifier.height(16.dp))
+                } else if (s == 3) {
+                    Text(tr("Your body"), style = AppType.display, color = P.textPrimary)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Turn off muscles you'd rather not train, and mark anything to go easy on. Your plan is built around it."),
+                        style = AppType.body,
+                        color = P.textSecondary
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
+                    Text(tr("Anything to focus on?"), style = AppType.label, color = P.textSecondary)
+                    Spacer(Modifier.height(8.dp))
+                    Focus.entries.forEach { f ->
+                        OptionCard(f.label, f.detail, focus == f) { haptics.tick(); focus = f }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(tr("Anything to go easy on?"), style = AppType.label, color = P.textSecondary)
                     Spacer(Modifier.height(8.dp))
                     ToggleChips(Limit.entries.map { it to it.label }, limits) { l ->
@@ -204,20 +236,10 @@ fun OnboardingScreen(
                         style = AppType.caption,
                         color = P.textTertiary
                     )
-                } else if (s == 3) {
-                    Text(tr("What do you want to train?"), style = AppType.display, color = P.textPrimary)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        tr("Turn off any muscles you'd rather not train. Your split and exercises are built around the rest."),
-                        style = AppType.body,
-                        color = P.textSecondary
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
                 } else {
-                    Text(tr("How do you train?"), style = AppType.display, color = P.textPrimary)
+                    Text(tr("Your plan"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
-                    Text(tr("Find your split, or build your own. You can change it any time in Profile."), style = AppType.body, color = P.textSecondary)
+                    Text(tr("Made from your answers. You can pick another split or build your own, here or later in Profile."), style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(20.dp))
                     recommended?.let { (id, why) ->
                         val info = if (id == RECOMMENDED_PLAN_ID) plan ?: programFor(id) else programFor(id)
