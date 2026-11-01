@@ -130,7 +130,7 @@ fun OnboardingScreen(
                     Text(tr("Welcome"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        tr("A couple of quick questions so the app can track your progress and suggest weights."),
+                        tr("A few questions, so the app can build your plan and suggest your weights."),
                         style = AppType.body,
                         color = P.textSecondary
                     )
@@ -206,7 +206,17 @@ fun OnboardingScreen(
                     Equipment.entries.forEach { e ->
                         OptionCard(e.label, e.detail, equipment == e) { haptics.tick(); equipment = e }
                     }
-                    Spacer(Modifier.height(16.dp))
+                } else if (s == 3) {
+                    Text(tr("Your body"), style = AppType.display, color = P.textPrimary)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Turn off muscles you'd rather not train, and mark anything to go easy on. Your plan is built around it."),
+                        style = AppType.body,
+                        color = P.textSecondary
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
+                    Spacer(Modifier.height(8.dp))
                     Text(tr("Anything to go easy on?"), style = AppType.label, color = P.textSecondary)
                     Spacer(Modifier.height(8.dp))
                     ToggleChips(Limit.entries.map { it to it.label }, limits) { l ->
@@ -219,20 +229,10 @@ fun OnboardingScreen(
                         style = AppType.caption,
                         color = P.textTertiary
                     )
-                } else if (s == 3) {
-                    Text(tr("What do you want to train?"), style = AppType.display, color = P.textPrimary)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        tr("Turn off any muscles you'd rather not train. Your split and exercises are built around the rest."),
-                        style = AppType.body,
-                        color = P.textSecondary
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
                 } else {
-                    Text(tr("How do you train?"), style = AppType.display, color = P.textPrimary)
+                    Text(tr("Your plan"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
-                    Text(tr("Find your split, or build your own. You can change it any time in Profile."), style = AppType.body, color = P.textSecondary)
+                    Text(tr("Made from your answers. You can pick another split or build your own, here or later in Profile."), style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(20.dp))
                     recommended?.let { (id, why) ->
                         val info = if (id == RECOMMENDED_PLAN_ID) plan ?: programFor(id) else programFor(id)

@@ -196,6 +196,9 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Setup polish (branch `onboarding-polish`, on top of `tick-earlier-sets`)
+- [x] "Anything to go easy on?" moved from the crowded week step to the muscle step, now "Your body"; the last step is "Your plan" ("Made from your answers…"); the first step says what the questions are for
+
 ## Ticking ahead (branch `tick-earlier-sets`, on top of `switch-workout`)
 - [x] Ticking a set while earlier work sets of the exercise are unticked asks "Set 2 isn't ticked. Did you do it too?" — Tick both / Just this one. Never blocked (supersets, logging afterwards, busy equipment); warm-ups don't count. Ticking during rest stays allowed (owner asked; a rest is advice and ticking starts the next rest anyway)
 

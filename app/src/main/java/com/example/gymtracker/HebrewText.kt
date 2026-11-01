@@ -9,7 +9,7 @@ package com.example.gymtracker
  */
 internal object HebrewText {
     private val ui: Map<String, String> by lazy {
-        HashMap<String, String>(1602).apply { ui1(this); ui2(this); ui3(this) }
+        HashMap<String, String>(1612).apply { ui1(this); ui2(this); ui3(this) }
     }
     private val names: Map<String, String> by lazy {
         HashMap<String, String>(856).apply { names1(this); names2(this) }
@@ -59,6 +59,7 @@ internal object HebrewText {
         m["A copy after every workout, in a folder you pick (another cloud app or the phone)"] = "עותק אחרי כל אימון, בתיקייה שתבחרו (אפליקציית ענן אחרת או הטלפון)"
         m["A copy of your data is kept first either way."] = "בכל מקרה נשמר קודם עותק של הנתונים שלכם."
         m["A couple of quick questions so the app can track your progress and suggest weights."] = "כמה שאלות קצרות, כדי שהאפליקציה תוכל לעקוב אחרי ההתקדמות שלכם ולהציע משקלים."
+        m["A few questions, so the app can build your plan and suggest your weights."] = "כמה שאלות, כדי שהאפליקציה תבנה לכם תוכנית ותציע משקלים."
         m["A file"] = "קובץ"
         m["A gym"] = "חדר כושר"
         m["A middle dose: growth keeps rising with sets, with smaller returns."] = "מינון בינוני: הגדילה ממשיכה לעלות עם עוד סטים, בתועלת שהולכת וקטנה."
@@ -330,6 +331,7 @@ internal object HebrewText {
         m["MUSCLES WORKED  ·  {0}"] = "שרירים שעבדו  ·  {0}"
         m["Made for the muscles you train: all of them each day, so each one gets {0} sessions a week."] = "בנוי לשרירים שאתם מאמנים: כולם בכל אימון, כך שכל אחד מקבל {0} אימונים בשבוע."
         m["Made for the muscles you train: split over the week so each one gets about two sessions."] = "בנוי לשרירים שאתם מאמנים: מחולקים על פני השבוע כך שכל אחד מקבל בערך שני אימונים."
+        m["Made from your answers. You can pick another split or build your own, here or later in Profile."] = "נבנתה מהתשובות שלכם. אפשר לבחור חלוקה אחרת או לבנות משלכם, כאן או אחר כך בפרופיל."
         m["Main"] = "עיקריים"
         m["Manage in Health Connect"] = "ניהול ב-Health Connect"
         m["Mark set done"] = "סימון הסט כבוצע"
@@ -371,11 +373,11 @@ internal object HebrewText {
         m["Newest · "] = "החדש ביותר · "
         m["Next"] = "הבא"
         m["Next month"] = "החודש הבא"
-        m["Next week"] = "השבוע הבא"
-        m["Next workout"] = "האימון הבא"
     }
 
     private fun ui2(m: HashMap<String, String>) {
+        m["Next week"] = "השבוע הבא"
+        m["Next workout"] = "האימון הבא"
         m["Next: {0}"] = "הבא: {0}"
         m["Next: {0} · {1}"] = "הבא: {0} · {1}"
         m["Nice work"] = "כל הכבוד"
@@ -627,6 +629,7 @@ internal object HebrewText {
         m["Try \"ppl\", \"upper lower\" or \"4 days\""] = "נסו \"ppl\", \"upper lower\" או \"4 days\""
         m["Try a different word, like \"row\" or \"cable\"."] = "נסו מילה אחרת, למשל \"חתירה\" או \"כבל\"."
         m["Turn off any muscles you'd rather not train. Your split and exercises are built around the rest."] = "כבו שרירים שאתם לא רוצים לאמן. החלוקה והתרגילים ייבנו סביב השאר."
+        m["Turn off muscles you'd rather not train, and mark anything to go easy on. Your plan is built around it."] = "כבו שרירים שלא תרצו לאמן, וסמנו במה להיזהר. התוכנית נבנית סביב זה."
         m["Two full-body days still train every muscle twice a week."] = "שני ימי גוף מלא עדיין מאמנים כל שריר פעמיים בשבוע."
         m["Two heavy days and two muscle-building days: strength and size together."] = "שני ימים כבדים ושני ימים לבניית שריר: כוח ונפח יחד."
         m["Under 6 months of lifting"] = "פחות מחצי שנה של אימונים"
@@ -688,6 +691,7 @@ internal object HebrewText {
         m["You skipped {0}: {1}"] = "דילגתם על {0}: {1}"
         m["Your automatic backups in {0}"] = "הגיבויים האוטומטיים שלכם ב-{0}"
         m["Your backups stay in Google Drive, but new workouts won't be backed up there."] = "הגיבויים נשארים ב-Google Drive, אבל אימונים חדשים לא יגובו לשם."
+        m["Your body"] = "הגוף שלכם"
         m["Your data becomes exactly what the backup holds."] = "הנתונים שלכם יהיו בדיוק מה שיש בגיבוי."
         m["Your edits to this workout won't be saved."] = "השינויים באימון הזה לא יישמרו."
         m["Your first set hit {0} at {1}. Get every set there, then move up."] = "הסט הראשון הגיע ל-{0} ב-{1}. הביאו לשם כל סט, ואז עלו."
@@ -699,6 +703,7 @@ internal object HebrewText {
         m["Your next weight"] = "המשקל הבא שלכם"
         m["Your next workout"] = "האימון הבא שלכם"
         m["Your numbers have dipped three sessions in a row. Go lighter {0}: {1}, and check your sleep and recovery."] = "המספרים ירדו שלושה אימונים ברצף. קחו משקל קל יותר {0}: {1}, ובדקו את השינה וההתאוששות."
+        m["Your plan"] = "התוכנית שלכם"
         m["Your split"] = "החלוקה שלכם"
         m["Your splits"] = "החלוקות שלכם"
         m["Your training"] = "האימונים שלכם"
@@ -721,14 +726,14 @@ internal object HebrewText {
         m["city buses"] = "אוטובוסים עירוניים"
         m["day"] = "יום"
         m["day a week"] = "יום בשבוע"
+    }
+
+    private fun ui3(m: HashMap<String, String>) {
         m["days"] = "ימים"
         m["days a week"] = "ימים בשבוע"
         m["distance"] = "מרחק"
         m["drop set"] = "דרופ סט"
         m["each week. Muscles that help in a lift count half a set, like biceps on rows or triceps on bench. "] = "בכל שבוע. שרירים שעוזרים בהרמה נספרים כחצי סט, כמו יד קדמית בחתירה או יד אחורית בלחיצת חזה. "
-    }
-
-    private fun ui3(m: HashMap<String, String>) {
         m["elephants"] = "פילים"
         m["est. 1-rep max"] = "1RM משוער"
         m["folder {0}"] = "תיקייה {0}"
