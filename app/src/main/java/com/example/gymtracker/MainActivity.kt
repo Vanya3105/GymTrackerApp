@@ -505,6 +505,8 @@ fun GymTrackerApp(
                             userProfile = LocalStorage.loadUserProfile(context)
                             weightHistory = LocalStorage.loadWeightHistory(context)
                             onUpdateSettings(LocalStorage.loadSettings(context))
+                            // The workout on screen is the one from before the restore: take the backup's, or none.
+                            reloadFromDisk.value()
                         },
                         onEditProgram = { haptics.tick(); editingProgramId = it },
                         onBuildSplit = { haptics.tick(); buildingSplit = it },
@@ -796,6 +798,7 @@ fun GymTrackerApp(
                         userProfile = LocalStorage.loadUserProfile(context)
                         weightHistory = LocalStorage.loadWeightHistory(context)
                         onUpdateSettings(LocalStorage.loadSettings(context))
+                        reloadFromDisk.value()
                         showOnboarding = needsSetup(userProfile) || needsTrainingQuestions(userProfile)
                         onboardingStart = if (!needsSetup(userProfile) && needsTrainingQuestions(userProfile)) 1 else 0
                         showWelcome = false

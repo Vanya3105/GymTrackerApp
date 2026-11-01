@@ -200,6 +200,7 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Neutral greys instead of warm cream/beige, near-black dark mode; the orange stays, kept for actions and progress
 - [x] Flat solid buttons (no gradient or coloured glow), lighter card shadows, 16 dp card corners, no gradient wash on the Up next card, neutral pill behind the selected tab, plain empty-state icon (no sparks)
 - [x] Simpler workout cards: one Add set button; drop sets and rest-pause stay in the set number's menu
+- [x] Fix: restoring a backup (Profile or the welcome screen) kept the workout that was open before it, with this phone's exercises under the restored split; it now takes the backup's workout, or none. Test: a restored backup brings back its own days, not ones fitted to this phone's answers
 
 ## Smart recommendations (branch `smart-recommendations`)
 - [x] Setup asks experience (new / some / experienced), goal (muscle / strength / fit), days a week, where you train (gym / dumbbells at home / bodyweight) and areas to go easy on (shoulders, knees, lower back). Stored in the profile JSON; old profiles have none and behave as before. Profile has a "Your training" card to change them

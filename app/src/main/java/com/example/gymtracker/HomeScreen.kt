@@ -191,7 +191,8 @@ private fun UpNextCard(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    val plannedCount = remember(split.title, isInProgress) {
+    // History is a new list after a restore, so the count is read again then too.
+    val plannedCount = remember(split.title, isInProgress, history) {
         if (isInProgress) 0 else LocalStorage.loadTemplateForSplit(context, split.title).size
     }
     val exerciseCount = if (isInProgress) activeExerciseCount else plannedCount
