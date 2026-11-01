@@ -271,6 +271,8 @@ fun GymTrackerApp(
     var exerciseInfoVersion by remember { mutableIntStateOf(0) }
     // The congratulations screen after Save.
     var celebration by remember { mutableStateOf<ShareData?>(null) }
+    // Another workout asked for while one is running: what to do with the running one.
+    var switchingTo by remember { mutableStateOf<WorkoutSplit?>(null) }
 
     val initialActive = remember { LocalStorage.loadActiveSession(context) }
     var activeSplit by remember {
@@ -373,9 +375,11 @@ fun GymTrackerApp(
 
     fun startWorkout(split: WorkoutSplit) {
         haptics.confirm()
-        if (activeSplit != null) {
-            // A workout is already running — just bring it back.
-            workoutExpanded = true
+        val running = activeSplit
+        if (running != null) {
+            // The same day: bring it back. Another one: ask what to do with this one first.
+            if (running.title == split.title) workoutExpanded = true
+            else switchingTo = split
             return
         }
         val entries = LocalStorage.loadTemplateForSplit(context, split.title).map { (exName, muscle) ->
@@ -390,14 +394,31 @@ fun GymTrackerApp(
     /** Starts with no exercises; the workout screen opens the exercise picker. */
     fun startQuickWorkout() {
         haptics.confirm()
-        if (activeSplit != null) {
-            workoutExpanded = true
+        val running = activeSplit
+        if (running != null) {
+            if (running.title == QUICK_WORKOUT_TITLE) workoutExpanded = true
+            else switchingTo = WorkoutSplit(QUICK_WORKOUT_TITLE, "", "")
             return
         }
         activeSplit = WorkoutSplit(QUICK_WORKOUT_TITLE, "", "")
         currentExercises = emptyList()
         workoutExpanded = true
         LocalStorage.saveActiveSession(context, QUICK_WORKOUT_TITLE, emptyList())
+    }
+
+    /** Ends the running workout (saved, or thrown away) and starts [next] in its place. */
+    fun switchWorkout(next: WorkoutSplit, save: Boolean) {
+        if (save) {
+            val saved = finishActiveWorkout(context, System.currentTimeMillis(), fromWidget = false)
+            history = LocalStorage.loadHistory(context)
+            if (saved != null) Toast.makeText(context, tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
+        } else {
+            LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
+            LocalStorage.saveActiveSession(context, null, emptyList())
+        }
+        activeSplit = null
+        currentExercises = emptyList()
+        if (next.title == QUICK_WORKOUT_TITLE) startQuickWorkout() else startWorkout(next)
     }
 
     fun discardActiveWorkout() {
@@ -830,6 +851,23 @@ fun GymTrackerApp(
             }
         }
 
+        switchingTo?.let { next ->
+            val current = activeSplit
+            if (current == null) {
+                switchingTo = null
+            } else {
+                val ticked = currentExercises.filter { !it.isSkipped }.sumOf { ex -> ex.sets.count { it.isCompleted } }
+                SwitchWorkoutDialog(
+                    currentTitle = workoutTitle(current.title),
+                    nextTitle = workoutTitle(next.title),
+                    tickedSets = ticked,
+                    onSave = { switchingTo = null; haptics.confirm(); switchWorkout(next, save = true) },
+                    onDiscard = { switchingTo = null; haptics.tick(); switchWorkout(next, save = false) },
+                    onKeep = { switchingTo = null; workoutExpanded = true }
+                )
+            }
+        }
+
         celebration?.let { c ->
             WorkoutCelebration(
                 data = c,
@@ -1233,6 +1271,54 @@ private fun TabHost(selected: AppTab, modifier: Modifier, content: @Composable (
                     )
                 ) { content(tab) }
             }
+        }
+    }
+}
+
+/** How a workout is named in a sentence: the day's name, or "Empty workout" for one started empty. */
+private fun workoutTitle(title: String) = if (title == QUICK_WORKOUT_TITLE) tr("Empty workout") else shown(title)
+
+/**
+ * Starting another workout while one runs: save this one (when a set is ticked) or throw it away
+ * and go on to [nextTitle], or keep going with this one.
+ */
+@Composable
+private fun SwitchWorkoutDialog(
+    currentTitle: String,
+    nextTitle: String,
+    tickedSets: Int,
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+    onKeep: () -> Unit
+) {
+    val P = LocalPalette.current
+    AppBottomSheet(onDismiss = onKeep) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp).navigationBarsPadding()) {
+            Text(tr("{0} is still going", currentTitle), style = AppType.title, color = P.textPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (tickedSets == 0) tr("Start {0} instead? Nothing is ticked in {1} yet.", nextTitle, currentTitle)
+                else tr("Start {0} instead? Save {1} first, or discard it.", nextTitle, currentTitle),
+                style = AppType.body,
+                color = P.textSecondary
+            )
+            Spacer(Modifier.height(20.dp))
+            if (tickedSets > 0) {
+                PrimaryButton(tr("Save and start {0}", nextTitle), onSave, Modifier.fillMaxWidth())
+                Text(
+                    if (tickedSets == 1) tr("Saves 1 set.") else tr("Saves {0} sets.", tickedSets),
+                    style = AppType.caption,
+                    color = P.textTertiary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                SecondaryButton(tr("Discard and start {0}", nextTitle), onDiscard, Modifier.fillMaxWidth(), contentColor = P.dangerText)
+            } else {
+                PrimaryButton(tr("Discard and start {0}", nextTitle), onDiscard, Modifier.fillMaxWidth())
+            }
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(tr("Keep {0}", currentTitle), onKeep, Modifier.fillMaxWidth())
         }
     }
 }

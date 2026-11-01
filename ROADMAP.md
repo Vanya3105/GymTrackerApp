@@ -196,6 +196,9 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Switching workouts (branch `switch-workout`, on top of `smart-plans`)
+- [x] Starting another day (or an empty workout) while one runs asks first: save it and start the new one (only when a set is ticked), discard it and start the new one, or keep it. Starting the day that's already running just opens it (it used to open the running one whatever was tapped)
+
 ## Smart plans (branch `smart-plans`, on top of `quiet-sets`)
 - [x] The recommended split is always built from the answers (`planWeek` in Recommendations.kt), not picked from the built-in ones: days and experience/goal choose the layout (full body, upper/lower, upper/lower/full, upper/lower + PPL, PPL), every big muscle at least twice a week; experience and goal set weekly hard sets per muscle (size 10/14/18, strength 8/10/12, fitness 6/8/10; arms, calves, core 60%), shared over the days, at most ~10 a session; goal picks the exercise lists, experience steps them up (goblet → back squat, pulldown → pull-up…), equipment / limits / skipped muscles fit them; a compound first, then the other kind (back: a pull-up and a row, leading in turn); each exercise gets its sets and reps as the day's target
 - [x] New question: session length (30/45/60/90 min), which caps exercises (about 4 to 9) and trims in order of what matters least

@@ -9,7 +9,7 @@ package com.example.gymtracker
  */
 internal object HebrewText {
     private val ui: Map<String, String> by lazy {
-        HashMap<String, String>(1572).apply { ui1(this); ui2(this); ui3(this) }
+        HashMap<String, String>(1588).apply { ui1(this); ui2(this); ui3(this) }
     }
     private val names: Map<String, String> by lazy {
         HashMap<String, String>(856).apply { names1(this); names2(this) }
@@ -181,6 +181,7 @@ internal object HebrewText {
         m["Delete {0}?"] = "למחוק את {0}?"
         m["Dips or pull-ups with a belt: log the added weight"] = "מקבילים או מתח עם חגורה: מתעדים את המשקל הנוסף"
         m["Discard"] = "מחיקה"
+        m["Discard and start {0}"] = "ביטול והתחלת {0}"
         m["Discard changes"] = "ביטול השינויים"
         m["Discard changes?"] = "לבטל את השינויים?"
         m["Discard this workout?"] = "למחוק את האימון הזה?"
@@ -288,6 +289,7 @@ internal object HebrewText {
         m["Keep going"] = "להמשיך"
         m["Keep it"] = "להשאיר"
         m["Keep screen on"] = "מסך דולק"
+        m["Keep {0}"] = "להמשיך ב{0}"
         m["Keep “{0}”"] = "להשאיר את „{0}”"
         m["Kilograms (kg)"] = "קילוגרם (ק״ג)"
         m["Knees"] = "ברכיים"
@@ -371,11 +373,11 @@ internal object HebrewText {
         m["Next: {0}"] = "הבא: {0}"
         m["Next: {0} · {1}"] = "הבא: {0} · {1}"
         m["Nice work"] = "כל הכבוד"
-        m["No background: save it, then add it as a sticker over your own photo or video."] = "בלי רקע: שמרו אותה, ואז הוסיפו אותה כמדבקה על תמונה או סרטון שלכם."
-        m["No backup there yet"] = "עוד אין שם גיבוי"
     }
 
     private fun ui2(m: HashMap<String, String>) {
+        m["No background: save it, then add it as a sticker over your own photo or video."] = "בלי רקע: שמרו אותה, ואז הוסיפו אותה כמדבקה על תמונה או סרטון שלכם."
+        m["No backup there yet"] = "עוד אין שם גיבוי"
         m["No backups in this Google account yet."] = "עוד אין גיבויים בחשבון Google הזה."
         m["No bar"] = "בלי מוט"
         m["No change {0}"] = "ללא שינוי {0}"
@@ -492,9 +494,12 @@ internal object HebrewText {
         m["Same volume as your last {0}"] = "אותו נפח כמו ב-{0} הקודם"
         m["Save"] = "שמירה"
         m["Save a backup file"] = "שמירת קובץ גיבוי"
+        m["Save and start {0}"] = "שמירה והתחלת {0}"
         m["Save changes"] = "שמירת השינויים"
         m["Save workout"] = "שמירת האימון"
         m["Saved to Pictures/GymTracker"] = "נשמר ב-Pictures/GymTracker"
+        m["Saves 1 set."] = "נשמר סט אחד."
+        m["Saves {0} sets."] = "נשמרים {0} סטים."
         m["Saves {0}, {1}."] = "נשמרים {0}, {1}."
         m["Search exercises"] = "חיפוש תרגילים"
         m["Search splits"] = "חיפוש חלוקות"
@@ -551,6 +556,8 @@ internal object HebrewText {
         m["Start training"] = "להתחיל להתאמן"
         m["Start workout"] = "התחלת אימון"
         m["Start {0}"] = "התחלת {0}"
+        m["Start {0} instead? Nothing is ticked in {1} yet."] = "להתחיל {0} במקום? עוד לא סומן כלום ב{1}."
+        m["Start {0} instead? Save {1} first, or discard it."] = "להתחיל {0} במקום? קודם שמרו את {1}, או בטלו אותו."
         m["Started at {0}; the program has added the rest"] = "התחיל ב-{0}; את השאר הוסיפה התוכנית"
         m["Still training?"] = "עדיין מתאמנים?"
         m["Stop"] = "הפסקה"
@@ -719,6 +726,9 @@ internal object HebrewText {
         m["grand pianos"] = "פסנתרי כנף"
         m["half a set, like biceps on rows or triceps on bench."] = "כחצי סט, כמו יד קדמית בחתירה או יד אחורית בלחיצת חזה."
         m["helped by "] = "בעזרת "
+    }
+
+    private fun ui3(m: HashMap<String, String>) {
         m["in {0}"] = "ב{0}"
         m["just now"] = "הרגע"
         m["last set: as many reps as you can"] = "סט אחרון: כמה שיותר חזרות"
@@ -726,9 +736,6 @@ internal object HebrewText {
         m["least help"] = "הכי מעט סיוע"
         m["lifted"] = "הורמו"
         m["longest"] = "הכי ארוך"
-    }
-
-    private fun ui3(m: HashMap<String, String>) {
         m["most reps"] = "הכי הרבה חזרות"
         m["nSuns {0}"] = "nSuns {0}"
         m["new best"] = "שיא חדש"
@@ -772,6 +779,7 @@ internal object HebrewText {
         m["{0} for {1} {2}. Stay there and add a rep; move up once every set hits {3}."] = "{0} ל-{1} {2}. הישארו שם והוסיפו חזרה; עלו כשכל סט מגיע ל-{3}."
         m["{0} in progress"] = "{0} בתהליך"
         m["{0} in total"] = "{0} בסך הכול"
+        m["{0} is still going"] = "{0} עדיין פעיל"
         m["{0} left"] = "נשארו {0}"
         m["{0} lifted"] = "{0} הורמו"
         m["{0} min"] = "{0} דק׳"
