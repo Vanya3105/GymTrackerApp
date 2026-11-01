@@ -63,6 +63,8 @@ object TrainingProfile {
 /** The split that fits [profile]'s days, experience, goal and equipment, with why. */
 fun recommendedProgram(profile: UserProfile): Pair<String, String>? {
     if (!profile.answered) return null
+    // Built-in splits train everything; without some of the big muscles a split is made instead.
+    if (profile.skipMuscles.any { it in MAJOR_MUSCLES }) return RECOMMENDED_PLAN_ID to planReason(profile)
     val level = profile.experience!!
     val goal = profile.goal!!
     val days = profile.daysPerWeek.takeIf { it > 0 } ?: if (level == Experience.BEGINNER) 3 else 4
@@ -289,14 +291,17 @@ private fun dayCap(level: Experience?): Int = if (level == Experience.BEGINNER) 
  * and goal. Exercises with nothing suitable to swap to are dropped. Without answers it's unchanged.
  */
 fun personalize(exercises: List<Pair<String, String>>, profile: UserProfile): List<Pair<String, String>> {
-    if (!profile.answered && profile.equipment == null && profile.limits.isEmpty()) return exercises
+    if (!profile.answered && profile.equipment == null && profile.limits.isEmpty() && profile.skipMuscles.isEmpty()) return exercises
     val avoid = profile.limits.flatMap { HARD_ON[it].orEmpty() }.toSet()
-    fun ok(name: String) = fitsEquipment(name, profile.equipment) && name.lowercase(Locale.US) !in avoid && ExerciseDatabase.find(name) != null
+    fun skipped(name: String, muscle: String) = (ExerciseDatabase.find(name)?.muscle ?: muscle) in profile.skipMuscles
+    fun ok(name: String) = fitsEquipment(name, profile.equipment) && name.lowercase(Locale.US) !in avoid &&
+        ExerciseDatabase.find(name).let { it != null && it.muscle !in profile.skipMuscles }
     val out = ArrayList<Pair<String, String>>()
     // A swap mustn't land on an exercise already picked, or one further down the day that stays.
     fun free(name: String) = out.none { exerciseKey(it.first) == exerciseKey(name) } &&
         exercises.none { exerciseKey(it.first) == exerciseKey(name) && ok(it.first) }
     for ((original, muscle) in exercises) {
+        if (skipped(original, muscle)) continue
         var name = original
         if (profile.experience == Experience.BEGINNER) BEGINNER_EASIER[name]?.takeIf { ok(it) && free(it) }?.let { name = it }
         if (profile.goal == TrainingGoal.MUSCLE) FOR_MUSCLE[name]?.takeIf { ok(it) && free(it) }?.let { name = it }
@@ -337,4 +342,81 @@ fun daySubtitle(split: WorkoutSplit, profile: UserProfile = TrainingProfile.curr
     val fitted = personalize(base, profile)
     if (base.isEmpty() || fitted == base) return shown(split.subtitle)
     return fitted.map { it.second }.distinct().take(4).joinToString(", ") { shown(it) }
+}
+
+// --- A split for the muscles someone trains ---
+
+const val RECOMMENDED_PLAN_ID = "recommended-plan"
+
+/** Skipping any of these changes what a week should look like; skipping the rest just drops a few exercises. */
+internal val MAJOR_MUSCLES = setOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes")
+private val PUSH_MUSCLES = setOf("Chest", "Shoulders", "Triceps")
+private val PULL_MUSCLES = setOf("Back", "Biceps", "Forearms")
+private val LEG_MUSCLES = setOf("Quads", "Hamstrings", "Glutes", "Calves")
+
+fun trainedMuscles(profile: UserProfile): Set<String> = BUILDER_MUSCLES.filter { it !in profile.skipMuscles }.toSet()
+
+/**
+ * The muscles of each day of a [days]-day week that trains [muscles], aiming at every muscle
+ * about twice a week (the frequency the research supports, see the top):
+ * - up to 3 days, or one kind of muscle only: the same muscles every day (full body);
+ * - push and pull muscles only: push and pull days, alternating;
+ * - one upper kind and legs: the two, alternating;
+ * - upper and legs on 4 days: upper / lower twice; on 5: upper, lower, push, pull, legs; on 6: push, pull, legs twice.
+ * Core goes with the leg days, or the pull days when there are none.
+ */
+internal fun planDays(trained: Set<String>, days: Int): List<Set<String>> {
+    // Rows, pull-ups and curls already work the grip hard; forearms get their own work only without them.
+    val muscles = if ("Back" in trained || "Biceps" in trained) trained - "Forearms" else trained
+    val push = muscles intersect PUSH_MUSCLES
+    val pull = muscles intersect PULL_MUSCLES
+    val legs = muscles intersect LEG_MUSCLES
+    val kinds = listOf(push, pull, legs).filter { it.isNotEmpty() }
+    if (kinds.size <= 1 || days <= 3) return List(days) { muscles }
+    val upper = push + pull
+    val week = when {
+        legs.isEmpty() -> listOf(push, pull)
+        kinds.size == 2 -> listOf(kinds[0], legs)
+        days == 4 -> listOf(upper, legs)
+        days == 5 -> listOf(upper, legs, push, pull, legs)
+        else -> listOf(push, pull, legs)
+    }
+    val coreWith = if (legs.isNotEmpty()) legs else pull
+    return List(days) { i -> week[i % week.size].let { d -> if ("Core" in muscles && d == coreWith) d + "Core" else d } }
+}
+
+private fun planReason(profile: UserProfile): String {
+    val days = profile.daysPerWeek.takeIf { it > 0 } ?: 3
+    val split = planDays(trainedMuscles(profile), days)
+    return if (split.distinct().size == 1) tr("Made for the muscles you train: all of them each day, so each one gets {0} sessions a week.", days)
+    else tr("Made for the muscles you train: split over the week so each one gets about two sessions.")
+}
+
+/** A split for the muscles [profile] trains, when it skips big ones; null otherwise. Day exercises come from [planDayExercises]. */
+fun generatedPlan(profile: UserProfile): SplitProgramInfo? {
+    if (!profile.answered || profile.skipMuscles.none { it in MAJOR_MUSCLES }) return null
+    val muscles = trainedMuscles(profile).ifEmpty { return null }
+    val days = profile.daysPerWeek.takeIf { it > 0 } ?: 3
+    val dayMuscles = planDays(muscles, days)
+    // Named by the main muscles: core riding along on pull days shouldn't turn "Pull" into "Upper".
+    val titles = uniqueDayTitles(dayMuscles.mapIndexed { i, m -> dayTitleFor((m - "Core").ifEmpty { m }, i) })
+    return SplitProgramInfo(
+        id = RECOMMENDED_PLAN_ID,
+        name = "Your plan",
+        tagline = "",
+        weeklyGoal = days,
+        splits = titles.mapIndexed { i, t -> WorkoutSplit(t, BUILDER_MUSCLES.filter { it in dayMuscles[i] }.joinToString(", "), "%02d".format(i + 1)) }
+    )
+}
+
+/**
+ * A plan day's exercises: the built-in day of that name when there is one and it still covers the
+ * day's muscles once fitted, else starter exercises for them.
+ */
+fun planDayExercises(day: WorkoutSplit, profile: UserProfile, index: Int): List<Pair<String, String>> {
+    val muscles = day.subtitle.split(", ").filter { it.isNotBlank() }.toSet()
+    val builtIn = personalize(defaultTemplateForSplit(day.title), profile)
+    if (builtIn.isNotEmpty() && muscles.all { m -> m == "Core" || builtIn.any { it.second == m } }) return builtIn
+    val variant = day.title.substringAfterLast(' ', "").singleOrNull()?.takeIf { it in 'A'..'G' }?.let { it - 'A' } ?: 0
+    return personalize(starterExercises(muscles, variant), profile).ifEmpty { personalize(starterExercises(muscles, index), profile) }
 }

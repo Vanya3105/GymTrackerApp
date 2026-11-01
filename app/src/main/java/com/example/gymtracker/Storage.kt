@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -249,7 +250,9 @@ object LocalStorage {
             goal = enumOf(TrainingGoal.entries, "goal"),
             equipment = enumOf(Equipment.entries, "equipment"),
             daysPerWeek = obj.optInt("daysPerWeek", 0),
-            limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet()
+            limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet(),
+            skipMuscles = obj.optJSONArray("skipMuscles").let { a -> (0 until (a?.length() ?: 0)).map { a!!.optString(it) }.filter { it in BUILDER_MUSCLES }.toSet() },
+            trainingAsked = obj.optBoolean("trainingAsked", false)
         ).also { TrainingProfile.current = it }
     }
 
@@ -264,6 +267,8 @@ object LocalStorage {
             profile.equipment?.let { put("equipment", it.name) }
             if (profile.daysPerWeek > 0) put("daysPerWeek", profile.daysPerWeek)
             if (profile.limits.isNotEmpty()) put("limits", JSONArray(profile.limits.map { it.name }))
+            if (profile.skipMuscles.isNotEmpty()) put("skipMuscles", JSONArray(profile.skipMuscles.toList()))
+            if (profile.trainingAsked) put("trainingAsked", true)
         })
         TrainingProfile.current = profile
     }
@@ -718,6 +723,32 @@ object LocalStorage {
 
     /** A built-in day's exercises, fitted to the setup answers. */
     private fun builtInDay(splitTitle: String) = personalize(defaultTemplateForSplit(splitTitle), TrainingProfile.current)
+
+    /**
+     * Saves the split made for [profile]'s muscles (see [generatedPlan]) under its fixed id,
+     * replacing an earlier one. Each day keeps the exercises it already has if its name is taken by
+     * a day the user saved with something else, it gets a new name instead.
+     */
+    fun saveGeneratedPlan(context: Context, profile: UserProfile): SplitProgramInfo? {
+        val plan = generatedPlan(profile) ?: return null
+        val saved = data(context).templates
+        val previous = data(context).programs.find { it.id == RECOMMENDED_PLAN_ID }?.splits.orEmpty().map { it.title }.toSet()
+        val used = HashSet<String>()
+        val days = plan.splits.mapIndexed { i, day ->
+            val exercises = planDayExercises(day, profile, i)
+            var title = day.title
+            var n = 2
+            // A day of the user's own (not an earlier version of this plan) keeps its name and exercises.
+            while (!used.add(title.lowercase(Locale.US)) ||
+                (title !in previous && saved[title] != null && saved[title] != exercises && saved[title] != builtInDay(title))
+            ) title = "${day.title} ${n++}"
+            saveTemplateForSplit(context, title, exercises)
+            day.copy(title = title)
+        }
+        val program = plan.copy(splits = days)
+        saveProgram(context, program)
+        return program
+    }
 
     /**
      * After the setup answers change: built-in days nobody has edited (still exactly what the old

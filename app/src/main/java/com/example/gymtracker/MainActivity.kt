@@ -190,6 +190,11 @@ enum class AppTab(val label: String, val icon: ImageVector, val idleIcon: ImageV
 private fun <T> List<T>.moved(fromIdx: Int, toIdx: Int): List<T> =
     toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
 
+private fun needsSetup(p: UserProfile) = !p.hasCompletedOnboarding || p.currentWeightKg <= 0f
+
+/** Set up before the training questions existed and not asked them yet. */
+private fun needsTrainingQuestions(p: UserProfile) = p.hasCompletedOnboarding && p.experience == null && !p.trainingAsked
+
 /** Builds the logbook entry; PRs are judged only against workouts logged before this one. */
 internal fun buildCompletedWorkout(base: CompletedWorkout, exercises: List<ExerciseEntry>, history: List<CompletedWorkout>, editing: Boolean = false): CompletedWorkout {
     // An edit keeps what is there: a set added to an old workout is rarely ticked.
@@ -249,9 +254,9 @@ fun GymTrackerApp(
     val activeProgram = programFor(userProfile.splitProgram)
     val splits = activeProgram.splits
 
-    var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
-    // 1 when Profile reopens it on the training questions.
-    var onboardingStart by remember { mutableIntStateOf(0) }
+    var showOnboarding by remember { mutableStateOf(needsSetup(userProfile) || needsTrainingQuestions(userProfile)) }
+    // 1 when it opens on the training questions (from Profile, or once for people set up before they existed).
+    var onboardingStart by remember { mutableIntStateOf(if (!needsSetup(userProfile) && needsTrainingQuestions(userProfile)) 1 else 0) }
     // Only on a new phone; saved so it survives the restart when the language changes.
     var showWelcome by rememberSaveable { mutableStateOf(!userProfile.hasCompletedOnboarding) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
@@ -751,7 +756,14 @@ fun GymTrackerApp(
                     onSelectUnit = { onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) },
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
-                    onBack = { showOnboarding = false; onboardingStart = 0 },
+                    onBack = {
+                        // Asked once; Profile can bring the questions back.
+                        if (needsTrainingQuestions(userProfile)) {
+                            userProfile = userProfile.copy(trainingAsked = true)
+                            LocalStorage.saveUserProfile(context, userProfile)
+                        }
+                        showOnboarding = false; onboardingStart = 0
+                    },
                     onBuildSplit = { haptics.tick(); buildingSplit = it },
                     startStep = onboardingStart,
                     onSaveProfile = { newProfile ->
@@ -760,6 +772,7 @@ fun GymTrackerApp(
                         userProfile = newProfile
                         LocalStorage.saveUserProfile(context, newProfile)
                         LocalStorage.refitBuiltInDays(context, old, newProfile)
+                        if (newProfile.splitProgram == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, newProfile)
                         if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
                         showOnboarding = false
                         onboardingStart = 0
@@ -783,7 +796,8 @@ fun GymTrackerApp(
                         userProfile = LocalStorage.loadUserProfile(context)
                         weightHistory = LocalStorage.loadWeightHistory(context)
                         onUpdateSettings(LocalStorage.loadSettings(context))
-                        showOnboarding = !userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f
+                        showOnboarding = needsSetup(userProfile) || needsTrainingQuestions(userProfile)
+                        onboardingStart = if (!needsSetup(userProfile) && needsTrainingQuestions(userProfile)) 1 else 0
                         showWelcome = false
                     }
                 )

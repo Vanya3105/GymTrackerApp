@@ -59,6 +59,8 @@ fun OnboardingScreen(
     var equipment by remember { mutableStateOf(initialProfile.equipment) }
     var days by remember { mutableIntStateOf(initialProfile.daysPerWeek.takeIf { it > 0 } ?: 3) }
     var limits by remember { mutableStateOf(initialProfile.limits) }
+    var skip by remember { mutableStateOf(initialProfile.skipMuscles) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     // Picked by hand on the last step, so a recommendation no longer replaces it.
     var splitChosen by remember { mutableStateOf(initialProfile.hasCompletedOnboarding) }
     fun answers() = initialProfile.copy(
@@ -66,11 +68,16 @@ fun OnboardingScreen(
         age = age.toIntOrNull() ?: 0,
         currentWeightKg = weightKg.toFloatOrNull() ?: 0f,
         splitProgram = program,
-        experience = experience, goal = goal, equipment = equipment, daysPerWeek = days, limits = limits
+        experience = experience, goal = goal, equipment = equipment, daysPerWeek = days, limits = limits,
+        skipMuscles = skip, trainingAsked = true
     )
     val recommended = recommendedProgram(answers())
+    // A split made for these muscles is saved as the user's own, so it can be picked and shown.
+    val plan = remember(experience, goal, equipment, days, limits, skip) { generatedPlan(answers()) }
     LaunchedEffect(step) {
-        if (step == LAST_STEP && !splitChosen) recommended?.let { program = it.first }
+        if (step != LAST_STEP) return@LaunchedEffect
+        if (recommended?.first == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, answers())
+        if (!splitChosen) recommended?.let { program = it.first }
     }
     val back: () -> Unit = { if (step > startStep) step-- else onBack() }
 
@@ -197,13 +204,24 @@ fun OnboardingScreen(
                         style = AppType.caption,
                         color = P.textTertiary
                     )
+                } else if (s == 3) {
+                    Text(tr("What do you want to train?"), style = AppType.display, color = P.textPrimary)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Turn off any muscles you'd rather not train. Your split and exercises are built around the rest."),
+                        style = AppType.body,
+                        color = P.textSecondary
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
                 } else {
                     Text(tr("How do you train?"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
                     Text(tr("Find your split, or build your own. You can change it any time in Profile."), style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(20.dp))
                     recommended?.let { (id, why) ->
-                        RecommendedSplit(programFor(id).name, why, chosen = program == id) {
+                        val info = if (id == RECOMMENDED_PLAN_ID) plan ?: programFor(id) else programFor(id)
+                        RecommendedSplit(info.name, info.splits.map { it.title }, why, chosen = program == id) {
                             haptics.tick(); program = id; splitChosen = true
                         }
                         Spacer(Modifier.height(16.dp))
@@ -225,6 +243,7 @@ fun OnboardingScreen(
                 0 -> ageOk && weightOk
                 1 -> experience != null && goal != null
                 2 -> days > 0 && equipment != null
+                3 -> skip.size < BUILDER_MUSCLES.size
                 else -> true
             },
             onClick = {
@@ -244,7 +263,7 @@ fun OnboardingScreen(
     }
 }
 
-private const val LAST_STEP = 3
+private const val LAST_STEP = 4
 
 /** One answer of a few, as a full-width card with a title and a line under it. */
 @Composable
@@ -273,7 +292,7 @@ private fun OptionCard(title: String, detail: String, selected: Boolean, onClick
 @Composable
 private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, onToggle: (T) -> Unit) {
     val P = LocalPalette.current
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (value, label) ->
             val on = value in selected
             Text(
@@ -290,9 +309,43 @@ private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, on
     }
 }
 
+/**
+ * Every muscle group as a chip, on when trained. The upper body, legs and core come in groups,
+ * each with a shortcut to turn the whole group off or on (skipping legs is common).
+ */
+@Composable
+private fun MuscleGroupToggles(skip: Set<String>, onChange: (Set<String>) -> Unit) {
+    val P = LocalPalette.current
+    val groups = listOf(
+        tr("Upper body") to listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Forearms"),
+        tr("Legs") to listOf("Quads", "Hamstrings", "Glutes", "Calves"),
+        "" to listOf("Core")
+    )
+    groups.forEach { (title, muscles) ->
+        val allOff = muscles.all { it in skip }
+        // A group of one (core) is just its chip, without a heading repeating its name.
+        if (muscles.size > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+                Text(
+                    if (allOff) tr("Train all") else tr("Skip all"),
+                    style = AppType.label,
+                    color = P.accentPrimary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onChange(if (allOff) skip - muscles.toSet() else skip + muscles) }.padding(8.dp)
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        ToggleChips(muscles.map { it to shown(it) }, muscles.filter { it !in skip }.toSet()) { m ->
+            onChange(if (m in skip) skip - m else skip + m)
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
 /** The split the answers point to, with why; tapping it picks it. */
 @Composable
-private fun RecommendedSplit(name: String, why: String, chosen: Boolean, onUse: () -> Unit) {
+private fun RecommendedSplit(name: String, days: List<String>, why: String, chosen: Boolean, onUse: () -> Unit) {
     val P = LocalPalette.current
     Column(
         Modifier
@@ -305,6 +358,8 @@ private fun RecommendedSplit(name: String, why: String, chosen: Boolean, onUse: 
         Text(if (chosen) tr("Recommended for you") else tr("Recommended for you: {0}", shown(name)), style = AppType.label, color = P.accentPrimary)
         Spacer(Modifier.height(4.dp))
         Text(why, style = AppType.body, color = P.textPrimary)
+        Spacer(Modifier.height(6.dp))
+        Text(days.joinToString(" · ") { shown(it) }, style = AppType.caption, color = P.textSecondary)
         if (!chosen) {
             Spacer(Modifier.height(8.dp))
             Text(tr("Tap to use it"), style = AppType.label, color = P.accentPrimary)

@@ -141,6 +141,9 @@ fun SettingsScreen(
                         style = AppType.bodyStrong,
                         color = P.textPrimary
                     )
+                    if (p.skipMuscles.isNotEmpty()) {
+                        Text(tr("Not training: {0}", BUILDER_MUSCLES.filter { it in p.skipMuscles }.joinToString(", ") { shown(it) }), style = AppType.caption, color = P.textSecondary)
+                    }
                     if (p.limits.isNotEmpty()) {
                         Text(tr("Going easy on: {0}", p.limits.joinToString(", ") { it.label }), style = AppType.caption, color = P.textSecondary)
                     }

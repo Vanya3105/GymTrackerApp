@@ -14,7 +14,11 @@ data class UserProfile(
     val goal: TrainingGoal? = null,
     val equipment: Equipment? = null,
     val daysPerWeek: Int = 0,
-    val limits: Set<Limit> = emptySet()
+    val limits: Set<Limit> = emptySet(),
+    /** Muscle groups (as in [BUILDER_MUSCLES]) the user doesn't want to train. */
+    val skipMuscles: Set<String> = emptySet(),
+    /** The training questions were shown once to someone set up before they existed. */
+    val trainingAsked: Boolean = false
 )
 
 @Immutable

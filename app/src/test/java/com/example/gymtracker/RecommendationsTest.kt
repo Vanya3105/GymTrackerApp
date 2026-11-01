@@ -77,4 +77,41 @@ class RecommendationsTest {
         assertEquals(Prescription(5, 3, 6, 180), prescriptionFor(strong, "Deadlift"))
         assertEquals(Prescription(3, 8, 12, 90), prescriptionFor(strong, "Lateral Raise"))
     }
+
+    @Test
+    fun skippingBigMusclesMakesAPlanThatTrainsTheRestTwiceAWeek() {
+        val skips = listOf(
+            setOf("Quads", "Hamstrings", "Glutes", "Calves"), setOf("Chest"), setOf("Chest", "Shoulders", "Triceps"),
+            setOf("Back", "Biceps"), setOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Forearms")
+        )
+        for (skip in skips) for (days in 2..6) for (eq in Equipment.entries) {
+            val p = UserProfile(experience = Experience.INTERMEDIATE, goal = TrainingGoal.MUSCLE, equipment = eq, daysPerWeek = days, skipMuscles = skip)
+            assertEquals(RECOMMENDED_PLAN_ID, recommendedProgram(p)!!.first)
+            val plan = generatedPlan(p)!!
+            assertEquals(days, plan.splits.size)
+            val dayMuscles = plan.splits.map { it.subtitle.split(", ").toSet() }
+            for (m in trainedMuscles(p) - "Core" - "Forearms" - "Calves") {
+                assertTrue("$m only ${dayMuscles.count { m in it }}x in $days days skipping $skip", dayMuscles.count { m in it } >= minOf(2, days))
+            }
+            plan.splits.forEachIndexed { i, day ->
+                val ex = planDayExercises(day, p, i)
+                assertTrue("${day.title} empty, $eq skipping $skip", ex.isNotEmpty())
+                ex.forEach { (name, muscle) -> assertTrue("$name on ${day.title} trains skipped $muscle", muscle !in skip) }
+            }
+        }
+    }
+
+    @Test
+    fun skippingSmallMusclesKeepsBuiltInSplitsWithoutThem() {
+        val p = beginner.copy(skipMuscles = setOf("Calves", "Core"))
+        assertEquals("FULL_BODY", recommendedProgram(p)!!.first)
+        val legs = personalize(defaultTemplateForSplit("Legs A"), p)
+        assertTrue(legs.none { it.second == "Calves" })
+    }
+
+    @Test
+    fun noLegsOnFourDaysIsPushPull() {
+        val p = beginner.copy(experience = Experience.INTERMEDIATE, daysPerWeek = 4, skipMuscles = setOf("Quads", "Hamstrings", "Glutes", "Calves"))
+        assertEquals(listOf("Push A", "Pull A", "Push B", "Pull B"), generatedPlan(p)!!.splits.map { it.title })
+    }
 }
