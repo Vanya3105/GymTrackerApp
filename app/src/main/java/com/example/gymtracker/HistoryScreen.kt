@@ -169,7 +169,10 @@ private fun WeekView(
             Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatTile("${week.workouts.size}", if (week.workouts.size == 1) tr("Workout") else tr("Workouts"), Modifier.weight(1f))
                 StatTile("${stats.sumOf { it.workSets }}", tr("Sets"), Modifier.weight(1f))
-                StatTile(formatVolume(stats.sumOf { it.volumeKg }), tr("Volume"), Modifier.weight(1f))
+                // Bodyweight weeks lift no weight: "0 kg" says nothing, the reps do.
+                val volume = stats.sumOf { it.volumeKg }
+                if (volume > 0) StatTile(formatVolume(volume), tr("Volume"), Modifier.weight(1f))
+                else StatTile("${week.workouts.sumOf { totalWorkReps(it.exercises) }}", tr("Reps"), Modifier.weight(1f))
             }
         }
         AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_list") { offset ->
@@ -410,7 +413,7 @@ fun WorkoutHistoryCard(
         }
         if (workout.skippedExercises.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(tr("Skipped: {0}", workout.skippedExercises.joinToString(", ")), style = AppType.caption, color = P.warningText)
+            Text(tr("Skipped: {0}", workout.skippedExercises.joinToString(", ") { shown(it) }), style = AppType.caption, color = P.warningText)
         }
         val bitmap = photo.bitmap
         if (bitmap != null && workout.photoPath != null) {

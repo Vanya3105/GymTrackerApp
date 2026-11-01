@@ -192,6 +192,10 @@ fun performedExercises(exercises: List<ExerciseEntry>): List<ExerciseEntry> {
     return ticked(warmUpsCount = false).ifEmpty { ticked(warmUpsCount = true) }
 }
 
+/** Reps of all work sets: the total to show instead of volume when nothing was lifted with weight. */
+fun totalWorkReps(exercises: List<ExerciseEntry>): Int =
+    exercises.filter { !it.isSkipped }.sumOf { ex -> ex.sets.filter { it.isValidWorkSet(ex.type) }.sumOf { it.repCount } }
+
 fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): WorkoutStats {
     var workSets = 0
     var volume = 0f

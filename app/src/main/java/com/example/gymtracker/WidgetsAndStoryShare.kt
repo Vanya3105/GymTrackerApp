@@ -786,7 +786,8 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
             val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
             val done = week.completedCoreSplits.size
             val goal = week.weeklyGoal.coerceAtLeast(1)
-            val volume = if ("volume" in settings.options) formatVolume(week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }) else null
+            // Nothing lifted with weight yet (or bodyweight only): no "0 kg" in the corner.
+            val volume = if ("volume" in settings.options) week.workouts.sumOf { computeWorkoutStats(it.exercises, emptyList()).volumeKg }.takeIf { it > 0 }?.let(::formatVolume) else null
             val next = if ("next" in settings.options && done < goal) tr("Next: {0}", shown(week.recommendedSplit)) else null
             // A narrow widget has no room for the volume next to the label; it goes under the ring.
             val narrow = wDp < 230

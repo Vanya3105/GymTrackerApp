@@ -1399,7 +1399,8 @@ private fun FinishSheet(
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountUpTile(stats.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
+                if (stats.volumeKg > 0) CountUpTile(stats.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
+                else CountUpTile(totalWorkReps(counted).toFloat(), { "${it.roundToInt()}" }, tr("Reps"), Modifier.weight(1f).enterAnimation(3), delayMillis = 250)
                 CountUpTile(
                     stats.prCount.toFloat(), { "${it.roundToInt()}" }, tr("New bests"), Modifier.weight(1f).enterAnimation(4), delayMillis = 300,
                     valueColor = if (stats.prCount > 0) P.warningText else null

@@ -202,6 +202,9 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] History: while swiping weeks or months, the page sliding out keeps its own week / month (it showed the new one); a month whose calendar doesn't hold the picked day lists its own workouts instead of that day's
 - [x] An exercise with only its warm-up ticked is saved as skipped (History showed "0 ×"); a workout of warm-ups only still saves them
 - [x] Lint errors cleared: byte-order marks written as escapes, a `remember` that returned nothing
+- [x] Bodyweight workouts show their reps instead of "0 kg" volume (History week, finish sheet, celebration); the weekly widget leaves the volume out at 0
+- [x] Hebrew: skipped exercises in History and the muscle names on share images were still in English
+- [x] Checked the release (shrunk) build on the emulator: setup, a workout, finish, History, Progress, exercise page, switching to Hebrew; no crashes
 
 ## Design refresh (branch `design-refresh`, on top of `smart-recommendations`)
 - [x] Neutral greys instead of warm cream/beige, near-black dark mode; the orange stays, kept for actions and progress

@@ -77,6 +77,8 @@ data class ShareData(
     val durationSeconds: Long,
     val workSets: Int,
     val volumeKg: Int,
+    /** Reps of the work sets, shown instead of volume for bodyweight workouts. */
+    val reps: Int = 0,
     val lifts: List<ShareLift>,
     val bests: List<ShareBest>,
     /** Sets per muscle group, most first; assisting muscles count half, as recovery counts them. */
@@ -150,6 +152,7 @@ fun buildShareData(
         durationSeconds = durationSeconds,
         workSets = stats.workSets,
         volumeKg = stats.volumeKg,
+        reps = totalWorkReps(done),
         lifts = lifts,
         bests = bests,
         muscles = muscles,
@@ -363,7 +366,7 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
     drawOverline(canvas, ink, tr("{0}  ·  WORKOUT {1}", shortDate(d.whenMillis), d.workoutNumber), y)
     y += if (onPhoto) 120f else 150f
     canvas.drawText(d.title, L, y, ink.type(ink.text, 132f, 800).fit(d.title, R - L))
-    val focus = d.muscles.take(3).joinToString(", ") { it.first }
+    val focus = d.muscles.take(3).joinToString(", ") { shown(it.first) }
     if (focus.isNotEmpty()) {
         y += 70f
         canvas.drawText(focus, L, y, ink.type(ink.muted, 42f, 450).fit(focus, R - L))
@@ -465,7 +468,8 @@ private fun drawBests(canvas: Canvas, ink: Ink, d: ShareData) {
 
 private fun drawMuscles(canvas: Canvas, ink: Ink, d: ShareData) {
     drawOverline(canvas, ink, tr("MUSCLES WORKED  ·  {0}", d.title.uppercase(Locale.US)), 330f)
-    val (top, topSets) = d.muscles.first()
+    val (topKey, topSets) = d.muscles.first()
+    val top = shown(topKey)
     canvas.drawText(top, L, 500f, ink.type(ink.text, 150f, 800).fit(top, R - L))
     canvas.drawText(tr("worked most, {0}", setsText(topSets)), L, 570f, ink.type(ink.muted, 42f, 450))
 
@@ -476,7 +480,7 @@ private fun drawMuscles(canvas: Canvas, ink: Ink, d: ShareData) {
     val rowH = ((1560f - y) / rows.size).coerceIn(124f, 210f)
     val barH = if (rowH > 160f) 34f else 22f
     rows.forEachIndexed { i, (muscle, sets) ->
-        canvas.drawText(muscle, L, y, ink.type(ink.text, if (rowH > 160f) 52f else 44f, 600))
+        canvas.drawText(shown(muscle), L, y, ink.type(ink.text, if (rowH > 160f) 52f else 44f, 600))
         canvas.drawText(setsText(sets), R, y, ink.type(ink.muted, if (rowH > 160f) 44f else 38f, 500, Paint.Align.RIGHT))
         val barTop = y + 28f
         canvas.drawRoundRect(RectF(L, barTop, R, barTop + barH), barH / 2, barH / 2, ink.fill(ink.track))
