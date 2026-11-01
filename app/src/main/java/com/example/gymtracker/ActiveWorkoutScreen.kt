@@ -56,7 +56,6 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
-import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PushPin
@@ -1000,20 +999,6 @@ private fun ExerciseCard(
                         ))
                     }
                 }, Modifier.weight(1f), icon = Icons.Rounded.Add, height = 40.dp)
-                if (exercise.type.hasWeightSuggestions) SecondaryButton(tr("Drop set"), {
-                    haptics.tick()
-                    onUpdate { ex ->
-                        val last = ex.sets.lastOrNull()
-                        val dropWeight = scaleWeight(last?.weight ?: "20", 0.8f)
-                        ex.copy(sets = ex.sets + SetEntry(
-                            setNumber = ex.sets.size + 1,
-                            weight = dropWeight,
-                            reps = last?.reps ?: "8",
-                            intensityType = "DROP",
-                            restSeconds = 0
-                        ))
-                    }
-                }, Modifier.weight(1f), icon = Icons.Rounded.LocalFireDepartment, height = 40.dp)
             }
         }
         }

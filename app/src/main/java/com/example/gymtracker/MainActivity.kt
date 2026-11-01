@@ -1065,7 +1065,7 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
                     .offset(x = pillX)
                     .size(pillWidth, 34.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(P.accentSoft)
+                    .background(P.bgControl)
             )
             Row(Modifier.fillMaxWidth()) {
                 AppTab.entries.forEach { tab ->
