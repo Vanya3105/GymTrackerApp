@@ -44,10 +44,33 @@ class ExerciseFiguresTest {
         sheet("figures-light", listOf("Back Squat", "Lateral Raise", "Cable Fly", "Cycling"), LightPalette)
     }
 
-    private fun sheet(file: String, names: List<String>, palette: GymPalette) {
+    /** A hand or foot fixed in the room at one moment and placed on the body at the next can't be blended between. */
+    @Test
+    fun handsAndFeetDontMixRoomAndBodyPlacing() {
+        val mixed = figures.flatMap { (name, f) ->
+            val poses = listOfNotNull(f.start, f.mid, f.end)
+            listOf<Pair<String, (Pose) -> Target?>>("hand" to { it.hand }, "farHand" to { it.farHand }, "foot" to { it.foot }, "farFoot" to { it.farFoot })
+                .filter { (_, of) -> poses.mapNotNull(of).filter { it.crank == 0f }.map { it.onBody }.distinct().size > 1 }
+                .map { "$name: ${it.first}" }
+        }
+        assertEquals(emptyList<String>(), mixed)
+    }
+
+    /** Larger, named strips of five moments each, a dozen exercises a page, for checking details. */
+    @Test
+    fun detailSheets() {
+        ExerciseDatabase.all.groupBy { it.muscle }.forEach { (muscle, exercises) ->
+            exercises.map { it.name }.filter { ExerciseFigures.has(it) }.chunked(12).forEachIndexed { page, names ->
+                sheet("detail/${muscle.lowercase()}-${page + 1}", names, DarkPalette, listOf(0f, 0.25f, 0.5f, 0.75f, 1f), Size(220f, 170f), labels = true)
+            }
+        }
+    }
+
+    private fun sheet(
+        file: String, names: List<String>, palette: GymPalette,
+        moments: List<Float> = listOf(0f, 0.5f, 1f), cell: Size = Size(240f, 160f), labels: Boolean = false
+    ) {
         if (names.isEmpty()) return
-        val cell = Size(240f, 160f)
-        val moments = listOf(0f, 0.5f, 1f)
         val perRow = 2
         val rows = (names.size + perRow - 1) / perRow
         val bitmap = Bitmap.createBitmap((cell.width * moments.size * perRow).toInt(), (cell.height * rows).toInt(), Bitmap.Config.ARGB_8888)
@@ -63,6 +86,13 @@ class ExerciseFiguresTest {
                         drawExerciseFigure(name, t, palette, Size(cell.width - 20f, cell.height - 20f))
                     }
                 }
+            }
+        }
+        if (labels) {
+            val paint = android.graphics.Paint().apply { color = android.graphics.Color.YELLOW; textSize = 15f; isAntiAlias = true }
+            val c = android.graphics.Canvas(bitmap)
+            names.forEachIndexed { i, name ->
+                c.drawText(name, (i % perRow) * moments.size * cell.width + 8f, (i / perRow) * cell.height + 18f, paint)
             }
         }
         File("build/figures/$file.png").apply { parentFile?.mkdirs() }

@@ -64,11 +64,14 @@ private val FAR = Offset(-2.5f, 0f)
  */
 internal data class Target(
     val x: Float, val y: Float, val onBody: Boolean = false, val way: Int = 0,
-    val crank: Float = 0f, val phase: Float = 0f
+    val crank: Float = 0f, val phase: Float = 0f, val straight: Boolean = false
 )
 
 internal fun room(x: Float, y: Float) = Target(x, y)
 internal fun onBody(x: Float, y: Float, way: Int = 0) = Target(x, y, onBody = true, way = way)
+
+/** Like [onBody], but reached in a straight line rather than an arc: a bar kept close to the body (cleans, upright rows). */
+internal fun close(x: Float, y: Float) = Target(x, y, onBody = true, straight = true)
 internal fun crank(x: Float, y: Float, r: Float, phase: Float = 0f, spin: Int = 1, onBody: Boolean = false) =
     Target(x, y, onBody, spin, r, phase)
 
@@ -149,6 +152,8 @@ internal class Figure(
     val cable: Offset? = null,
     val floor: Boolean = true,
     val loop: Int = 0,
+    /** A pose half way, for movements that don't go straight from start to end (a muscle-up, a clean). */
+    val mid: Pose? = null,
     val parts: (Body) -> List<Part> = { emptyList() }
 )
 
@@ -178,6 +183,7 @@ private fun mix(a: Float, b: Float, t: Float) = a + (b - a) * t
 private fun mix(a: Target, b: Target, t: Float): Target {
     if (a.crank > 0f) return a
     if (!a.onBody) return Target(mix(a.x, b.x, t), mix(a.y, b.y, t))
+    if (a.straight || b.straight) return Target(mix(a.x, b.x, t), mix(a.y, b.y, t), onBody = true)
     val from = atan2(a.y, a.x)
     var to = atan2(b.y, b.x)
     val turn = 2 * PI.toFloat()
@@ -212,14 +218,18 @@ private fun reach(root: Offset, target: Offset, upper: Float, lower: Float, bend
 
 /** The body at [time] (0–1): along the movement, or round the loop for [Figure.loop] ones. */
 internal fun Figure.at(time: Float): Body {
-    val t = if (loop > 0) (1 - cos(2 * PI * time).toFloat()) / 2 else time
-    val a = start
-    val b = end
+    val along = if (loop > 0) (1 - cos(2 * PI * time).toFloat()) / 2 else time
+    val a = if (mid != null && along > 0.5f) mid else start
+    val b = if (mid != null && along <= 0.5f) mid else end
+    val t = if (mid == null) along else if (along <= 0.5f) along * 2f else along * 2f - 1f
     val hip = lerp(a.hip, b.hip, t)
     val torso = mix(a.torso, b.torso, t)
     val up = dir(torso)
-    val center = hip + up * (TORSO * mix(a.squash, b.squash, t))
-    val head = center + dir(torso + mix(a.head, b.head, t)) * NECK * mix(a.squash, b.squash, t).coerceAtMost(1f)
+    val squash = mix(a.squash, b.squash, t)
+    val center = hip + up * (TORSO * squash)
+    // Shoulders raised past normal (a shrug) come up towards the ears: the head stays put.
+    val neck = if (squash > 1f) NECK - TORSO * (squash - 1f) else NECK * squash
+    val head = center + dir(torso + mix(a.head, b.head, t)) * neck
     // Seen from the front the shoulders and hips are apart, and the far side mirrors the near one.
     val side = if (front) Offset(up.y, -up.x) else Offset.Zero
     val shoulder = center + side * 8f
@@ -260,7 +270,7 @@ internal fun Figure.at(time: Float): Body {
         reach(farShoulder, far(handT, a.farHand, b.farHand, shoulder, farShoulder, center), UPPER_ARM * farArmScale, FOREARM * farArmScale, farElbowBend),
         reach(nearHip, place(footT, nearHip), THIGH * thighScale, SHIN * legScale, kneeBend),
         reach(farHip, far(footT, a.farFoot, b.farFoot, nearHip, farHip, hip), THIGH * thighScale, SHIN * legScale, farKneeBend),
-        toe, farToe, t, time
+        toe, farToe, along, time
     )
 }
 
@@ -370,6 +380,13 @@ private fun DrawScope.drawFigure(f: Figure, b: Body, k: Frame, c: Palette, loads
     fun arm(l: Limb, far: Boolean) {
         val base = if (far && !front) c.far else c.near
         val dim = far && !front
+        // A thin gap in the background colour round the arm, so an arm across the body (same
+        // grey) still reads as an arm. Not at the shoulder, where it joins the body.
+        if (!far) {
+            seg(lerp(l.root, l.joint, 0.4f), l.joint, 6.2f + 2.4f, c.background)
+            seg(l.joint, l.end, 5.2f + 2.4f, c.background)
+            dot(l.end, 2.7f + 1.2f, c.background)
+        }
         seg(l.root, l.joint, 6.2f, base)
         seg(l.joint, l.end, 5.2f, base)
         heat(base, "Shoulders", dim)?.let { seg(l.root, lerp(l.root, l.joint, 0.3f), 6.2f, it) }
@@ -540,11 +557,12 @@ fun ExerciseFigure(name: String, modifier: Modifier = Modifier, moving: Boolean 
         else -> {
             val t = remember(name) { Animatable(0f) }
             LaunchedEffect(name) {
+                // Like a good rep: a brisk lift, a squeeze at the top, a slower controlled lowering.
                 while (true) {
-                    delay(600)
-                    t.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
                     delay(500)
-                    t.animateTo(0f, tween(1000, easing = FastOutSlowInEasing))
+                    t.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
+                    delay(450)
+                    t.animateTo(0f, tween(1300, easing = FastOutSlowInEasing))
                 }
             }
             t.asState()

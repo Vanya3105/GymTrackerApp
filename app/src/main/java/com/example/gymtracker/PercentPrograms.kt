@@ -196,12 +196,12 @@ fun planLiftDay(plan: LiftPlan, tm: TrainingMax, history: List<CompletedWorkout>
         PercentScheme.WENDLER_531 -> {
             val week = sessionsOf(plan.exercise, setOf(PercentScheme.WENDLER_531), history, tm.setAtMillis).size % 4
             val (weekName, work) = WENDLER_WEEKS[week]
-            LiftDay(WARMUP + work, null, currentTrainingMaxKg(plan.trainingMaxOf, tm, history, unit), "5/3/1 · Week ${week + 1} of 4 ($weekName)")
+            LiftDay(WARMUP + work, null, currentTrainingMaxKg(plan.trainingMaxOf, tm, history, unit), tr("5/3/1 · Week {0} of 4 ({1})", week + 1, weekName))
         }
         PercentScheme.GZCLP_T1, PercentScheme.GZCLP_T2 -> planGzclp(plan, tm, history, unit)
         else -> {
-            val tier = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(plan.exercise)) "T1" else "T2 (off your ${plan.trainingMaxOf} TM)"
-            LiftDay(NSUNS_TABLES.getValue(plan.scheme), null, currentTrainingMaxKg(plan.trainingMaxOf, tm, history, unit), "nSuns $tier")
+            val tier = if (exerciseKey(plan.trainingMaxOf) == exerciseKey(plan.exercise)) "T1" else tr("T2 (off your {0} TM)", plan.trainingMaxOf)
+            LiftDay(NSUNS_TABLES.getValue(plan.scheme), null, currentTrainingMaxKg(plan.trainingMaxOf, tm, history, unit), tr("nSuns {0}", tier))
         }
     }
 
@@ -239,7 +239,7 @@ private fun planGzclp(plan: LiftPlan, tm: TrainingMax, history: List<CompletedWo
         sets = warmups + work,
         weightKg = parseWeightClean(percentWeight(weightKg, 1f, unit), 0f),
         trainingMaxKg = tm.kg,
-        title = "GZCLP ${if (t1) "T1" else "T2"} · $setCount×$reps${if (t1) "+" else ""} (stage ${stage + 1} of 3)"
+        title = tr("GZCLP {0} · {1}×{2}{3} (stage {4} of 3)", if (t1) "T1" else "T2", setCount, reps, if (t1) "+" else "", stage + 1)
     )
 }
 
@@ -256,8 +256,8 @@ fun LiftDay.amrapText(): String? {
     val numbers = work.mapIndexedNotNull { i, s -> if (s.amrap) i + 1 else null }
     return when {
         numbers.isEmpty() -> null
-        numbers == listOf(work.size) -> "last set: as many reps as you can"
-        else -> "sets ${numbers.joinToString(" and ")}: as many reps as you can"
+        numbers == listOf(work.size) -> tr("last set: as many reps as you can")
+        else -> tr("sets {0}: as many reps as you can", numbers.joinToString(tr(" and ")))
     }
 }
 

@@ -252,7 +252,7 @@ fun TipTourOverlay(tour: TipTour, onShowStep: (String) -> Unit = {}) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (tour.steps.size > 1) {
                         Text(
-                            "Skip",
+                            tr("Skip"),
                             style = AppType.label,
                             color = P.textSecondary,
                             modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable(onClick = ::close).padding(8.dp)
@@ -262,10 +262,10 @@ fun TipTourOverlay(tour: TipTour, onShowStep: (String) -> Unit = {}) {
                     }
                     Spacer(Modifier.weight(1f))
                     if (tour.index > 0) {
-                        SecondaryButton("Back", { go(-1) }, height = 44.dp)
+                        SecondaryButton(tr("Back"), { go(-1) }, height = 44.dp)
                         Spacer(Modifier.width(8.dp))
                     }
-                    PrimaryButton(if (tour.index == tour.steps.lastIndex) "Got it" else "Next", { go(1) }, height = 44.dp)
+                    PrimaryButton(if (tour.index == tour.steps.lastIndex) tr("Got it") else tr("Next"), { go(1) }, height = 44.dp)
                 }
             }
         }

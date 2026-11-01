@@ -14,7 +14,8 @@ import kotlin.math.roundToInt
 // so switching back and forth never alters logged data, records or charts.
 
 enum class WeightUnit(
-    val label: String,
+    private val englishLabel: String,
+    private val hebrewLabel: String,
     private val kgPerUnit: Double,
     /** Display rounding: kg keeps 0.01 (1.25 kg plates), lb keeps 0.1. */
     private val decimals: Int,
@@ -25,11 +26,16 @@ enum class WeightUnit(
     /** Starting weight for an exercise with no history. */
     val defaultWorkWeight: Float,
     /** Distances go with the weight unit: kilometres for kg, miles for lb. */
-    val distanceLabel: String,
+    private val englishDistance: String,
+    private val hebrewDistance: String,
     val metersPerDistanceUnit: Float
 ) {
-    KG("kg", 1.0, 2, 2.5f, listOf(0.5f, 1f, 1.25f, 2f, 2.5f, 5f), 0.5f, 40f, "km", 1000f),
-    LB("lb", 0.45359237, 1, 5f, listOf(1f, 2.5f, 5f, 10f), 1f, 95f, "mi", 1609.344f);
+    KG("kg", "ק״ג", 1.0, 2, 2.5f, listOf(0.5f, 1f, 1.25f, 2f, 2.5f, 5f), 0.5f, 40f, "km", "ק״מ", 1000f),
+    LB("lb", "ליב׳", 0.45359237, 1, 5f, listOf(1f, 2.5f, 5f, 10f), 1f, 95f, "mi", "מייל", 1609.344f);
+
+    // Hebrew units keep "2 ק״ג" in order in a right-to-left line, where "2 kg" would show as "kg 2".
+    val label: String get() = if (hebrewOn()) hebrewLabel else englishLabel
+    val distanceLabel: String get() = if (hebrewOn()) hebrewDistance else englishDistance
 
     /** Kilograms → this unit, rounded the way it is displayed. */
     fun fromKg(kg: Float): Float = round((kg / kgPerUnit).toFloat())
@@ -86,7 +92,7 @@ fun formatDistance(meters: Float): String =
 /** A set as words for its type: "80 kg × 6", "12 reps", "+20 kg × 8", "1:30", "5 km · 25:00". */
 fun formatSet(set: SetEntry, type: ExerciseType = ExerciseType.WEIGHT_REPS): String = when (type) {
     ExerciseType.WEIGHT_REPS -> "${formatWeightKg(set.weightKg)} × ${set.reps}"
-    ExerciseType.BODYWEIGHT -> if (set.repCount == 1) "1 rep" else "${set.repCount} reps"
+    ExerciseType.BODYWEIGHT -> if (set.repCount == 1) tr("1 rep") else tr("{0} reps", set.repCount)
     // Nothing added / no assistance is simply a bodyweight set.
     ExerciseType.WEIGHTED_BODYWEIGHT -> if (set.weightKg > 0f) "+${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)
     ExerciseType.ASSISTED -> if (set.weightKg > 0f) "−${formatWeightKg(set.weightKg)} × ${set.reps}" else formatSet(set, ExerciseType.BODYWEIGHT)

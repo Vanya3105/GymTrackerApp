@@ -64,7 +64,7 @@ fun OnboardingScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (step > 0 || canGoBack) {
-                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", { if (step > 0) step-- else onBack() }, container = Color.Transparent)
+                CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), { if (step > 0) step-- else onBack() }, container = Color.Transparent)
             } else {
                 Spacer(Modifier.size(40.dp))
             }
@@ -91,15 +91,15 @@ fun OnboardingScreen(
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Rounded.FitnessCenter, null, tint = P.accentPrimary, modifier = Modifier.size(28.dp)) }
                     Spacer(Modifier.height(20.dp))
-                    Text("Welcome", style = AppType.display, color = P.textPrimary)
+                    Text(tr("Welcome"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "A couple of quick questions so the app can track your progress and suggest weights.",
+                        tr("A couple of quick questions so the app can track your progress and suggest weights."),
                         style = AppType.body,
                         color = P.textSecondary
                     )
                     Spacer(Modifier.height(32.dp))
-                    Text("How old are you?", style = AppType.label, color = P.textSecondary)
+                    Text(tr("How old are you?"), style = AppType.label, color = P.textSecondary)
                     Spacer(Modifier.height(8.dp))
                     NumberStepper(
                         value = age,
@@ -112,7 +112,7 @@ fun OnboardingScreen(
                     )
                     Spacer(Modifier.height(20.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("What do you weigh?", style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+                        Text(tr("What do you weigh?"), style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
                         SegmentedControl(
                             options = WeightUnit.entries.map { it to it.label },
                             selected = unit,
@@ -131,9 +131,9 @@ fun OnboardingScreen(
                         height = 56.dp
                     )
                 } else {
-                    Text("How do you train?", style = AppType.display, color = P.textPrimary)
+                    Text(tr("How do you train?"), style = AppType.display, color = P.textPrimary)
                     Spacer(Modifier.height(6.dp))
-                    Text("Find your split, or build your own. You can change it any time in Profile.", style = AppType.body, color = P.textSecondary)
+                    Text(tr("Find your split, or build your own. You can change it any time in Profile."), style = AppType.body, color = P.textSecondary)
                     Spacer(Modifier.height(24.dp))
                     SplitPicker(
                         selectedId = program,
@@ -147,7 +147,7 @@ fun OnboardingScreen(
         val ageOk = (age.toIntOrNull() ?: 0) > 0
         val weightOk = (weightKg.toFloatOrNull() ?: 0f) > 0f
         PrimaryButton(
-            text = if (step == 0) "Continue" else "Start training",
+            text = if (step == 0) tr("Continue") else tr("Start training"),
             enabled = if (step == 0) ageOk && weightOk else true,
             onClick = {
                 haptics.tick()
@@ -165,7 +165,7 @@ fun OnboardingScreen(
         )
         if (step == 0) {
             Text(
-                "Stored only on this phone.",
+                tr("Stored only on this phone."),
                 style = AppType.caption.copy(fontWeight = FontWeight.Normal),
                 color = P.textTertiary,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp)

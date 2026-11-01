@@ -92,17 +92,17 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
             ) {
                 Text(
                     when {
-                        bests.size > 1 -> "${bests.size} new bests!"
-                        bests.size == 1 -> "New best!"
-                        else -> "Workout done!"
+                        bests.size > 1 -> tr("{0} new bests!", bests.size)
+                        bests.size == 1 -> tr("New best!")
+                        else -> tr("Workout done!")
                     },
                     style = AppType.display,
                     color = P.textPrimary,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    "${data.title} · your ${ordinal(data.workoutNumber)} workout" +
-                        if (data.weekStreak >= 2) " · ${data.weekStreak} weeks in a row" else "",
+                    tr("{0} · your {1} workout", shown(data.title), ordinal(data.workoutNumber)) +
+                        if (data.weekStreak >= 2) tr(" · {0} weeks in a row", data.weekStreak) else "",
                     style = AppType.body,
                     color = P.textSecondary,
                     textAlign = TextAlign.Center,
@@ -110,26 +110,26 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                 )
                 Spacer(Modifier.height(24.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CountUpTile(data.durationSeconds.toFloat(), { formatDuration(it.toLong()) }, "Time", Modifier.weight(1f), delayMillis = 350)
-                    CountUpTile(data.workSets.toFloat(), { "${it.roundToInt()}" }, "Sets", Modifier.weight(1f), delayMillis = 450)
+                    CountUpTile(data.durationSeconds.toFloat(), { formatDuration(it.toLong()) }, tr("Time"), Modifier.weight(1f), delayMillis = 350)
+                    CountUpTile(data.workSets.toFloat(), { "${it.roundToInt()}" }, tr("Sets"), Modifier.weight(1f), delayMillis = 450)
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CountUpTile(data.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, "Volume", Modifier.weight(1f), delayMillis = 550)
+                    CountUpTile(data.volumeKg.toFloat(), { formatVolume(it.roundToInt()) }, tr("Volume"), Modifier.weight(1f), delayMillis = 550)
                     // No "0 new bests": without one, the tile counts exercises.
                     if (bests.isNotEmpty()) CountUpTile(
-                        bests.size.toFloat(), { "${it.roundToInt()}" }, if (bests.size == 1) "New best" else "New bests", Modifier.weight(1f),
+                        bests.size.toFloat(), { "${it.roundToInt()}" }, if (bests.size == 1) tr("New best") else tr("New bests"), Modifier.weight(1f),
                         delayMillis = 650, valueColor = P.warningText
                     ) else CountUpTile(
-                        data.lifts.size.toFloat(), { "${it.roundToInt()}" }, if (data.lifts.size == 1) "Exercise" else "Exercises", Modifier.weight(1f),
+                        data.lifts.size.toFloat(), { "${it.roundToInt()}" }, if (data.lifts.size == 1) tr("Exercise") else tr("Exercises"), Modifier.weight(1f),
                         delayMillis = 650
                     )
                 }
                 volumeComparison(data.volumeKg)?.let { thing ->
-                    Text("You lifted $thing.", style = AppType.label, color = P.textSecondary, modifier = Modifier.padding(top = 12.dp))
+                    Text(tr("You lifted {0}.", thing), style = AppType.label, color = P.textSecondary, modifier = Modifier.padding(top = 12.dp))
                 }
                 data.volumeChangePct?.takeIf { it > 0 }?.let { pct ->
-                    Text("$pct% more volume than your last ${data.title}", style = AppType.label, color = P.successText, modifier = Modifier.padding(top = 4.dp))
+                    Text(tr("{0}% more volume than your last {1}", pct, shown(data.title)), style = AppType.label, color = P.successText, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (bests.isNotEmpty()) {
                     Spacer(Modifier.height(18.dp))
@@ -140,35 +140,36 @@ fun WorkoutCelebration(data: ShareData, haptics: Haptics, onShare: () -> Unit, o
                                 Icon(Icons.Rounded.EmojiEvents, null, tint = P.warningText, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(b.name, style = AppType.bodyStrong, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(b.before?.let { "Was $it" } ?: "First time logged", style = AppType.caption, color = P.textSecondary)
+                                    Text(shown(b.name), style = AppType.bodyStrong, color = P.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(b.before?.let { tr("Was {0}", it) } ?: tr("First time logged"), style = AppType.caption, color = P.textSecondary)
                                 }
                                 Text(b.set, style = AppType.bodyStrong.copy(fontFeatureSettings = "tnum"), color = P.textPrimary)
                             }
                         }
-                        if (bests.size > 4) Text("and ${bests.size - 4} more", style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 10.dp))
+                        if (bests.size > 4) Text(tr("and {0} more", bests.size - 4), style = AppType.caption, color = P.textTertiary, modifier = Modifier.padding(top = 10.dp))
                     }
                 }
                 Spacer(Modifier.height(28.dp))
-                PrimaryButton("Done", onDone, Modifier.fillMaxWidth())
+                PrimaryButton(tr("Done"), onDone, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(10.dp))
-                SecondaryButton("Share", onShare, Modifier.fillMaxWidth(), icon = Icons.Rounded.IosShare)
+                SecondaryButton(tr("Share"), onShare, Modifier.fillMaxWidth(), icon = Icons.Rounded.IosShare)
                 Spacer(Modifier.height(24.dp))
             }
         }
-        ConfettiBurst(Modifier.fillMaxSize(), pieces = if (bests.isNotEmpty()) 160 else 110)
+        ConfettiBurst(Modifier.fillMaxSize(), pieces = if (bests.isNotEmpty()) 150 else 110, cannons = true)
     }
 }
 
 private fun ordinal(n: Int): String {
+    if (hebrewOn()) return "$n"
     val suffix = if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
     return "$n$suffix"
 }
 
 /**
- * A short rising chime, made in code (no sound file): G5, C6, E6, G6, each a soft bell that
- * fades. Quiet unless the phone's sound is on; plays as a notification-type sound, so it ducks
- * music instead of stopping it.
+ * A short "ta-da" made in code (no sound file): a quick C-E-G run, then a bright C major chord
+ * that rings out, about a second and a half. Only when the phone's sound is on; it plays as a
+ * notification-type sound, so it ducks music instead of stopping it.
  */
 object WorkoutChime {
     fun play(context: Context) {
@@ -177,22 +178,27 @@ object WorkoutChime {
         Thread {
             runCatching {
                 val rate = 44_100
-                val notes = floatArrayOf(783.99f, 1046.5f, 1318.51f, 1567.98f)
-                val step = (rate * 0.09).toInt()
-                val ring = (rate * 0.7).toInt()
-                val total = step * (notes.size - 1) + ring
+                val total = (rate * 1.75).toInt()
                 val mix = FloatArray(total)
-                notes.forEachIndexed { i, f ->
-                    val start = i * step
-                    for (s in 0 until ring) {
-                        val t = s.toFloat() / rate
-                        // Bell: the note plus a soft octave, a fast attack and an exponential fade.
-                        val env = (1f - exp(-t * 400f)) * exp(-t * 6f)
-                        val v = (sin(2 * PI * f * t) + 0.25 * sin(2 * PI * f * 2 * t)).toFloat() * env
-                        mix[start + s] += v * 0.22f
+                // A brassy tone: the note with some of its 2nd and 3rd harmonics, a little vibrato once held.
+                fun note(freq: Float, startSec: Float, lengthSec: Float, decay: Float, gain: Float) {
+                    val start = (startSec * rate).toInt()
+                    val length = (lengthSec * rate).toInt().coerceAtMost(total - start)
+                    for (n in 0 until length) {
+                        val t = n.toFloat() / rate
+                        val f = freq * (1f + 0.004f * sin(2 * PI * 5.5 * t).toFloat() * (t * 3f).coerceAtMost(1f))
+                        val phase = 2 * PI * f * t
+                        val tone = sin(phase) + 0.35 * sin(2 * phase) + 0.15 * sin(3 * phase)
+                        val env = (1f - exp(-t * 140f)) * exp(-t * decay)
+                        mix[start + n] += (tone * env * gain).toFloat()
                     }
                 }
-                val pcm = ShortArray(total) { (mix[it].coerceIn(-1f, 1f) * Short.MAX_VALUE).toInt().toShort() }
+                // The run up...
+                floatArrayOf(523.25f, 659.25f, 783.99f).forEachIndexed { i, f -> note(f, i * 0.1f, 0.4f, 9f, 0.5f) }
+                // ...and the chord, held.
+                floatArrayOf(523.25f, 659.25f, 783.99f, 1046.5f).forEach { f -> note(f, 0.32f, 1.4f, 2.4f, 0.32f) }
+                val peak = mix.maxOf { kotlin.math.abs(it) }.coerceAtLeast(0.001f)
+                val pcm = ShortArray(total) { (mix[it] / peak * 0.85f * Short.MAX_VALUE).toInt().toShort() }
                 val track = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()

@@ -59,9 +59,9 @@ import kotlin.math.roundToInt
 // ============================================================================
 
 /** Clear is a transparent PNG to lay over your own photo or video, like Strava's stats sticker. */
-enum class ShareBackground(val label: String) { DARK("Dark"), LIGHT("Light"), CLEAR("Clear"), PHOTO("Photo") }
+enum class ShareBackground(val label: String) { DARK(tr("Dark")), LIGHT(tr("Light")), CLEAR(tr("Clear")), PHOTO(tr("Photo")) }
 
-enum class ShareCard(val label: String) { SUMMARY("Summary"), BESTS("New bests"), MUSCLES("Muscles"), STREAK("Streak") }
+enum class ShareCard(val label: String) { SUMMARY(tr("Summary")), BESTS(tr("New bests")), MUSCLES(tr("Muscles")), STREAK(tr("Streak")) }
 
 @Immutable
 data class ShareLift(val name: String, val set: String, val isBest: Boolean)
@@ -112,7 +112,7 @@ fun buildShareData(
     whenMillis: Long,
     photoPath: String?
 ): ShareData {
-    val done = exercises.filter { !it.isSkipped }
+    val done = performedExercises(exercises)
     val stats = computeWorkoutStats(done, historyBefore)
     val byExercise = historyByExercise(historyBefore)
     val lifts = ArrayList<ShareLift>()
@@ -145,7 +145,7 @@ fun buildShareData(
         .let { it.get(Calendar.YEAR) == month.get(Calendar.YEAR) && it.get(Calendar.MONTH) == month.get(Calendar.MONTH) }
 
     return ShareData(
-        title = splitTitle,
+        title = shown(splitTitle),
         whenMillis = whenMillis,
         durationSeconds = durationSeconds,
         workSets = stats.workSets,
@@ -175,14 +175,14 @@ private fun weekStart(millis: Long): Long = Calendar.getInstance().apply {
  */
 internal fun volumeComparison(kg: Int): String? {
     val things = listOf(
-        Triple("a city bus", "city buses", 12_000f),
-        Triple("an elephant", "elephants", 6_000f),
-        Triple("a small car", "small cars", 1_200f),
-        Triple("a grand piano", "grand pianos", 480f)
+        Triple(tr("a city bus"), tr("city buses"), 12_000f),
+        Triple(tr("an elephant"), tr("elephants"), 6_000f),
+        Triple(tr("a small car"), tr("small cars"), 1_200f),
+        Triple(tr("a grand piano"), tr("grand pianos"), 480f)
     )
     val (one, many, each) = things.firstOrNull { kg >= it.third } ?: return null
     val n = kg / each
-    return if (n < 1.5f) "about $one" else "about ${n.roundToInt()} $many"
+    return if (n < 1.5f) tr("about {0}", one) else tr("about {0} {1}", n.roundToInt(), many)
 }
 
 // ============================================================================
@@ -264,11 +264,11 @@ private fun Paint.ellipsize(text: String, maxWidth: Float): String {
     return "$t…"
 }
 
-private fun shortDate(millis: Long) = SimpleDateFormat("EEE, MMM d", Locale.US).format(Date(millis)).uppercase(Locale.US)
+private fun shortDate(millis: Long) = (if (hebrewOn()) SimpleDateFormat("EEE, d בMMM", Locale.forLanguageTag("he")) else SimpleDateFormat("EEE, MMM d", Locale.US)).format(Date(millis)).uppercase(Locale.US)
 
 private fun setsText(sets: Float): String {
     val shown = if (sets % 1f == 0f) "${sets.toInt()}" else String.format(Locale.US, "%.1f", sets)
-    return if (shown == "1") "1 set" else "$shown sets"
+    return if (shown == "1") tr("1 set") else tr("{0} sets", shown)
 }
 
 /** Draws one card. [scale] < 1 makes a smaller copy for the preview. */
@@ -360,7 +360,7 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
     val unit = Units.current
     // Over a photo the picture is the hero: everything sits in the lower half, without the list.
     var y = if (onPhoto) 1000f else 330f
-    drawOverline(canvas, ink, "${shortDate(d.whenMillis)}  ·  WORKOUT ${d.workoutNumber}", y)
+    drawOverline(canvas, ink, tr("{0}  ·  WORKOUT {1}", shortDate(d.whenMillis), d.workoutNumber), y)
     y += if (onPhoto) 120f else 150f
     canvas.drawText(d.title, L, y, ink.type(ink.text, 132f, 800).fit(d.title, R - L))
     val focus = d.muscles.take(3).joinToString(", ") { it.first }
@@ -377,16 +377,16 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
         canvas.drawText(unit.label, L + big.measureText(number) + 20f, y, ink.type(ink.muted, 64f, 600))
         val compare = volumeComparison(d.volumeKg)
         y += 64f
-        canvas.drawText(listOfNotNull("lifted", compare).joinToString(", "), L, y, ink.type(ink.muted, 42f, 450))
+        canvas.drawText(listOfNotNull(tr("lifted"), compare).joinToString(", "), L, y, ink.type(ink.muted, 42f, 450))
     } else {
         canvas.drawText("${d.workSets}", L, y, ink.type(ink.text, 220f, 800))
         y += 64f
-        canvas.drawText("sets done", L, y, ink.type(ink.muted, 42f, 450))
+        canvas.drawText(tr("sets done"), L, y, ink.type(ink.muted, 42f, 450))
     }
     d.volumeChangePct?.takeIf { it != 0 }?.let { pct ->
         y += 40f
         val up = pct > 0
-        val label = "${if (up) "↑" else "↓"} ${kotlin.math.abs(pct)}% vs last ${d.title}"
+        val label = tr("{0} {1}% vs last {2}", if (up) "↑" else "↓", kotlin.math.abs(pct), d.title)
         val paint = ink.type(if (up) ink.good else ink.muted, 36f, 600).fit(label, R - L - 48f)
         val w = paint.measureText(label) + 48f
         canvas.drawRoundRect(RectF(L, y, L + w, y + 64f), 32f, 32f, ink.fill(if (up && !ink.clear) ink.good else ink.text, if (ink.clear) 50 else 36))
@@ -398,11 +398,11 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
     drawStatRow(
         canvas, ink, y,
         listOf(
-            Triple(formatDuration(d.durationSeconds), "Time", false),
-            Triple("${d.workSets}", "Sets", false),
+            Triple(formatDuration(d.durationSeconds), tr("Time"), false),
+            Triple("${d.workSets}", tr("Sets"), false),
             // No "0 new bests": without one, the slot counts exercises instead.
-            if (d.bests.isNotEmpty()) Triple("${d.bests.size}", if (d.bests.size == 1) "New best" else "New bests", true)
-            else Triple("${d.lifts.size}", if (d.lifts.size == 1) "Exercise" else "Exercises", false)
+            if (d.bests.isNotEmpty()) Triple("${d.bests.size}", if (d.bests.size == 1) tr("New best") else tr("New bests"), true)
+            else Triple("${d.lifts.size}", if (d.lifts.size == 1) tr("Exercise") else tr("Exercises"), false)
         )
     )
     if (onPhoto) return
@@ -411,7 +411,7 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
     val rowH = 72f
     val maxRows = ((1630f - y) / rowH).toInt().coerceIn(0, 6)
     if (d.lifts.isEmpty() || maxRows == 0) return
-    drawOverline(canvas, ink, "TOP SETS", y, ink.faint)
+    drawOverline(canvas, ink, tr("TOP SETS"), y, ink.faint)
     val shown = if (d.lifts.size > maxRows) d.lifts.take(maxRows - 1) else d.lifts
     shown.forEach { lift ->
         y += rowH
@@ -419,12 +419,12 @@ private fun drawSummary(canvas: Canvas, ink: Ink, d: ShareData, onPhoto: Boolean
         val namePaint = ink.type(ink.text, 42f, 450)
         val indent = if (lift.isBest) 40f else 0f
         if (lift.isBest) canvas.drawCircle(L + 12f, y - 14f, 10f, ink.fill(ink.accent))
-        canvas.drawText(namePaint.ellipsize(lift.name, R - L - indent - setPaint.measureText(lift.set) - 32f), L + indent, y, namePaint)
+        canvas.drawText(namePaint.ellipsize(shown(lift.name), R - L - indent - setPaint.measureText(lift.set) - 32f), L + indent, y, namePaint)
         canvas.drawText(lift.set, R, y, setPaint)
     }
     if (shown.size < d.lifts.size) {
         y += rowH
-        canvas.drawText("+${d.lifts.size - shown.size} more", L, y, ink.type(ink.faint, 38f, 450))
+        canvas.drawText(tr("+{0} more", d.lifts.size - shown.size), L, y, ink.type(ink.faint, 38f, 450))
     }
 }
 
@@ -437,13 +437,13 @@ private fun drawMedal(canvas: Canvas, ink: Ink, cx: Float, cy: Float, r: Float) 
 }
 
 private fun drawBests(canvas: Canvas, ink: Ink, d: ShareData) {
-    drawOverline(canvas, ink, "NEW BESTS  ·  ${shortDate(d.whenMillis)}", 330f)
+    drawOverline(canvas, ink, tr("NEW BESTS  ·  {0}", shortDate(d.whenMillis)), 330f)
     drawMedal(canvas, ink, L + 95f, 545f, 95f)
     val count = d.bests.size
     canvas.drawText("$count", L + 240f, 610f, ink.type(ink.text, 240f, 800))
-    val label = if (count == 1) "new best" else "new bests"
+    val label = if (count == 1) tr("new best") else tr("new bests")
     canvas.drawText(label, L + 240f + ink.type(ink.text, 240f, 800).measureText("$count") + 24f, 610f, ink.type(ink.muted, 56f, 600))
-    canvas.drawText("in ${d.title}", L + 240f, 680f, ink.type(ink.muted, 42f, 450).fit("in ${d.title}", R - L - 240f))
+    canvas.drawText(tr("in {0}", d.title), L + 240f, 680f, ink.type(ink.muted, 42f, 450).fit(tr("in {0}", d.title), R - L - 240f))
 
     var y = 830f
     val maxRows = 4
@@ -454,20 +454,20 @@ private fun drawBests(canvas: Canvas, ink: Ink, d: ShareData) {
     shown.forEachIndexed { i, best ->
         if (i > 0) canvas.drawRect(L, y - 40f, R, y - 38f, ink.fill(ink.line))
         val name = ink.type(ink.muted, if (big) 48f else 42f, 550)
-        canvas.drawText(name.ellipsize(best.name, R - L), L, y + 30f, name)
+        canvas.drawText(name.ellipsize(shown(best.name), R - L), L, y + 30f, name)
         canvas.drawText(best.set, L, y + if (big) 140f else 106f, ink.type(ink.text, if (big) 104f else 72f, 800).fit(best.set, R - L))
-        val before = best.before?.let { "Before: $it" } ?: "First time logged"
+        val before = best.before?.let { tr("Before: {0}", it) } ?: tr("First time logged")
         canvas.drawText(before, L, y + if (big) 200f else 150f, ink.type(ink.faint, if (big) 40f else 34f, 450).fit(before, R - L))
         y += blockH
     }
-    if (shown.size < d.bests.size) canvas.drawText("+${d.bests.size - shown.size} more", L, y + 20f, ink.type(ink.faint, 38f, 450))
+    if (shown.size < d.bests.size) canvas.drawText(tr("+{0} more", d.bests.size - shown.size), L, y + 20f, ink.type(ink.faint, 38f, 450))
 }
 
 private fun drawMuscles(canvas: Canvas, ink: Ink, d: ShareData) {
-    drawOverline(canvas, ink, "MUSCLES WORKED  ·  ${d.title.uppercase(Locale.US)}", 330f)
+    drawOverline(canvas, ink, tr("MUSCLES WORKED  ·  {0}", d.title.uppercase(Locale.US)), 330f)
     val (top, topSets) = d.muscles.first()
     canvas.drawText(top, L, 500f, ink.type(ink.text, 150f, 800).fit(top, R - L))
-    canvas.drawText("worked most, ${setsText(topSets)}", L, 570f, ink.type(ink.muted, 42f, 450))
+    canvas.drawText(tr("worked most, {0}", setsText(topSets)), L, 570f, ink.type(ink.muted, 42f, 450))
 
     var y = 730f
     val max = topSets
@@ -485,7 +485,7 @@ private fun drawMuscles(canvas: Canvas, ink: Ink, d: ShareData) {
         canvas.drawRoundRect(RectF(L, barTop, L + w, barTop + barH), barH / 2, barH / 2, ink.fill(ink.accent, if (i == 0) 255 else 170))
         y += rowH
     }
-    val note = "Helping muscles count as half a set"
+    val note = tr("Helping muscles count as half a set")
     canvas.drawText(note, L, minOf(y + 10f, 1620f), ink.type(ink.faint, 32f, 450))
 }
 
@@ -501,20 +501,20 @@ private fun drawCheck(canvas: Canvas, cx: Float, cy: Float, size: Float, color: 
 }
 
 private fun drawStreak(canvas: Canvas, ink: Ink, d: ShareData) {
-    drawOverline(canvas, ink, "CONSISTENCY  ·  ${shortDate(d.whenMillis)}", 330f)
+    drawOverline(canvas, ink, tr("CONSISTENCY  ·  {0}", shortDate(d.whenMillis)), 330f)
     val streaking = d.weekStreak >= 2
     val hero = if (streaking) "${d.weekStreak}" else "${d.workoutNumber}"
     val heroPaint = ink.type(ink.text, 300f, 800)
     canvas.drawText(hero, L, 640f, heroPaint)
-    canvas.drawText(if (streaking) "weeks in a row" else if (d.workoutNumber == 1) "workout logged" else "workouts logged", L, 730f, ink.type(ink.text, 60f, 650))
+    canvas.drawText(if (streaking) tr("weeks in a row") else if (d.workoutNumber == 1) tr("workout logged") else tr("workouts logged"), L, 730f, ink.type(ink.text, 60f, 650))
     val sub = if (streaking) {
         val since = Calendar.getInstance().apply { timeInMillis = weekStart(d.whenMillis); add(Calendar.WEEK_OF_YEAR, -(d.weekStreak - 1)) }
-        "Training every week since ${SimpleDateFormat("MMM d", Locale.US).format(since.time)}"
-    } else "One workout at a time"
+        tr("Training every week since {0}", DateUtils.formatShortDay(since.time))
+    } else tr("One workout at a time")
     canvas.drawText(sub, L, 800f, ink.type(ink.muted, 42f, 450).fit(sub, R - L))
 
     // This week, day by day, starting on the locale's first day.
-    drawOverline(canvas, ink, "THIS WEEK", 980f, ink.faint)
+    drawOverline(canvas, ink, tr("THIS WEEK"), 980f, ink.faint)
     val first = Calendar.getInstance().firstDayOfWeek
     val today = Calendar.getInstance().apply { timeInMillis = d.whenMillis }.get(Calendar.DAY_OF_WEEK)
     val step = (R - L) / 7f
@@ -539,9 +539,9 @@ private fun drawStreak(canvas: Canvas, ink: Ink, d: ShareData) {
     drawStatRow(
         canvas, ink, 1330f,
         listOf(
-            Triple("${d.workoutsThisMonth}", "This month", false),
-            Triple("${d.workoutNumber}", "All time", false),
-            Triple(if (d.weekStreak == 1) "1 week" else "${d.weekStreak} weeks", "Streak", streaking)
+            Triple("${d.workoutsThisMonth}", tr("This month"), false),
+            Triple("${d.workoutNumber}", tr("All time"), false),
+            Triple(if (d.weekStreak == 1) tr("1 week") else tr("{0} weeks", d.weekStreak), tr("Streak"), streaking)
         )
     )
 }
@@ -604,8 +604,8 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
             }
             busy = false
             when {
-                ok == null -> Toast.makeText(context, if (save) "Couldn't save the image" else "Couldn't create the image", Toast.LENGTH_SHORT).show()
-                save -> Toast.makeText(context, "Saved to Pictures/GymTracker", Toast.LENGTH_SHORT).show()
+                ok == null -> Toast.makeText(context, if (save) tr("Couldn't save the image") else tr("Couldn't create the image"), Toast.LENGTH_SHORT).show()
+                save -> Toast.makeText(context, tr("Saved to Pictures/GymTracker"), Toast.LENGTH_SHORT).show()
                 ok is File -> openShareChooser(context, ok, data.title, background == ShareBackground.CLEAR)
             }
         }
@@ -613,9 +613,9 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
 
     AppBottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(bottom = 20.dp).navigationBarsPadding()) {
-            Text("Share workout", style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 24.dp))
+            Text(tr("Share workout"), style = AppType.title, color = P.textPrimary, modifier = Modifier.padding(horizontal = 24.dp))
             Text(
-                "Swipe for more cards. ${cards[pager.currentPage].label} card.",
+                tr("Swipe for more cards. {0} card.", cards[pager.currentPage].label),
                 style = AppType.caption,
                 color = P.textSecondary,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp)
@@ -644,7 +644,7 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
                 ChoiceChips(options = options.map { it to it.label }, selected = background, onSelect = { background = it })
                 if (background == ShareBackground.CLEAR) {
                     Text(
-                        "No background: save it, then add it as a sticker over your own photo or video.",
+                        tr("No background: save it, then add it as a sticker over your own photo or video."),
                         style = AppType.caption,
                         color = P.textTertiary,
                         modifier = Modifier.padding(top = 8.dp)
@@ -652,10 +652,10 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PrimaryButton("Share", { export(save = false) }, Modifier.weight(1f), icon = Icons.Rounded.IosShare, enabled = !busy)
+                    PrimaryButton(tr("Share"), { export(save = false) }, Modifier.weight(1f), icon = Icons.Rounded.IosShare, enabled = !busy)
                     // Saving to Pictures without a storage permission needs Android 10's MediaStore.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        SecondaryButton("Save", { export(save = true) }, Modifier.weight(0.6f), icon = Icons.Rounded.FileDownload, enabled = !busy, height = 54.dp)
+                        SecondaryButton(tr("Save"), { export(save = true) }, Modifier.weight(0.6f), icon = Icons.Rounded.FileDownload, enabled = !busy, height = 54.dp)
                     }
                 }
             }
@@ -687,7 +687,7 @@ private fun SharePreview(data: ShareData, card: ShareCard, background: ShareBack
                 } else Modifier
             )
     ) {
-        image?.let { Image(it, contentDescription = "${card.label} card", modifier = Modifier.fillMaxSize()) }
+        image?.let { Image(it, contentDescription = tr("{0} card", card.label), modifier = Modifier.fillMaxSize()) }
     }
 }
 
@@ -707,10 +707,10 @@ private fun openShareChooser(context: Context, file: File, title: String, png: B
     val send = Intent(Intent.ACTION_SEND).apply {
         type = if (png) "image/png" else "image/jpeg"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, "$title done. Logged with GymTracker.")
+        putExtra(Intent.EXTRA_TEXT, tr("{0} done. Logged with GymTracker.", title))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Share workout").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent.createChooser(send, tr("Share workout")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 private fun saveToPictures(context: Context, bmp: Bitmap, png: Boolean) {

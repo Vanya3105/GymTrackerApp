@@ -35,6 +35,11 @@ fun searchSplits(query: String, programs: List<SplitProgramInfo>, days: Int? = n
             append(name); append(' ')
             append(norm(p.tagline)); append(' ')
             p.splits.forEach { append(norm(it.title)); append(' '); append(norm(it.subtitle)); append(' ') }
+            // In Hebrew the shown names are searched too.
+            if (hebrewOn()) {
+                append(norm(shown(p.name))); append(' '); append(norm(shown(p.tagline))); append(' ')
+                p.splits.forEach { append(norm(shown(it.title))); append(' ') }
+            }
             keywords.forEach { append(it); append(' ') }
             append("${p.weeklyGoal} day ${p.weeklyGoal} days")
         }

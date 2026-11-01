@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <stroke android:width="10dp" android:color="#FF7A4D" />
-</shape>
+<!-- Inset by half the stroke so the ring isn't clipped at the edges of its view. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="3dp">
+    <shape android:shape="oval">
+        <stroke android:width="6dp" android:color="#FF7A4D" />
+    </shape>
+</inset>

@@ -137,7 +137,7 @@ fun stepLabel(field: SetField, type: ExerciseType, weightStep: Float): String = 
     SetField.WEIGHT -> formatKgClean(weightStep)
     SetField.DISTANCE -> "0.1"
     SetField.REPS -> "1"
-    SetField.TIME -> "${timeStep(type)}s"
+    SetField.TIME -> tr("{0}s", timeStep(type))
 }
 
 /** The box after [ref] in its set, then the first box of the next set; null after the last set. */
@@ -234,7 +234,7 @@ fun SetKeypad(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = AppType.caption, color = P.textSecondary, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 6.dp))
             Text(
-                "Done",
+                tr("Done"),
                 style = AppType.label,
                 color = P.textPrimary,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).pressable(onClick = onDone).padding(horizontal = 12.dp, vertical = 10.dp)
@@ -250,7 +250,7 @@ fun SetKeypad(
                     if (decimal) DigitKey(".") { onKey('.') } else Box(Modifier.weight(1f))
                     DigitKey("0") { onKey('0') }
                     Key(onClick = { onKey(KEY_BACKSPACE) }) {
-                        Icon(Icons.AutoMirrored.Rounded.Backspace, "Delete", tint = P.textSecondary, modifier = Modifier.size(22.dp))
+                        Icon(Icons.AutoMirrored.Rounded.Backspace, tr("Delete"), tint = P.textSecondary, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -272,7 +272,7 @@ fun SetKeypad(
                                 if (hasNext) Icons.AutoMirrored.Rounded.KeyboardArrowRight else Icons.Rounded.Check,
                                 null, tint = P.onAccentPrimary, modifier = Modifier.size(24.dp)
                             )
-                            Text(if (hasNext) "Next" else "Done", style = AppType.label, color = P.onAccentPrimary)
+                            Text(if (hasNext) tr("Next") else tr("Done"), style = AppType.label, color = P.onAccentPrimary)
                         }
                     }
                 }

@@ -389,22 +389,25 @@ object ExerciseDatabase {
     fun search(query: String, muscle: String? = null): List<ExerciseInfo> {
         val pool = if (muscle == null) all else all.filter { it.muscle == muscle }
         val q = norm(query.trim())
-        if (q.isEmpty()) return pool.sortedBy { it.name }
+        if (q.isEmpty()) return pool.sortedBy { shown(it.name) }
         val words = q.split(" ").filter { it.isNotBlank() }
 
         return pool.mapNotNull { info ->
             val name = norm(info.name)
+            // In Hebrew the shown names are searched too; the English ones still work.
+            val local = norm(shown(info.name))
             val haystack = buildString {
                 append(name); append(' ')
+                if (local != name) { append(local); append(' ') }
                 info.aliases.forEach { append(norm(it)); append(' ') }
-                append(norm(info.muscle)); append(' ')
-                append(norm(info.equipment))
+                append(norm(info.muscle)); append(' '); append(norm(shown(info.muscle))); append(' ')
+                append(norm(info.equipment)); append(' '); append(norm(shown(info.equipment)))
             }
             if (!words.all { haystack.contains(it) }) return@mapNotNull null
             val score = when {
-                name.startsWith(q) -> 0
+                name.startsWith(q) || local.startsWith(q) -> 0
                 info.aliases.any { norm(it).startsWith(q) } -> 1
-                name.split(" ").any { it.startsWith(words.first()) } -> 2
+                name.split(" ").any { it.startsWith(words.first()) } || local.split(" ").any { it.startsWith(words.first()) } -> 2
                 else -> 3
             }
             score to info

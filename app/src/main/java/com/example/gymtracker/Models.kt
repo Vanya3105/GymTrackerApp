@@ -87,12 +87,12 @@ data class ExerciseTarget(val sets: Int, val repMin: Int, val repMax: Int) {
 
 /** What a set of this exercise records. Belongs to the exercise, not to each workout. */
 enum class ExerciseType(val label: String, val example: String) {
-    WEIGHT_REPS("Weight & reps", "Barbell, dumbbell, machine, cable"),
-    BODYWEIGHT("Bodyweight reps", "Push-ups, pull-ups, sit-ups"),
-    WEIGHTED_BODYWEIGHT("Weighted bodyweight", "Dips or pull-ups with a belt: log the added weight"),
-    ASSISTED("Assisted bodyweight", "Band or machine help: log the assistance"),
-    DURATION("Time", "Planks, hangs, holds"),
-    DISTANCE_TIME("Distance & time", "Running, rowing, cycling");
+    WEIGHT_REPS(tr("Weight & reps"), tr("Barbell, dumbbell, machine, cable")),
+    BODYWEIGHT(tr("Bodyweight reps"), tr("Push-ups, pull-ups, sit-ups")),
+    WEIGHTED_BODYWEIGHT(tr("Weighted bodyweight"), tr("Dips or pull-ups with a belt: log the added weight")),
+    ASSISTED(tr("Assisted bodyweight"), tr("Band or machine help: log the assistance")),
+    DURATION(tr("Time"), tr("Planks, hangs, holds")),
+    DISTANCE_TIME(tr("Distance & time"), tr("Running, rowing, cycling"));
 
     val usesWeight: Boolean get() = this == WEIGHT_REPS || this == WEIGHTED_BODYWEIGHT || this == ASSISTED
     val usesReps: Boolean get() = usesWeight || this == BODYWEIGHT
@@ -164,6 +164,20 @@ data class WorkoutStats(
     val volumeKg: Int,
     val prCount: Int
 )
+
+/**
+ * What a finished workout keeps: the ticked sets of each exercise that wasn't skipped. Sets come
+ * pre-filled with suggestions, so an unticked one wasn't done. With nothing ticked at all every set
+ * is kept, so a workout logged without ticking still saves.
+ */
+fun performedExercises(exercises: List<ExerciseEntry>): List<ExerciseEntry> {
+    val kept = exercises.filter { !it.isSkipped }
+    if (kept.none { ex -> ex.sets.any { it.isCompleted } }) return kept
+    return kept.mapNotNull { ex ->
+        val done = ex.sets.filter { it.isCompleted }
+        if (done.isEmpty()) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+    }
+}
 
 fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): WorkoutStats {
     var workSets = 0

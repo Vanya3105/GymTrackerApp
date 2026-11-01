@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 // MUSCLE RECOVERY
 // ============================================================================
 
-enum class RecoveryStatus(val label: String) { TIRED("Tired"), RECOVERING("Recovering"), READY("Ready") }
+enum class RecoveryStatus(val label: String) { TIRED(tr("Tired")), RECOVERING(tr("Recovering")), READY(tr("Ready")) }
 
 @Immutable
 data class MuscleRecoveryItem(
@@ -38,7 +38,7 @@ val RECOVERY_GROUPS = listOf(
 private val BASE_RECOVERY_HOURS = floatArrayOf(48f, 72f, 48f, 36f, 42f, 30f, 72f, 72f, 60f, 36f, 30f)
 
 /** Short names where the full one crowds a ring label. */
-fun recoveryLabel(group: String): String = if (group == "Hamstrings") "Hams" else group
+fun recoveryLabel(group: String): String = shown(if (group == "Hamstrings") "Hams" else group)
 
 /**
  * How much one set of an exercise works each group, in [RECOVERY_GROUPS] order: 1 for the
@@ -320,7 +320,7 @@ fun suggestNextWeight(
 
     // Never logged: the weight in the sets is only a placeholder, so don't present it as advice.
     return Suggestion(
-        "First time: find a weight you can lift ${goal.text} times with good form. Hit ${goal.max} on every set, then add ${formatKgClean(step)} ${unit.label}.",
+        tr("First time: find a weight you can lift {0} times with good form. Hit {1} on every set, then add {2} {3}.", goal.text, goal.max, formatKgClean(step), unit.label),
         SuggestionTone.NEUTRAL, ""
     )
 }
@@ -340,14 +340,14 @@ private fun inSession(done: List<SetEntry>, goal: RepGoal, step: Float, unit: We
     if (latest.repCount <= goal.min - 2 && w > 0f) {
         val lighter = minOf(w - step, maxOf(floorTo(weightFor(e1rm, goal.min, bodyLoad), step), floorTo(w * 0.8f, step))).coerceAtLeast(0f)
         return if (straight.size == 1) {
-            make(lighter, SuggestionTone.CAUTION, "${latest.repCount} reps is under your ${goal.text} range, so this is too heavy today. Use ${shown(lighter)} for the next sets.")
+            make(lighter, SuggestionTone.CAUTION, tr("{0} reps is under your {1} range, so this is too heavy today. Use {2} for the next sets.", latest.repCount, goal.text, shown(lighter)))
         } else {
-            make(lighter, SuggestionTone.CAUTION, "Reps fell to ${latest.repCount}. Rest a little longer, or use ${shown(lighter)} for the rest.")
+            make(lighter, SuggestionTone.CAUTION, tr("Reps fell to {0}. Rest a little longer, or use {1} for the rest.", latest.repCount, shown(lighter)))
         }
     }
     if (straight.size == 1 && latest.repCount >= goal.max + 3) {
         val heavier = maxOf(w + step, minOf(floorTo(weightFor(e1rm, goal.mid, bodyLoad), step), floorTo(w * 1.15f, step)))
-        return make(heavier, SuggestionTone.GOOD, "${latest.repCount} reps is light for ${goal.text}. Go up to ${shown(heavier)} for the next sets.")
+        return make(heavier, SuggestionTone.GOOD, tr("{0} reps is light for {1}. Go up to {2} for the next sets.", latest.repCount, goal.text, shown(heavier)))
     }
     return null
 }
@@ -365,8 +365,8 @@ private fun plan(
     val last = sessions[0]
     val prev = sessions.getOrNull(1)
     val w = last.weight
-    val whenText = if (nextTime) "next time" else "today"
-    val lastText = if (nextTime) "today" else "last time"
+    val whenText = if (nextTime) tr("next time") else tr("today")
+    val lastText = if (nextTime) tr("today") else tr("last time")
     fun shown(v: Float) = "${formatKgClean(unit.round(v))} ${unit.label}"
     fun make(v: Float, tone: SuggestionTone, message: String) =
         Suggestion(message, tone, unit.stored(unit.round(v.coerceAtLeast(0f))), forNextTime = nextTime)
@@ -379,16 +379,16 @@ private fun plan(
     val daysOff = ((now - last.time) / DAY_MS).toInt()
     if (!nextTime && daysOff >= 28 && w > 0f) {
         val back = floorTo(w * (if (daysOff >= 56) 0.8f else 0.9f), step)
-        return make(back, SuggestionTone.CAUTION, "It's been ${daysOff / 7} weeks since you last did this. Ease back in at ${shown(back)} and build up from there.")
+        return make(back, SuggestionTone.CAUTION, tr("It's been {0} weeks since you last did this. Ease back in at {1} and build up from there.", daysOff / 7, shown(back)))
     }
 
     // Well under the range once, or under it twice running at this weight: the weight is wrong.
     val missedTwice = last.firstReps < goal.min && prev != null && sameWeight(prev) && prev.firstReps < goal.min
     if (w > 0f && (last.firstReps <= goal.min - 3 || missedTwice)) {
         val down = lighter(weightFor(last.e1rm, goal.mid, bodyLoad), 0.15f)
-        val why = if (missedTwice) "Under ${goal.min} reps at ${shown(w)} two sessions running."
-        else "Only ${last.firstReps} reps at ${shown(w)} $lastText, well under ${goal.text}."
-        return make(down, SuggestionTone.CAUTION, "$why Drop to ${shown(down)} $whenText and build back up.")
+        val why = if (missedTwice) tr("Under {0} reps at {1} two sessions running.", goal.min, shown(w))
+        else tr("Only {0} reps at {1} {2}, well under {3}.", last.firstReps, shown(w), lastText, goal.text)
+        return make(down, SuggestionTone.CAUTION, tr("{0} Drop to {1} {2} and build back up.", why, shown(down), whenText))
     }
 
     if (sessions.size >= 3 && w > 0f) {
@@ -396,11 +396,11 @@ private fun plan(
         // Same weight three times, never reaching the top and no more reps than before: a stall.
         if (three.all(sameWeight) && three.none { it.minReps >= goal.max } && last.totalReps <= three[2].totalReps) {
             val reset = lighter(w * 0.9f, 0.1f)
-            return make(reset, SuggestionTone.CAUTION, "No progress at ${shown(w)} in 3 sessions. Reset to ${shown(reset)} $whenText and work back up; you'll usually pass it within a few weeks.")
+            return make(reset, SuggestionTone.CAUTION, tr("No progress at {0} in 3 sessions. Reset to {1} {2} and work back up; you'll usually pass it within a few weeks.", shown(w), shown(reset), whenText))
         }
         if (three[0].e1rm < three[1].e1rm * 0.99f && three[1].e1rm < three[2].e1rm * 0.99f) {
             val down = lighter(w * 0.9f, 0.1f)
-            return make(down, SuggestionTone.CAUTION, "Your numbers have dipped three sessions in a row. Go lighter $whenText: ${shown(down)}, and check your sleep and recovery.")
+            return make(down, SuggestionTone.CAUTION, tr("Your numbers have dipped three sessions in a row. Go lighter {0}: {1}, and check your sleep and recovery.", whenText, shown(down)))
         }
     }
 
@@ -409,10 +409,10 @@ private fun plan(
         // One step on a light dumbbell can be 20%+. Earn it with extra reps first.
         val bigJump = total > 0f && step / total > 0.10f
         if (bigJump && last.minReps < goal.max + 2) {
-            return make(w, SuggestionTone.NEUTRAL, "Every set hit ${goal.max}+ at ${shown(w)}. The next step is a big jump for this weight, so get ${goal.max + 2} reps on every set first.")
+            return make(w, SuggestionTone.NEUTRAL, tr("Every set hit {0}+ at {1}. The next step is a big jump for this weight, so get {2} reps on every set first.", goal.max, shown(w), goal.max + 2))
         }
         if (!nextTime && daysOff >= 14) {
-            return make(w, SuggestionTone.NEUTRAL, "First session in ${daysOff / 7} weeks. Repeat ${shown(w)} before moving up.")
+            return make(w, SuggestionTone.NEUTRAL, tr("First session in {0} weeks. Repeat {1} before moving up.", daysOff / 7, shown(w)))
         }
         var steps = 1
         // Beat the top by 2+ on every set: a bigger jump, as long as the reps should stay in range.
@@ -421,18 +421,18 @@ private fun plan(
             while (steps < 4 && w + (steps + 1) * step <= cap + 0.001f && repsAt(last.e1rm, w + (steps + 1) * step, bodyLoad) >= goal.mid) steps++
         }
         val up = w + steps * step
-        val message = if (steps == 1) "Every set hit ${goal.max}+ reps at ${shown(w)}. Go up to ${shown(up)} $whenText."
-        else "You beat ${goal.max} reps on every set at ${shown(w)}. Jump to ${shown(up)} $whenText."
+        val message = if (steps == 1) tr("Every set hit {0}+ reps at {1}. Go up to {2} {3}.", goal.max, shown(w), shown(up), whenText)
+        else tr("You beat {0} reps on every set at {1}. Jump to {2} {3}.", goal.max, shown(w), shown(up), whenText)
         return make(up, SuggestionTone.GOOD, message)
     }
 
     if (last.firstReps < goal.min) {
-        return make(w, SuggestionTone.CAUTION, "${last.firstReps} reps at ${shown(w)} $lastText, just under ${goal.text}. Stay there and aim for ${goal.min}.")
+        return make(w, SuggestionTone.CAUTION, tr("{0} reps at {1} {2}, just under {3}. Stay there and aim for {4}.", last.firstReps, shown(w), lastText, goal.text, goal.min))
     }
     if (last.firstReps >= goal.max) {
-        return make(w, SuggestionTone.NEUTRAL, "Your first set hit ${goal.max} at ${shown(w)}. Get every set there, then move up.")
+        return make(w, SuggestionTone.NEUTRAL, tr("Your first set hit {0} at {1}. Get every set there, then move up.", goal.max, shown(w)))
     }
-    return make(w, SuggestionTone.NEUTRAL, "${shown(w)} for ${last.reps.joinToString(", ")} $lastText. Stay there and add a rep; move up once every set hits ${goal.max}.")
+    return make(w, SuggestionTone.NEUTRAL, tr("{0} for {1} {2}. Stay there and add a rep; move up once every set hits {3}.", shown(w), last.reps.joinToString(", "), lastText, goal.max))
 }
 
 /**

@@ -25,59 +25,75 @@ import kotlin.random.Random
 
 private class ConfettiPiece(
     val originX: Float,
+    val originY: Float,
     val angle: Float,
     val speed: Float,
     val spin: Float,
     val width: Float,
     val height: Float,
     val color: Color,
-    val drift: Float
+    val drift: Float,
+    val round: Boolean,
+    /** Seconds after the start that this piece is fired. */
+    val delay: Float
 )
 
-private const val CONFETTI_SECONDS = 2.4f
+private const val CONFETTI_SECONDS = 3.2f
 
 /**
- * A one-off burst of confetti from the top of [modifier]'s area that falls under gravity and
- * fades out. Draws nothing once it's over. Doesn't take touches.
+ * A one-off burst of confetti over [modifier]'s area that falls under gravity and fades out:
+ * from the top, and with [cannons] also from both bottom corners, aimed up and in. Draws nothing
+ * once it's over. Doesn't take touches.
  */
 @Composable
-fun ConfettiBurst(modifier: Modifier = Modifier, pieces: Int = 80) {
+fun ConfettiBurst(modifier: Modifier = Modifier, pieces: Int = 80, cannons: Boolean = false) {
     val P = LocalPalette.current
     val colors = listOf(P.accentPrimary, P.warningText, P.successText, P.accentSecondary, Color.White)
     val parts = remember {
         val rnd = Random(System.nanoTime())
-        List(pieces) {
-            ConfettiPiece(
-                originX = 0.3f + rnd.nextFloat() * 0.4f,
-                // Upwards, spread over ~130°.
-                angle = Math.toRadians(-90.0 + (rnd.nextFloat() - 0.5f) * 130.0).toFloat(),
-                speed = 420f + rnd.nextFloat() * 520f,
-                spin = (rnd.nextFloat() - 0.5f) * 3f,
-                width = 6f + rnd.nextFloat() * 6f,
-                height = 10f + rnd.nextFloat() * 8f,
-                color = colors[rnd.nextInt(colors.size)],
-                drift = (rnd.nextFloat() - 0.5f) * 2f
-            )
-        }
+        fun piece(originX: Float, originY: Float, angleDeg: Double, spreadDeg: Double, speed: Float, delay: Float) = ConfettiPiece(
+            originX = originX,
+            originY = originY,
+            angle = Math.toRadians(angleDeg + (rnd.nextFloat() - 0.5f) * spreadDeg).toFloat(),
+            speed = speed * (0.7f + rnd.nextFloat() * 0.6f),
+            spin = (rnd.nextFloat() - 0.5f) * 3f,
+            width = 6f + rnd.nextFloat() * 6f,
+            height = 10f + rnd.nextFloat() * 8f,
+            color = colors[rnd.nextInt(colors.size)],
+            drift = (rnd.nextFloat() - 0.5f) * 2f,
+            round = rnd.nextFloat() < 0.3f,
+            delay = delay
+        )
+        val top = List(pieces) { piece(0.3f + rnd.nextFloat() * 0.4f, 0.08f, -90.0, 130.0, 700f, 0f) }
+        // The corner cannons fire a moment later, so the two bursts read as one celebration.
+        val sides = if (cannons) List(pieces) { i ->
+            val left = i % 2 == 0
+            piece(if (left) -0.02f else 1.02f, 1.0f, if (left) -62.0 else -118.0, 26.0, 2600f, 0.15f + rnd.nextFloat() * 0.12f)
+        } else emptyList()
+        top + sides
     }
     val time = remember { Animatable(0f) }
     LaunchedEffect(Unit) { time.animateTo(CONFETTI_SECONDS, tween((CONFETTI_SECONDS * 1000).toInt(), easing = LinearEasing)) }
     if (time.value >= CONFETTI_SECONDS) return
 
     Canvas(modifier) {
-        val t = time.value
         val scale = density / 2.6f
         val gravity = 520f * scale
-        val fade = (1f - (t / CONFETTI_SECONDS).let { it * it * it }).coerceIn(0f, 1f)
+        val fade = (1f - (time.value / CONFETTI_SECONDS).let { it * it * it }).coerceIn(0f, 1f)
         parts.forEach { p ->
+            val t = time.value - p.delay
+            if (t <= 0f) return@forEach
             // Air drag: the burst slows quickly, then the pieces flutter down.
             val travel = (1f - kotlin.math.exp(-2.2f * t)) / 2.2f
             val x = size.width * p.originX + cos(p.angle) * p.speed * scale * travel + sin(t * 4f + p.drift * 3f) * 14f * scale * p.drift
-            val y = size.height * 0.08f + sin(p.angle) * p.speed * scale * travel + 0.5f * gravity * t * t
+            val y = size.height * p.originY + sin(p.angle) * p.speed * scale * travel + 0.5f * gravity * t * t
             val w = p.width * scale * 1.6f
             val h = p.height * scale * 1.6f
-            rotate(degrees = p.spin * t * 360f, pivot = Offset(x, y)) {
-                drawRect(p.color.copy(alpha = fade), topLeft = Offset(x - w / 2, y - h / 2), size = Size(w, h * (0.35f + 0.65f * kotlin.math.abs(cos(t * 6f + p.drift * 5f)))))
+            val color = p.color.copy(alpha = fade)
+            if (p.round) {
+                drawCircle(color, w * 0.45f, Offset(x, y))
+            } else rotate(degrees = p.spin * t * 360f, pivot = Offset(x, y)) {
+                drawRect(color, topLeft = Offset(x - w / 2, y - h / 2), size = Size(w, h * (0.35f + 0.65f * kotlin.math.abs(cos(t * 6f + p.drift * 5f)))))
             }
         }
     }

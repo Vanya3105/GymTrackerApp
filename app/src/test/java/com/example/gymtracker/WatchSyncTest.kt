@@ -153,12 +153,15 @@ class WatchSyncTest {
         assertNull(LocalStorage.loadActiveSession(context))
         val saved = LocalStorage.loadHistory(context).single()
         assertEquals("Push", saved.splitTitle)
-        assertEquals(listOf("Bench Press", "Plank"), saved.exercises.map { it.name })
+        // Only the ticked set is kept; Plank, with nothing ticked, counts as skipped.
+        assertEquals(listOf("Bench Press"), saved.exercises.map { it.name })
+        assertEquals(1, saved.exercises.single().sets.size)
+        assertEquals(listOf("Plank"), saved.skippedExercises)
 
         val s = watchStateOf(context)
         assertFalse(s.active)
         assertEquals("Push", s.lastWorkout?.workoutName)
-        // Counted like the phone's finish sheet: filled-in sets count even if not ticked.
+        // Counted like the phone's finish sheet: ticked sets only.
         val stats = computeWorkoutStats(saved.exercises, emptyList())
         assertEquals(stats.workSets, s.lastWorkout?.sets)
         assertEquals(formatVolume(stats.volumeKg), s.lastWorkout?.volume)
