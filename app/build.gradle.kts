@@ -54,6 +54,13 @@ android {
             }
         }
     }
+    // The language is picked inside the app, so Play must ship every language's resources, not
+    // only the phone's: otherwise Hebrew chosen on an English phone would miss its strings.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

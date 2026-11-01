@@ -154,10 +154,12 @@ private fun WeekView(
     Column(Modifier.fillMaxSize().swipeToPage({ weekOffset-- }, { weekOffset++ }, canGoNext = weekOffset < 0)) {
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, tr("Previous week"), { weekOffset-- })
-            AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_title") { _ ->
+            AnimatedContent(weekOffset, transitionSpec = { pageTransition() }, modifier = Modifier.weight(1f), label = "week_title") { offset ->
+                // The title sliding out keeps its own week's name.
+                val shownWeek = if (offset == weekOffset) week else remember(offset, history) { computeWeekSummary(history, offset, userProfile.splitProgram) }
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(week.titleLabel, style = AppType.bodyStrong, color = P.textPrimary)
-                    Text(week.dateRangeLabel, style = AppType.caption, color = P.textSecondary)
+                    Text(shownWeek.titleLabel, style = AppType.bodyStrong, color = P.textPrimary)
+                    Text(shownWeek.dateRangeLabel, style = AppType.caption, color = P.textSecondary)
                 }
             }
             CircleIconButton(Icons.AutoMirrored.Rounded.KeyboardArrowRight, tr("Next week"), { weekOffset++ }, enabled = weekOffset < 0)
@@ -203,13 +205,6 @@ private fun MonthView(
     var selectedKey by rememberSaveable { mutableStateOf(todayKey) }
     val byDate = remember(history) { history.groupBy { it.dateKey } }
 
-    val (firstDayOffset, daysInMonth, monthTitle) = remember(year, month) {
-        val cal = Calendar.getInstance().apply { set(year, month, 1) }
-        Triple(cal.get(Calendar.DAY_OF_WEEK) - 1, cal.getActualMaximum(Calendar.DAY_OF_MONTH), DateUtils.formatMonthTitle(cal.time))
-    }
-    // "yyyy-MM-" for this month; day keys are built from it.
-    val monthPrefix = remember(year, month) { String.format(Locale.US, "%04d-%02d-", year, month + 1) }
-    val workoutsThisMonth = byDate.keys.count { it.startsWith(monthPrefix) }
     fun previousMonth() { if (month == 0) { month = 11; year-- } else month-- }
     fun nextMonth() { if (month == 11) { month = 0; year++ } else month++ }
 
@@ -218,7 +213,17 @@ private fun MonthView(
         transitionSpec = { pageTransition() },
         modifier = Modifier.swipeToPage(::previousMonth, ::nextMonth),
         label = "month_page"
-    ) { _ ->
+    ) { page ->
+    // Each page shows its own month, so the one sliding out keeps its days while the next comes in.
+    val pageYear = page / 12
+    val pageMonth = page % 12
+    val (firstDayOffset, daysInMonth, monthTitle) = remember(pageYear, pageMonth) {
+        val cal = Calendar.getInstance().apply { set(pageYear, pageMonth, 1) }
+        Triple(cal.get(Calendar.DAY_OF_WEEK) - 1, cal.getActualMaximum(Calendar.DAY_OF_MONTH), DateUtils.formatMonthTitle(cal.time))
+    }
+    // "yyyy-MM-" for this month; day keys are built from it.
+    val monthPrefix = remember(pageYear, pageMonth) { String.format(Locale.US, "%04d-%02d-", pageYear, pageMonth + 1) }
+    val workoutsThisMonth = byDate.keys.count { it.startsWith(monthPrefix) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
@@ -290,11 +295,20 @@ private fun MonthView(
                 }
             }
         }
-        item {
-            val label = if (selectedKey == todayKey) tr("Today") else selectedKey.toDayLabel()
-            SectionHeader(label)
+        if (selectedKey.startsWith(monthPrefix)) {
+            item {
+                val label = if (selectedKey == todayKey) tr("Today") else selectedKey.toDayLabel()
+                SectionHeader(label)
+            }
+            workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyTitle = tr("Rest day"), emptyText = tr("No workout on this day."), emptyIcon = Icons.Rounded.Event)
+        } else {
+            // The picked day is in another month: show this month's workouts rather than a day off the calendar.
+            item { SectionHeader(monthTitle) }
+            workoutList(
+                history.filter { it.dateKey.startsWith(monthPrefix) }, history, onOpen, onDelete, onViewPhoto,
+                emptyTitle = tr("A rest month"), emptyText = tr("Nothing was logged that month."), emptyIcon = Icons.Rounded.Event
+            )
         }
-        workoutList(byDate[selectedKey].orEmpty(), history, onOpen, onDelete, onViewPhoto, emptyTitle = tr("Rest day"), emptyText = tr("No workout on this day."), emptyIcon = Icons.Rounded.Event)
     }
     }
 }

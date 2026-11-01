@@ -477,7 +477,7 @@ object LocalStorage {
 
     fun importJsonBackupString(context: Context, jsonContent: String): Boolean {
         val parsed = try {
-            JSONObject(jsonContent.removePrefix("﻿").trim())
+            JSONObject(jsonContent.removePrefix("\uFEFF").trim())
         } catch (e: Exception) {
             return false
         }
@@ -516,7 +516,7 @@ object LocalStorage {
      */
     fun addBackupJsonString(context: Context, jsonContent: String): CombineResult? {
         val parsed = try {
-            JSONObject(jsonContent.removePrefix("﻿").trim())
+            JSONObject(jsonContent.removePrefix("\uFEFF").trim())
         } catch (e: Exception) {
             return null
         }

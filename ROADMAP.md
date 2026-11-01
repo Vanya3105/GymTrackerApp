@@ -198,6 +198,10 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 
 ## Polish (branch `polish`, on top of `design-refresh`)
 - [x] Figures: elbows and knees no longer snap to the other side mid-movement (117 jumps in about 60 exercises: upright rows, cleans, flyes, raises, clap push-ups…). The joint now drifts across as the bend lines up with the limb, like an elbow turning towards the viewer. Landmine rotation swings in an arc over the head, the snatch's bar passes in front of the face with the elbows turning up. `FigureMotionTest` plays every figure in 400 steps and fails on any jump
+- [x] Google Play: language splits off (`bundle.language.enableSplit = false`), so Hebrew picked in the app on a phone set to another language has all its strings (lint AppBundleLocaleChanges)
+- [x] History: while swiping weeks or months, the page sliding out keeps its own week / month (it showed the new one); a month whose calendar doesn't hold the picked day lists its own workouts instead of that day's
+- [x] An exercise with only its warm-up ticked is saved as skipped (History showed "0 ×"); a workout of warm-ups only still saves them
+- [x] Lint errors cleared: byte-order marks written as escapes, a `remember` that returned nothing
 
 ## Design refresh (branch `design-refresh`, on top of `smart-recommendations`)
 - [x] Neutral greys instead of warm cream/beige, near-black dark mode; the orange stays, kept for actions and progress

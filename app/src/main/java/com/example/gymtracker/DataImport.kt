@@ -345,7 +345,7 @@ internal fun parseExportDate(text: String): Long? {
 
 /** RFC 4180 CSV (also ';'-separated, as older Strong exports are): rows of fields, quotes undone. */
 internal fun parseCsv(text: String): List<List<String>> {
-    val clean = text.removePrefix("﻿")
+    val clean = text.removePrefix("\uFEFF")
     val firstLine = clean.substringBefore('\n')
     val delimiter = if (firstLine.count { it == ';' } > firstLine.count { it == ',' }) ';' else ','
     val rows = ArrayList<List<String>>()

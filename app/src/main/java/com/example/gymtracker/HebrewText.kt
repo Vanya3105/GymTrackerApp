@@ -9,7 +9,7 @@ package com.example.gymtracker
  */
 internal object HebrewText {
     private val ui: Map<String, String> by lazy {
-        HashMap<String, String>(1540).apply { ui1(this); ui2(this); ui3(this) }
+        HashMap<String, String>(1544).apply { ui1(this); ui2(this); ui3(this) }
     }
     private val names: Map<String, String> by lazy {
         HashMap<String, String>(856).apply { names1(this); names2(this) }
@@ -61,6 +61,7 @@ internal object HebrewText {
         m["A couple of quick questions so the app can track your progress and suggest weights."] = "כמה שאלות קצרות, כדי שהאפליקציה תוכל לעקוב אחרי ההתקדמות שלכם ולהציע משקלים."
         m["A file"] = "קובץ"
         m["A gym"] = "חדר כושר"
+        m["A rest month"] = "חודש מנוחה"
         m["A rest week"] = "שבוע מנוחה"
         m["A short beep that lowers your music instead of stopping it"] = "צפצוף קצר שמנמיך את המוזיקה במקום לעצור אותה"
         m["Add"] = "הוספה"
@@ -372,10 +373,10 @@ internal object HebrewText {
         m["No days yet"] = "עוד אין ימים"
         m["No exercises yet."] = "עוד אין תרגילים."
         m["No file picker on this phone"] = "אין בטלפון הזה בוחר קבצים"
-        m["No help"] = "בלי סיוע"
     }
 
     private fun ui2(m: HashMap<String, String>) {
+        m["No help"] = "בלי סיוע"
         m["No lifts yet"] = "עוד אין הרמות"
         m["No matches"] = "אין תוצאות"
         m["No plan"] = "בלי תוכנית"
@@ -401,6 +402,7 @@ internal object HebrewText {
         m["Nothing logged yet"] = "עוד לא תועד כלום"
         m["Nothing on the bar"] = "אין כלום על המוט"
         m["Nothing was allowed. You can allow it in Health Connect."] = "לא אושר כלום. אפשר לאשר ב-Health Connect."
+        m["Nothing was logged that month."] = "לא נרשם כלום באותו חודש."
         m["Nothing was logged that week."] = "לא תועד כלום באותו שבוע."
         m["Numbers you've already logged are kept. Switch back any time to see them again."] = "מספרים שכבר תיעדתם נשמרים. אפשר לחזור בכל רגע כדי לראות אותם שוב."
         m["Off"] = "כבוי"
@@ -724,11 +726,11 @@ internal object HebrewText {
         m["reps"] = "חזרות"
         m["rest · next {0}"] = "מנוחה · הבא {0}"
         m["sets done"] = "סטים בוצעו"
-        m["sets {0}: as many reps as you can"] = "סטים {0}: כמה שיותר חזרות"
-        m["since {0}"] = "מאז {0}"
     }
 
     private fun ui3(m: HashMap<String, String>) {
+        m["sets {0}: as many reps as you can"] = "סטים {0}: כמה שיותר חזרות"
+        m["since {0}"] = "מאז {0}"
         m["small cars"] = "מכוניות קטנות"
         m["time"] = "זמן"
         m["to recover (legs and back longest, arms and calves quickest). Muscles that help in a lift count "] = "להתאושש (רגליים וגב הכי הרבה, ידיים ושוקיים הכי מהר). שרירים שעוזרים בהרמה נספרים "

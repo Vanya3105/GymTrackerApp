@@ -242,10 +242,11 @@ fun GymTrackerApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val P = LocalPalette.current
 
+    // Once, before the first frame (not in an effect): Profile shouldn't show "off" for a frame and then jump.
     remember {
         LocalStorage.reconcileProfileWeight(context)
-        // Read before Profile first draws, so it doesn't show "off" for a frame and then jump.
         AutoBackup.refreshStatus(context)
+        true
     }
     var userProfile by remember { mutableStateOf(LocalStorage.loadUserProfile(context)) }
     var weightHistory by remember { mutableStateOf(LocalStorage.loadWeightHistory(context)) }

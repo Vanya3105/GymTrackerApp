@@ -183,10 +183,13 @@ data class WorkoutStats(
 fun performedExercises(exercises: List<ExerciseEntry>): List<ExerciseEntry> {
     val kept = exercises.filter { !it.isSkipped }
     if (kept.none { ex -> ex.sets.any { it.isCompleted } }) return kept
-    return kept.mapNotNull { ex ->
+    fun ticked(warmUpsCount: Boolean) = kept.mapNotNull { ex ->
         val done = ex.sets.filter { it.isCompleted }
-        if (done.isEmpty()) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
+        if (done.none { warmUpsCount || !it.isWarmupSet }) null else ex.copy(sets = done.mapIndexed { i, set -> set.copy(setNumber = i + 1) })
     }
+    // Only a warm-up ticked: the exercise wasn't really done (History would show "0 ×" for it),
+    // unless warm-ups are all there is, which still makes a workout.
+    return ticked(warmUpsCount = false).ifEmpty { ticked(warmUpsCount = true) }
 }
 
 fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedWorkout>): WorkoutStats {
