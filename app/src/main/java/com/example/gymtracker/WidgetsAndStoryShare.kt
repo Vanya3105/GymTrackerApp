@@ -22,6 +22,7 @@ import android.view.View
 import android.widget.RemoteViews
 import com.example.gymtracker.watchlink.WatchExercise
 import com.example.gymtracker.watchlink.WatchFinished
+import com.example.gymtracker.watchlink.SetKind
 import com.example.gymtracker.watchlink.WatchState
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
@@ -108,7 +109,10 @@ private class NextSetInfo(
     val primary: String,
     val secondary: String?,
     val setNumber: Int,
-    val setCount: Int
+    val setCount: Int,
+    val kind: SetKind,
+    val workNumber: Int,
+    val workCount: Int
 )
 
 private class LiveSession(
@@ -149,7 +153,14 @@ private class LiveSession(
                 else -> "${parseRepsClean(set.reps, 8)}"
             },
             setNumber = idx + 1,
-            setCount = ex.sets.size
+            setCount = ex.sets.size,
+            kind = when {
+                set.isWarmupSet -> SetKind.WARMUP
+                set.intensityType == "DROP" -> SetKind.DROP
+                else -> SetKind.WORK
+            },
+            workNumber = workNum,
+            workCount = ex.sets.count { !it.isWarmupSet }
         )
     }
 }
@@ -163,8 +174,8 @@ fun watchStateOf(context: Context): WatchState {
     val restStart = LocalStorage.getRestStartedMillis(context)
     return WatchState(
         active = true,
-        workoutName = live.splitName,
-        exerciseName = next?.exerciseName,
+        workoutName = shown(live.splitName),
+        exerciseName = next?.exerciseName?.let(::shown),
         setLabel = next?.label.orEmpty(),
         primary = next?.primary.orEmpty(),
         primaryLabel = when (type) {
@@ -182,13 +193,20 @@ fun watchStateOf(context: Context): WatchState {
         restEndsAtMillis = restEnd,
         restTotalMillis = if (restEnd > 0L && restStart in 1 until restEnd) restEnd - restStart else 0L,
         startedAtMillis = LocalStorage.getActiveSessionStartTime(context),
-        exercises = live.exercises.map { ex -> WatchExercise(ex.name, ex.sets.count { it.isCompleted }, ex.sets.size) },
+        exercises = live.exercises.map { ex -> WatchExercise(shown(ex.name), ex.sets.count { it.isCompleted }, ex.sets.size) },
         currentExercise = live.exercises.indexOf(live.currentExercise),
         setNumber = next?.setNumber ?: 0,
         setCount = next?.setCount ?: 0,
-        canUndo = live.exercises.any { ex -> ex.sets.any { it.isCompleted } }
+        canUndo = live.exercises.any { ex -> ex.sets.any { it.isCompleted } },
+        language = watchLanguage(),
+        setKind = next?.kind ?: SetKind.WORK,
+        workSetNumber = next?.workNumber ?: 0,
+        workSetCount = next?.workCount ?: 0
     )
 }
+
+/** The watch speaks the phone app's language. */
+private fun watchLanguage() = if (hebrewOn()) "he" else "en"
 
 /** Shown on the watch for this long after a workout is saved. */
 private const val WATCH_SAVED_WINDOW_MS = 60 * 60_000L
@@ -200,12 +218,15 @@ private fun idleWatchState(context: Context): WatchState {
     val titles = programFor(programId).splits.map { it.title }
     val upNext = computeWeekSummary(history, 0, programId).recommendedSplit
     val last = history.firstOrNull()?.takeIf { System.currentTimeMillis() - it.id in 0 until WATCH_SAVED_WINDOW_MS }
+    val days = titles.filter { it == upNext } + titles.filter { it != upNext }
     return WatchState(
         active = false,
-        days = titles.filter { it == upNext } + titles.filter { it != upNext },
+        days = days,
+        dayLabels = days.map(::shown),
+        language = watchLanguage(),
         lastWorkout = last?.let { w ->
             WatchFinished(
-                workoutName = w.splitTitle,
+                workoutName = shown(w.splitTitle),
                 finishedAtMillis = w.id,
                 durationSeconds = w.durationSeconds,
                 sets = computeWorkoutStats(w.exercises, emptyList()).workSets,
