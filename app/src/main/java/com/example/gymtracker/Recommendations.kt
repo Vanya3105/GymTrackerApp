@@ -38,6 +38,18 @@ enum class Equipment(val label: String, val detail: String) {
     BODYWEIGHT(tr("Bodyweight"), tr("No weights, a pull-up bar helps"))
 }
 
+/**
+ * Muscles to prioritise. A priority muscle gets more weekly sets (growth rises with sets: Schoenfeld
+ * et al. 2017; Pelland et al.), a session more where the week allows, and is trained first in the
+ * day, when fresh (muscles trained first gain more: Simão et al. 2012; Nunes et al. 2021).
+ */
+enum class Focus(val label: String, val detail: String, val muscles: Set<String>) {
+    BALANCED(tr("Balanced"), tr("Every muscle the same"), emptySet()),
+    UPPER(tr("Upper body"), tr("Chest, back and shoulders"), setOf("Chest", "Back", "Shoulders")),
+    ARMS(tr("Arms"), tr("Biceps and triceps"), setOf("Biceps", "Triceps")),
+    LOWER(tr("Legs and glutes"), tr("Quads, hamstrings and glutes"), setOf("Quads", "Hamstrings", "Glutes"))
+}
+
 /** Areas to go easy on: lifts that load them a lot are swapped for gentler ones. */
 enum class Limit(val label: String) {
     SHOULDERS(tr("Shoulders")),
@@ -337,7 +349,15 @@ internal enum class Layout(val label: String) {
     UPPER_LOWER_FULL(tr("upper, lower and full body")),
     UPPER_LOWER_PPL(tr("upper / lower, then push / pull / legs")),
     PUSH_PULL_LEGS(tr("push / pull / legs")),
-    PUSH_PULL(tr("push / pull"))
+    PUSH_PULL(tr("push / pull")),
+    /** Upper three times, lower twice: an upper body priority. */
+    UPPER_FOCUS(tr("upper / lower with an extra upper day")),
+    /** Lower three times, upper twice: a legs and glutes priority. */
+    LOWER_FOCUS(tr("lower / upper with an extra lower day")),
+    /** Chest, back and shoulders on one day, arms with legs on the other: arms trained fresh, not after presses and rows. */
+    TORSO_LIMBS(tr("torso / arms and legs")),
+    /** Chest & back, shoulders & arms, legs, twice: each part twice with its own day. */
+    ARNOLD(tr("chest & back, shoulders & arms, legs"))
 }
 
 /**
@@ -351,8 +371,12 @@ internal enum class Layout(val label: String) {
  * - 6 days: push / pull / legs twice for size; otherwise upper / lower / full twice.
  * Every muscle ends up trained at least twice a week (Schoenfeld et al. 2016).
  */
-internal fun layoutFor(days: Int, level: Experience, goal: TrainingGoal): Layout = when {
+internal fun layoutFor(days: Int, level: Experience, goal: TrainingGoal, focus: Focus = Focus.BALANCED): Layout = when {
     days <= 2 -> Layout.FULL_BODY
+    // Up to three days a week, full body is what gets every muscle twice; a priority shows in sets and order.
+    focus == Focus.UPPER && days >= 4 -> if (days == 6 && goal == TrainingGoal.MUSCLE) Layout.ARNOLD else Layout.UPPER_FOCUS
+    focus == Focus.LOWER && days >= 4 -> Layout.LOWER_FOCUS
+    focus == Focus.ARMS && days >= 4 -> if (days == 6) Layout.ARNOLD else Layout.TORSO_LIMBS
     days == 3 -> if (level != Experience.BEGINNER && goal == TrainingGoal.MUSCLE) Layout.UPPER_LOWER_FULL else Layout.FULL_BODY
     days == 4 -> Layout.UPPER_LOWER
     goal == TrainingGoal.MUSCLE && level != Experience.BEGINNER -> if (days == 5) Layout.UPPER_LOWER_PPL else Layout.PUSH_PULL_LEGS
@@ -393,6 +417,28 @@ internal fun weekMuscles(trained: Set<String>, days: Int, layout: Layout): List<
         Layout.UPPER_LOWER_PPL -> listOf(upper, lower, push, pull, lower)
         Layout.PUSH_PULL_LEGS -> listOf(push, pull, lower)
         Layout.PUSH_PULL -> listOf(push, pull + core)
+        Layout.UPPER_FOCUS -> when (days) {
+            4 -> listOf(upper, lower, upper, full)
+            5 -> listOf(upper, lower, upper, lower, upper)
+            else -> listOf(upper, lower, upper, lower, upper, full)
+        }
+        Layout.LOWER_FOCUS -> when (days) {
+            4 -> listOf(lower, upper, lower, full)
+            5 -> listOf(lower, upper, lower, upper, lower)
+            else -> listOf(lower, upper, lower, upper, lower, full)
+        }
+        Layout.TORSO_LIMBS -> {
+            val arms = muscles intersect setOf("Biceps", "Triceps", "Forearms")
+            val torso = upper - arms
+            val limbs = legs + arms + core
+            if (torso.isEmpty() || limbs.isEmpty()) listOf(upper, lower)
+            else if (days == 5) listOf(torso, limbs, torso, limbs, full) else listOf(torso, limbs)
+        }
+        Layout.ARNOLD -> {
+            val chestBack = muscles intersect setOf("Chest", "Back")
+            val shouldersArms = muscles intersect setOf("Shoulders", "Biceps", "Triceps", "Forearms")
+            listOf(chestBack, shouldersArms, lower)
+        }
     }
     // A day whose muscles are all skipped (push days without chest, shoulders and triceps) goes.
     val kept = week.filter { it.isNotEmpty() }.ifEmpty { listOf(muscles) }
@@ -412,7 +458,20 @@ internal fun weeklySets(profile: UserProfile, muscle: String): Int {
         TrainingGoal.STRENGTH -> when (level) { Experience.BEGINNER -> 8; Experience.INTERMEDIATE -> 10; Experience.ADVANCED -> 12 }
         TrainingGoal.GENERAL -> when (level) { Experience.BEGINNER -> 6; Experience.INTERMEDIATE -> 8; Experience.ADVANCED -> 10 }
     }
-    return if (muscle in SMALL_MUSCLES) (base * 0.6f).toInt().coerceAtLeast(3) else base
+    val sets = if (muscle in SMALL_MUSCLES) (base * 0.6f).toInt().coerceAtLeast(3) else base
+    // A priority muscle gets about a third more; arms as a priority get as much as a big muscle.
+    val focus = focusOf(profile)
+    return when {
+        muscle !in focus.muscles -> sets
+        focus == Focus.ARMS -> base
+        else -> (sets * 1.33f).toInt()
+    }
+}
+
+/** [profile]'s focus, or balanced when its muscles are all skipped. */
+internal fun focusOf(profile: UserProfile): Focus {
+    val f = profile.focus ?: Focus.BALANCED
+    return if (f.muscles.isNotEmpty() && f.muscles.all { it in profile.skipMuscles }) Focus.BALANCED else f
 }
 
 /**
@@ -520,7 +579,8 @@ fun planWeek(profile: UserProfile): List<PlannedDay> {
     val goal = profile.goal!!
     val days = profile.daysPerWeek.takeIf { it > 0 } ?: 3
     val trained = trainedMuscles(profile).ifEmpty { return emptyList() }
-    val layout = layoutFor(days, level, goal)
+    val focus = focusOf(profile)
+    val layout = layoutFor(days, level, goal, focus)
     val dayMuscles = weekMuscles(trained, days, layout)
     val titles = uniqueDayTitles(dayMuscles.mapIndexed { i, m -> dayTitleFor((m - "Core").ifEmpty { m }, i) })
     val minutes = profile.sessionMinutes.takeIf { it > 0 } ?: 60
@@ -530,7 +590,9 @@ fun planWeek(profile: UserProfile): List<PlannedDay> {
 
     return dayMuscles.mapIndexed { d, muscles ->
         val chosen = ArrayList<PlannedExercise>()
-        for (muscle in TRAINING_ORDER.filter { it in muscles }) {
+        // Priority muscles first, while fresh; then the usual order.
+        val order = TRAINING_ORDER.filter { it in focus.muscles } + TRAINING_ORDER.filter { it !in focus.muscles }
+        for (muscle in order.filter { it in muscles }) {
             val frequency = dayMuscles.count { muscle in it }.coerceAtLeast(1)
             val sets = (weeklySets(profile, muscle).toFloat() / frequency).let { kotlin.math.round(it).toInt() }.coerceIn(2, perSessionCap)
             val seen = timesSeen.getOrDefault(muscle, 0)
@@ -574,21 +636,26 @@ fun planWeek(profile: UserProfile): List<PlannedDay> {
         val maxExercises = ((minutes + 15) / 10).coerceIn(4, 9)
         // Extra exercises of a muscle, the muscle with the most first (so a third chest exercise
         // goes before the only row).
+        // Priority muscles are cut last, so their extra work survives a short session.
         fun seconds() = chosen.groupBy { it.muscle }.values.filter { it.size > 1 }
-            .sortedWith(compareBy<List<PlannedExercise>>({ it.size }, { g -> g.sumOf { e -> e.target.sets } })).map { it.last() }
+            .sortedWith(compareBy<List<PlannedExercise>>({ it.first().muscle !in focus.muscles }, { it.size }, { g -> g.sumOf { e -> e.target.sets } })).map { it.last() }
         fun shave(floor: Int): Boolean {
-            val biggest = chosen.filter { it.target.sets > floor }.maxByOrNull { it.target.sets } ?: return false
+            val over = chosen.filter { it.target.sets > floor }
+            val biggest = (over.filter { it.muscle !in focus.muscles }.ifEmpty { over }).maxByOrNull { it.target.sets } ?: return false
             chosen[chosen.indexOf(biggest)] = biggest.copy(target = biggest.target.copy(sets = biggest.target.sets - 1))
             return true
         }
         while (chosen.size > 3 && (chosen.size > maxExercises || minutesFor(chosen, profile) > minutes)) {
             val tooMany = chosen.size > maxExercises
-            seconds().lastOrNull { it.muscle in SMALL_MUSCLES }?.let { chosen.remove(it); continue }
+            seconds().lastOrNull { it.muscle in SMALL_MUSCLES && it.muscle !in focus.muscles }?.let { chosen.remove(it); continue }
             if (!tooMany && shave(3)) continue
+            seconds().lastOrNull { it.muscle !in focus.muscles }?.let { chosen.remove(it); continue }
+            chosen.lastOrNull { it.muscle in SMALL_MUSCLES && it.muscle !in focus.muscles }?.let { chosen.remove(it); continue }
             seconds().lastOrNull()?.let { chosen.remove(it); continue }
-            chosen.lastOrNull { it.muscle in SMALL_MUSCLES }?.let { chosen.remove(it); continue }
             // A lift down to two sets does little: drop the last exercise first while there are plenty.
-            if (chosen.size > 4 || tooMany || !shave(2)) chosen.removeAt(chosen.lastIndex)
+            if (chosen.size > 4 || tooMany || !shave(2)) {
+                chosen.remove(chosen.lastOrNull { it.muscle !in focus.muscles } ?: chosen.last())
+            }
         }
         PlannedDay(titles[d], muscles, chosen)
     }
@@ -600,7 +667,8 @@ fun planReason(profile: UserProfile): String {
     if (week.isEmpty()) return ""
     val level = profile.experience!!
     val goal = profile.goal!!
-    val layout = layoutFor(week.size, level, goal)
+    val focus = focusOf(profile)
+    val layout = layoutFor(week.size, level, goal, focus)
     val perMuscle = week.flatMap { it.exercises }.filter { it.muscle in MAJOR_MUSCLES }
         .groupBy { it.muscle }.mapValues { (_, e) -> e.sumOf { it.target.sets } }
     val typicalSets = perMuscle.values.sorted().let { if (it.isEmpty()) 0 else it[it.size / 2] }
@@ -616,7 +684,12 @@ fun planReason(profile: UserProfile): String {
         TrainingGoal.STRENGTH -> tr("Heavy main lifts first and often; strength needs fewer sets than size.")
         TrainingGoal.GENERAL -> tr("A moderate dose of simple compound moves gives most of the health benefit.")
     }
-    return "$first $second " + tr("About {0} min a session.", minutes)
+    val third = when (focus) {
+        Focus.BALANCED -> ""
+        Focus.ARMS -> tr("Arms get more sets and come first, trained fresh rather than after presses and rows.") + " "
+        else -> tr("More sets for {0}, trained first in the session, while you're fresh.", focus.label.lowercase()) + " "
+    }
+    return "$first $second $third" + tr("About {0} min a session.", minutes)
 }
 
 /** The plan as a program, its days named and listing their muscles; null without answers. */

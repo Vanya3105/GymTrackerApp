@@ -15,6 +15,8 @@ data class UserProfile(
     val equipment: Equipment? = null,
     val daysPerWeek: Int = 0,
     val limits: Set<Limit> = emptySet(),
+    /** Muscles to prioritise; null when not answered (balanced). */
+    val focus: Focus? = null,
     /** How long a workout can be, in minutes; 0 when not answered. */
     val sessionMinutes: Int = 0,
     /** Muscle groups (as in [BUILDER_MUSCLES]) the user doesn't want to train. */

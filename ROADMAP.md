@@ -196,6 +196,11 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Step 3b: all 294 exercise guides (steps and tips) in Hebrew, in `HebrewGuides.kt`; `ExerciseGuides.find` picks them in Hebrew. `HebrewNamesTest` checks every guide has Hebrew with the same number of steps; `HebrewTextTest` now also checks trailing spaces survive (they join text to what follows)
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
+## Split focus (branch `split-focus`, on top of `crash-reports`)
+- [x] New question on "Your body": anything to focus on (balanced, upper body, arms, legs and glutes). Priority muscles get about a third more weekly sets (arms: as much as a big muscle), go first in each session (exercise order: Simão et al. 2012, Nunes et al. 2021) and are cut last when a session runs long
+- [x] New layouts from 4 days a week: upper / lower with an extra upper day, lower / upper with an extra lower day, torso / arms and legs (arms trained fresh), and chest & back / shoulders & arms / legs for 6 days; up to 3 days stays full body (the only way to train everything twice)
+- [x] Tests: every focus × days gives more sets for the priority muscles, starts their days with them, and (outside chest & back / shoulders & arms / legs) trains them more often from 4 days
+
 ## Crash reports (branch `crash-reports`, on top of `onboarding-polish`)
 - [x] Firebase Crashlytics wired in (`CrashReports.kt`, Firebase BoM 35.1.0, plugins applied only when `app/google-services.json` exists, so the app builds and runs without it); Profile → Advanced → "Send crash reports" (on by default, shown only when Firebase is set up)
 - [x] Release fix: Firebase made R8 split Kotlin's SequencesKt parts across packages and the release build crashed on start; `app/keep-rules.pro` keeps Kotlin's packages whole

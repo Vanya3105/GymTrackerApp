@@ -60,6 +60,7 @@ fun OnboardingScreen(
     var days by remember { mutableIntStateOf(initialProfile.daysPerWeek.takeIf { it > 0 } ?: 3) }
     var limits by remember { mutableStateOf(initialProfile.limits) }
     var skip by remember { mutableStateOf(initialProfile.skipMuscles) }
+    var focus by remember { mutableStateOf(initialProfile.focus ?: Focus.BALANCED) }
     var minutes by remember { mutableIntStateOf(initialProfile.sessionMinutes.takeIf { it > 0 } ?: 60) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // Picked by hand on the last step, so a recommendation no longer replaces it.
@@ -70,17 +71,17 @@ fun OnboardingScreen(
         currentWeightKg = weightKg.toFloatOrNull() ?: 0f,
         splitProgram = program,
         experience = experience, goal = goal, equipment = equipment, daysPerWeek = days, limits = limits,
-        skipMuscles = skip, trainingAsked = true, sessionMinutes = minutes
+        skipMuscles = skip, trainingAsked = true, sessionMinutes = minutes, focus = focus
     )
     // Someone already set up keeps their split unless they changed an answer: then the plan follows.
     val answersChanged = answers().let { a ->
         a.experience != initialProfile.experience || a.goal != initialProfile.goal || a.equipment != initialProfile.equipment ||
             a.daysPerWeek != initialProfile.daysPerWeek || a.limits != initialProfile.limits || a.skipMuscles != initialProfile.skipMuscles ||
-            a.sessionMinutes != initialProfile.sessionMinutes
+            a.sessionMinutes != initialProfile.sessionMinutes || a.focus != (initialProfile.focus ?: Focus.BALANCED)
     }
     val recommended = recommendedProgram(answers())
     // A split made for these muscles is saved as the user's own, so it can be picked and shown.
-    val plan = remember(experience, goal, equipment, days, limits, skip, minutes) { generatedPlan(answers()) }
+    val plan = remember(experience, goal, equipment, days, limits, skip, minutes, focus) { generatedPlan(answers()) }
     LaunchedEffect(step) {
         if (step != LAST_STEP) return@LaunchedEffect
         if (recommended?.first == RECOMMENDED_PLAN_ID) LocalStorage.saveGeneratedPlan(context, answers())
@@ -216,6 +217,12 @@ fun OnboardingScreen(
                     )
                     Spacer(Modifier.height(24.dp))
                     MuscleGroupToggles(skip) { s2 -> haptics.tick(); skip = s2 }
+                    Text(tr("Anything to focus on?"), style = AppType.label, color = P.textSecondary)
+                    Spacer(Modifier.height(8.dp))
+                    Focus.entries.forEach { f ->
+                        OptionCard(f.label, f.detail, focus == f) { haptics.tick(); focus = f }
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Spacer(Modifier.height(8.dp))
                     Text(tr("Anything to go easy on?"), style = AppType.label, color = P.textSecondary)
                     Spacer(Modifier.height(8.dp))

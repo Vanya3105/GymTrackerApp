@@ -80,6 +80,8 @@ fun dayTitleFor(muscles: Set<String>, index: Int): String {
         muscles == setOf("Biceps", "Triceps") || muscles == setOf("Biceps", "Triceps", "Forearms") -> "Arms"
         muscles == setOf("Shoulders", "Biceps", "Triceps") -> "Arms & Shoulders"
         ordered.size <= 2 -> joinMuscles(ordered)
+        // Arms with legs (a torso / limbs split): not "Full Body", which also has chest and back.
+        lower >= 2 && (muscles intersect setOf("Chest", "Back", "Shoulders")).isEmpty() && ("Biceps" in muscles || "Triceps" in muscles) -> "Arms & Legs"
         upper == 0 && "Quads" in muscles && "Hamstrings" in muscles -> "Legs"
         upper == 0 -> if (ordered.size == 3) joinMuscles(ordered) else "Lower"
         lower == 0 -> if ("Chest" in muscles && "Back" in muscles) "Upper" else if (ordered.size == 3) joinMuscles(ordered) else "Upper"

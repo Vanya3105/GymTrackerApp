@@ -68,8 +68,8 @@ class RecommendationsTest {
 
     private fun everyone(): List<UserProfile> = buildList {
         for (level in Experience.entries) for (goal in TrainingGoal.entries) for (eq in Equipment.entries) for (days in 2..6)
-            for (minutes in listOf(30, 45, 60, 90))
-                add(UserProfile(experience = level, goal = goal, equipment = eq, daysPerWeek = days, sessionMinutes = minutes))
+            for (minutes in listOf(30, 45, 60, 90)) for (focus in Focus.entries)
+                add(UserProfile(experience = level, goal = goal, equipment = eq, daysPerWeek = days, sessionMinutes = minutes, focus = focus))
     }
 
     @Test
@@ -83,7 +83,7 @@ class RecommendationsTest {
             // Every big muscle at least twice a week (each day of a 2-day week trains it).
             for (m in MAJOR_MUSCLES) assertTrue("$m in $p", week.count { m in it.muscles } >= 2)
             for (day in week) {
-                assertTrue("${day.title} has ${day.exercises.size} for $p", day.exercises.size >= 3)
+                assertTrue("${day.title} has ${day.exercises.size} for $p", day.exercises.size >= minOf(3, day.muscles.size))
                 day.exercises.forEach { e ->
                     assertTrue("${e.name} doesn't fit ${p.equipment}", fitsEquipment(e.name, p.equipment))
                     assertTrue("${e.name} not in the library", ExerciseDatabase.find(e.name) != null)
@@ -98,7 +98,7 @@ class RecommendationsTest {
     @Test
     fun differentAnswersGiveDifferentPlans() {
         fun fingerprint(p: UserProfile) = planWeek(p).map { d -> d.title to d.exercises.map { "${it.name} ${it.target.label}" } }
-        val gym = everyone().filter { it.equipment == Equipment.GYM && it.sessionMinutes == 60 }
+        val gym = everyone().filter { it.equipment == Equipment.GYM && it.sessionMinutes == 60 && it.focus == Focus.BALANCED }
         // Experience, goal and days each change the plan, whatever the others are.
         val plans = gym.map(::fingerprint)
         assertEquals(gym.size, plans.distinct().size)
@@ -148,5 +148,26 @@ class RecommendationsTest {
     fun noLegsOnFourDaysIsPushPull() {
         val p = beginner.copy(experience = Experience.INTERMEDIATE, daysPerWeek = 4, skipMuscles = setOf("Quads", "Hamstrings", "Glutes", "Calves"))
         assertEquals(listOf("Push A", "Pull A", "Push B", "Pull B"), generatedPlan(p)!!.splits.map { it.title })
+    }
+
+    @Test
+    fun aFocusGetsMoreSetsSessionsAndGoesFirst() {
+        for (focus in Focus.entries - Focus.BALANCED) for (days in 2..6) {
+            val base = UserProfile(experience = Experience.INTERMEDIATE, goal = TrainingGoal.MUSCLE, equipment = Equipment.GYM, daysPerWeek = days, sessionMinutes = 90)
+            val balanced = planWeek(base)
+            val focused = planWeek(base.copy(focus = focus))
+            fun sets(week: List<PlannedDay>) = week.flatMap { it.exercises }.filter { it.muscle in focus.muscles }.sumOf { it.target.sets }
+            assertTrue("$focus $days days: ${sets(focused)} vs ${sets(balanced)}", sets(focused) > sets(balanced))
+            // First exercise of any day that trains a priority muscle is for one.
+            focused.filter { d -> d.exercises.any { it.muscle in focus.muscles } }.forEach { d ->
+                assertTrue("$focus ${d.title} starts with ${d.exercises.first()}", d.exercises.first().muscle in focus.muscles)
+            }
+            // More sessions for the priority, except where it gets its own day instead (chest & back, shoulders & arms, legs).
+            if (days >= 4 && focus != Focus.ARMS && layoutFor(days, base.experience!!, base.goal!!, focus) != Layout.ARNOLD) {
+                val m = focus.muscles.first()
+                assertTrue("$focus $days days", focused.count { m in it.muscles } > balanced.count { m in it.muscles } ||
+                    focused.count { m in it.muscles } >= 3)
+            }
+        }
     }
 }

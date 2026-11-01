@@ -251,6 +251,7 @@ object LocalStorage {
             equipment = enumOf(Equipment.entries, "equipment"),
             daysPerWeek = obj.optInt("daysPerWeek", 0),
             sessionMinutes = obj.optInt("sessionMinutes", 0),
+            focus = enumOf(Focus.entries, "focus"),
             limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet(),
             skipMuscles = obj.optJSONArray("skipMuscles").let { a -> (0 until (a?.length() ?: 0)).map { a!!.optString(it) }.filter { it in BUILDER_MUSCLES }.toSet() },
             trainingAsked = obj.optBoolean("trainingAsked", false)
@@ -268,6 +269,7 @@ object LocalStorage {
             profile.equipment?.let { put("equipment", it.name) }
             if (profile.daysPerWeek > 0) put("daysPerWeek", profile.daysPerWeek)
             if (profile.sessionMinutes > 0) put("sessionMinutes", profile.sessionMinutes)
+            profile.focus?.let { put("focus", it.name) }
             if (profile.limits.isNotEmpty()) put("limits", JSONArray(profile.limits.map { it.name }))
             if (profile.skipMuscles.isNotEmpty()) put("skipMuscles", JSONArray(profile.skipMuscles.toList()))
             if (profile.trainingAsked) put("trainingAsked", true)
