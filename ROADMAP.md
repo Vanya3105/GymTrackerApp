@@ -197,6 +197,7 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [ ] Step 4: widgets, notifications, share images, the watch app
 
 ## Setup polish (branch `onboarding-polish`, on top of `tick-earlier-sets`)
+- [x] Progress: best lifts first, then sets per muscle, then body weight and weigh-ins (lifting is what the tab is for). Profile: your training and split, then backups, workouts, Health Connect, bringing in data, appearance, help, advanced
 - [x] "Anything to go easy on?" moved from the crowded week step to the muscle step, now "Your body"; the last step is "Your plan" ("Made from your answers…"); the first step says what the questions are for
 
 ## Ticking ahead (branch `tick-earlier-sets`, on top of `switch-workout`)

@@ -178,19 +178,11 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsGroup(tr("Appearance")) {
-                SegmentedControl(
-                    options = listOf(THEME_SYSTEM to tr("System"), THEME_LIGHT to tr("Light"), THEME_DARK to tr("Dark")),
-                    selected = settings.themeChoice,
-                    onSelect = { onUpdateSettings(settings.copy(themeChoice = it)) }
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(stringResource(R.string.settings_language), style = AppType.label, color = P.textSecondary)
-                Spacer(Modifier.height(8.dp))
-                SegmentedControl(
-                    options = AppLanguage.entries.map { it to it.label },
-                    selected = remember { AppLanguage.current(context) },
-                    onSelect = { language -> context.findActivity()?.let { AppLanguage.set(it, language) } }
+            SettingsGroup(tr("Backups")) {
+                BackupsSection(
+                    onRestoreContent = { pendingBackup = it },
+                    onRestoreFile = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                    onSaveFile = { exportLauncher.launch("gymtracker_backup.json") }
                 )
             }
         }
@@ -239,16 +231,6 @@ fun SettingsScreen(
         item { HealthConnectGroup(onImported = onDataRestored) }
 
         item {
-            SettingsGroup(tr("Backups")) {
-                BackupsSection(
-                    onRestoreContent = { pendingBackup = it },
-                    onRestoreFile = { importLauncher.launch(arrayOf("application/json", "*/*")) },
-                    onSaveFile = { exportLauncher.launch("gymtracker_backup.json") }
-                )
-            }
-        }
-
-        item {
             SettingsGroup(tr("Bring in data")) {
                 LinkRow(Icons.Rounded.MoveToInbox, tr("Import from Strong or Hevy")) {
                     otherAppLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*"))
@@ -257,6 +239,24 @@ fun SettingsScreen(
                     tr("Workouts from their export file are added to your history. A copy of your data is kept first."),
                     style = AppType.caption,
                     color = P.textTertiary
+                )
+            }
+        }
+
+        item {
+            SettingsGroup(tr("Appearance")) {
+                SegmentedControl(
+                    options = listOf(THEME_SYSTEM to tr("System"), THEME_LIGHT to tr("Light"), THEME_DARK to tr("Dark")),
+                    selected = settings.themeChoice,
+                    onSelect = { onUpdateSettings(settings.copy(themeChoice = it)) }
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(stringResource(R.string.settings_language), style = AppType.label, color = P.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                SegmentedControl(
+                    options = AppLanguage.entries.map { it to it.label },
+                    selected = remember { AppLanguage.current(context) },
+                    onSelect = { language -> context.findActivity()?.let { AppLanguage.set(it, language) } }
                 )
             }
         }
@@ -280,6 +280,7 @@ fun SettingsScreen(
         }
 
         // Technical options last: most people never need them.
+
         item {
             SettingsGroup(tr("Advanced")) {
                 ToggleRow(
