@@ -250,6 +250,8 @@ fun GymTrackerApp(
     val splits = activeProgram.splits
 
     var showOnboarding by remember { mutableStateOf(!userProfile.hasCompletedOnboarding || userProfile.currentWeightKg <= 0f) }
+    // 1 when Profile reopens it on the training questions.
+    var onboardingStart by remember { mutableIntStateOf(0) }
     // Only on a new phone; saved so it survives the restart when the language changes.
     var showWelcome by rememberSaveable { mutableStateOf(!userProfile.hasCompletedOnboarding) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
@@ -500,7 +502,8 @@ fun GymTrackerApp(
                             onUpdateSettings(LocalStorage.loadSettings(context))
                         },
                         onEditProgram = { haptics.tick(); editingProgramId = it },
-                        onBuildSplit = { haptics.tick(); buildingSplit = it }
+                        onBuildSplit = { haptics.tick(); buildingSplit = it },
+                        onEditTraining = { haptics.tick(); onboardingStart = 1; showOnboarding = true }
                     )
                 }
             }
@@ -748,14 +751,18 @@ fun GymTrackerApp(
                     onSelectUnit = { onUpdateSettings(settings.copy(weightUnit = it, weightStep = it.defaultStep)) },
                     canGoBack = userProfile.hasCompletedOnboarding && userProfile.currentWeightKg > 0f,
                     haptics = haptics,
-                    onBack = { showOnboarding = false },
+                    onBack = { showOnboarding = false; onboardingStart = 0 },
                     onBuildSplit = { haptics.tick(); buildingSplit = it },
+                    startStep = onboardingStart,
                     onSaveProfile = { newProfile ->
                         val weightChanged = newProfile.currentWeightKg != userProfile.currentWeightKg
+                        val old = userProfile
                         userProfile = newProfile
                         LocalStorage.saveUserProfile(context, newProfile)
+                        LocalStorage.refitBuiltInDays(context, old, newProfile)
                         if (weightChanged) weightHistory = LocalStorage.addWeightLog(context, newProfile.currentWeightKg)
                         showOnboarding = false
+                        onboardingStart = 0
                     }
                 )
             }
@@ -949,10 +956,14 @@ private fun newExerciseEntryDefault(
     settings: AppSettings
 ): ExerciseEntry {
     val type = LocalStorage.exerciseType(context, name)
-    val rest = LocalStorage.getExerciseDefaultRest(context, name, settings.restTimerSeconds)
+    // Sets, reps and rest from the setup answers when the day has no target of its own.
+    val prescription = prescriptionFor(TrainingProfile.current, name)?.takeIf { type.usesReps }
+    // A rest the owner chose in Settings wins over the recommended one.
+    val restFallback = prescription?.restSeconds?.takeIf { settings.restTimerSeconds == AppSettings().restTimerSeconds } ?: settings.restTimerSeconds
+    val rest = LocalStorage.getExerciseDefaultRest(context, name, restFallback)
     val target = LocalStorage.getTarget(context, splitTitle, name)
-    val workSetCount = target?.sets
-    val targetReps = target?.repMax?.toString()
+    val workSetCount = target?.sets ?: prescription?.sets
+    val targetReps = target?.repMax?.toString() ?: prescription?.repMin?.toString()
 
     if (!type.hasWeightSuggestions) {
         // No weight to suggest: start from your own last session, else plain defaults.
@@ -985,7 +996,9 @@ private fun newExerciseEntryDefault(
             sets = List(workSetCount ?: 3) { i -> SetEntry(i + 1, weight = added, reps = targetReps ?: "8", restSeconds = rest) }
         )
     }
-    val workWeight = suggestion?.suggestedWeight?.ifBlank { null } ?: unit.stored(unit.defaultWorkWeight)
+    val workWeight = suggestion?.suggestedWeight?.ifBlank { null }
+        ?: startingWeightKg(TrainingProfile.current, name)?.let { kg -> unit.stored(kotlin.math.round(unit.fromKg(kg) / unit.defaultStep).coerceAtLeast(1f) * unit.defaultStep) }
+        ?: unit.stored(unit.defaultWorkWeight)
     // Warm-up at half the work weight, rounded down to a whole default step (2.5 kg / 5 lb).
     val half = unit.fromKg(parseWeightClean(workWeight, unit.toKg(unit.defaultWorkWeight))) * 0.5f
     val warmupWeight = unit.stored((half / unit.defaultStep).toInt() * unit.defaultStep)

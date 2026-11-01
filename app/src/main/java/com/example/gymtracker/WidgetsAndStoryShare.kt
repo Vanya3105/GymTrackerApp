@@ -363,7 +363,7 @@ fun buildWorkoutWidgetViews(
         status(tr("Up next"), accent)
         headerValue(if (WIDGET_OPTION_WEEKLY in settings.options) "${week.completedCoreSplits.size}/${week.weeklyGoal}" else null)
         views.setTextViewText(R.id.widget_split_title, shown(week.recommendedSplit))
-        subtitle(split?.subtitle?.let(::shown))
+        subtitle(split?.let { daySubtitle(it, profile) })
         action(tr("Start workout"))
     }
 

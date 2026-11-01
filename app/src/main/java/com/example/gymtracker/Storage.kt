@@ -238,12 +238,19 @@ object LocalStorage {
         // The profile names a program that may be one of the user's own: make sure they're loaded.
         data(context)
         val obj = root(context).optJSONObject("userProfile") ?: return UserProfile()
+        fun <T : Enum<T>> enumOf(values: List<T>, key: String): T? = obj.optString(key, "").let { v -> values.find { it.name == v } }
+        val limits = obj.optJSONArray("limits")
         return UserProfile(
             hasCompletedOnboarding = obj.optBoolean("hasCompletedOnboarding", false),
             age = obj.optInt("age", 0),
             currentWeightKg = obj.optDouble("currentWeightKg", 0.0).toFloat(),
-            splitProgram = obj.optString("splitProgram", "PPL_ARNOLD")
-        )
+            splitProgram = obj.optString("splitProgram", "PPL_ARNOLD"),
+            experience = enumOf(Experience.entries, "experience"),
+            goal = enumOf(TrainingGoal.entries, "goal"),
+            equipment = enumOf(Equipment.entries, "equipment"),
+            daysPerWeek = obj.optInt("daysPerWeek", 0),
+            limits = (0 until (limits?.length() ?: 0)).mapNotNull { i -> Limit.entries.find { it.name == limits!!.optString(i) } }.toSet()
+        ).also { TrainingProfile.current = it }
     }
 
     fun saveUserProfile(context: Context, profile: UserProfile) = edit(context) { root ->
@@ -252,7 +259,13 @@ object LocalStorage {
             put("age", profile.age)
             put("currentWeightKg", profile.currentWeightKg.toDouble())
             put("splitProgram", profile.splitProgram)
+            profile.experience?.let { put("experience", it.name) }
+            profile.goal?.let { put("goal", it.name) }
+            profile.equipment?.let { put("equipment", it.name) }
+            if (profile.daysPerWeek > 0) put("daysPerWeek", profile.daysPerWeek)
+            if (profile.limits.isNotEmpty()) put("limits", JSONArray(profile.limits.map { it.name }))
         })
+        TrainingProfile.current = profile
     }
 
     /** Newest first. */
@@ -697,11 +710,32 @@ object LocalStorage {
 
     fun loadTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>> =
         data(context).templates[splitTitle]
-            ?: defaultTemplateForSplit(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
+            ?: builtInDay(splitTitle).also { saveTemplateForSplit(context, splitTitle, it) }
 
     /** The exercises a day of this name already has (saved or built-in), without saving anything; null if none. */
     fun existingTemplateForSplit(context: Context, splitTitle: String): List<Pair<String, String>>? =
-        (data(context).templates[splitTitle] ?: defaultTemplateForSplit(splitTitle)).takeIf { it.isNotEmpty() }
+        (data(context).templates[splitTitle] ?: builtInDay(splitTitle)).takeIf { it.isNotEmpty() }
+
+    /** A built-in day's exercises, fitted to the setup answers. */
+    private fun builtInDay(splitTitle: String) = personalize(defaultTemplateForSplit(splitTitle), TrainingProfile.current)
+
+    /**
+     * After the setup answers change: built-in days nobody has edited (still exactly what the old
+     * answers gave) are fitted to the new ones. Days the user changed are left alone.
+     */
+    fun refitBuiltInDays(context: Context, old: UserProfile, new: UserProfile) {
+        val templates = data(context).templates
+        val titles = SPLIT_PROGRAMS.values.flatMap { p -> p.splits.map { it.title } }.distinct()
+        for (title in titles) {
+            val saved = templates[title] ?: continue
+            val base = defaultTemplateForSplit(title)
+            if (base.isEmpty()) continue
+            if (saved == base || saved == personalize(base, old)) {
+                val fitted = personalize(base, new)
+                if (fitted != saved) saveTemplateForSplit(context, title, fitted)
+            }
+        }
+    }
 
     /** Replaces a day's exercise list. Targets of exercises that stay on it are kept. */
     fun saveTemplateForSplit(context: Context, splitTitle: String, list: List<Pair<String, String>>) {

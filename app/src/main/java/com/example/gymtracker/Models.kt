@@ -8,7 +8,13 @@ data class UserProfile(
     val hasCompletedOnboarding: Boolean = false,
     val age: Int = 0,
     val currentWeightKg: Float = 0f,
-    val splitProgram: String = "PPL_ARNOLD"
+    val splitProgram: String = "PPL_ARNOLD",
+    // Setup answers for recommendations (Recommendations.kt); null / empty when never answered.
+    val experience: Experience? = null,
+    val goal: TrainingGoal? = null,
+    val equipment: Equipment? = null,
+    val daysPerWeek: Int = 0,
+    val limits: Set<Limit> = emptySet()
 )
 
 @Immutable

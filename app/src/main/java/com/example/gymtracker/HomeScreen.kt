@@ -209,7 +209,7 @@ private fun UpNextCard(
             Text(if (isInProgress) tr("In progress") else tr("Up next"), style = AppType.overline, color = P.accentPrimary)
             Spacer(Modifier.height(6.dp))
             Text(shown(split.title), style = AppType.display, color = P.textPrimary)
-            Text(shown(split.subtitle), style = AppType.body, color = P.textSecondary)
+            Text(daySubtitle(split), style = AppType.body, color = P.textSecondary)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill(if (exerciseCount == 1) tr("1 exercise") else tr("{0} exercises", exerciseCount), container = P.bgCard.copy(alpha = 0.7f))
@@ -373,7 +373,7 @@ private fun SplitRow(
             Column(Modifier.weight(1f)) {
                 Text(shown(split.title), style = AppType.bodyStrong, color = P.textPrimary)
                 Text(
-                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: shown(split.subtitle),
+                    if (doneThisWeek) tr("Done this week") else lastDone?.let { tr("Last done {0}", relativeDay(it.id)) } ?: daySubtitle(split),
                     style = AppType.caption,
                     color = if (doneThisWeek) P.successText else P.textSecondary
                 )

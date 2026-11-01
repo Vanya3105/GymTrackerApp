@@ -76,7 +76,8 @@ fun SettingsScreen(
     onReplayTips: () -> Unit,
     onDataRestored: () -> Unit,
     onEditProgram: (String) -> Unit,
-    onBuildSplit: (String) -> Unit
+    onBuildSplit: (String) -> Unit,
+    onEditTraining: () -> Unit
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
@@ -123,6 +124,30 @@ fun SettingsScreen(
     ) {
         item {
             Text(tr("Profile"), style = AppType.display, color = P.textPrimary, modifier = Modifier.statusBarsPadding().padding(top = 20.dp))
+        }
+
+        item {
+            SettingsGroup(tr("Your training")) {
+                val p = userProfile
+                if (p.experience == null || p.goal == null) {
+                    Text(tr("Answer a few questions so the app can pick exercises, sets, reps and rest for you."), style = AppType.body, color = P.textSecondary)
+                } else {
+                    Text(
+                        listOfNotNull(
+                            p.experience.label, p.goal.label,
+                            p.daysPerWeek.takeIf { it > 0 }?.let { tr("{0} days a week", it) },
+                            p.equipment?.label
+                        ).joinToString(" · "),
+                        style = AppType.bodyStrong,
+                        color = P.textPrimary
+                    )
+                    if (p.limits.isNotEmpty()) {
+                        Text(tr("Going easy on: {0}", p.limits.joinToString(", ") { it.label }), style = AppType.caption, color = P.textSecondary)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                SecondaryButton(if (p.experience == null) tr("Answer the questions") else tr("Change answers"), onEditTraining, Modifier.fillMaxWidth())
+            }
         }
 
         item {
