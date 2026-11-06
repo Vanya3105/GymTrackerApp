@@ -852,6 +852,15 @@ internal object HebrewText {
         m["• reads body weights from other apps and scales into your weight log;"] = "• קוראת משקלי גוף מאפליקציות אחרות וממשקלים אל יומן המשקל שלכם;"
         m["• reads the heart rate recorded during a workout, to show its average and maximum in your history."] = "• קוראת את הדופק שנמדד במהלך אימון, כדי להציג את הממוצע והמקסימום בהיסטוריה."
         m["• writes each workout you finish (name, start and end time, your sets as text) and the body weights you log, so they show up in apps like Samsung Health and Google Fit;"] = "• כותבת כל אימון שמסיימים (שם, שעת התחלה וסיום, הסטים כטקסט) ואת משקלי הגוף שמתעדים, כדי שיופיעו באפליקציות כמו Samsung Health ו-Google Fit;"
+        m["About"] = "אודות"
+        m["Send feedback"] = "שליחת משוב"
+        m["Privacy policy"] = "מדיניות פרטיות"
+        m["Open-source licenses"] = "רישיונות קוד פתוח"
+        m["Version {0}"] = "גרסה {0}"
+        m["No email app on this phone"] = "אין אפליקציית אימייל בטלפון"
+        m["No browser on this phone"] = "אין דפדפן בטלפון"
+        m["GymTracker is built with these open-source parts. Thank you to their authors."] = "GymTracker בנויה מרכיבי הקוד הפתוח האלה. תודה ליוצרים שלהם."
+        m["License texts"] = "נוסחי הרישיונות"
     }
 
     private fun names1(m: HashMap<String, String>) {

@@ -9,11 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-Everything through **tab-transitions** is merged into `master` (2026-10-30, at the owner's request): auto-backup, share design, declutter, smoothness, merging duplicate exercises, combining backups and Strong/Hevy import, tab fade-through, the collapsed workout notification. Parts the owner hasn't tried on the phone yet: auto-backup to a folder, combining backups / importing, merging exercises, the tab animation and the collapsed notification. Fixes go on a new branch.
-
-**Exercise photos** and the **wider library** (150 more exercises: bodyweight, kettlebells, Olympic lifts) are tested and merged (2026-10-30). **Drawn exercise figures** : all 294 exercises drawn in the app's style, replacing the photos; tested and merged (2026-10-31). **Photo code removed**: `ExercisePhotos` and its test are gone, `ExerciseThumb` now lives with the figures, and the app deletes the old downloaded photos once on start; tested and merged (2026-10-31).
-
-Google sign-in + Drive backup is tested on the owner's phone and merged (2026-10-30). **Google Play release** (branch `play-release`, see that section): the upload key exists (2026-10-31). Upload-key OAuth client done. Privacy policy live; consent screen In production (owner, 2026-10-31). **Hebrew + welcome screen**, the **widgets redesign**, the **bigger finish celebration**, **fixes** (ticked-sets count, sheet scroll) and **figures polish** (every exercise's animation reviewed) are tested on the owner's phone and merged (2026-11-01). **Smart recommendations**, the **design refresh**, **polish** and the **watch redesign** are tested on the owner's phone and watch and merged (2026-11-01). Quiet sets, smart plans, switching workouts, ticking ahead, setup polish, crash reports (waiting for the owner's google-services.json) and split focus are merged too; v3.7.0 released on GitHub (2026-11-01). next: then the watch in Hebrew, then the friends' release APK; later for Play: store listing, app in Play Console + client for its signing key, internal testing. Then the training-types plan below.
+**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data → snackbars with Undo → back gesture → state after Android closes the app → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -167,6 +163,14 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Fixed Inter weights instead of the variable font (`res/font/inter_*.ttf`, made with fontTools; see `licenses/Inter-files.txt`): measuring a text 0.79 → 0.58 ms, a screen's recomposition 1.6 → 1.0 ms, drawing a frame 10.3 → 6.7 ms on tab switches. The share images use the same files
 - [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
 - The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
+
+## Professional polish (branch `pro-polish`)
+- [x] About (end of Profile): Send feedback (email with the app version and phone model filled in), Privacy policy, Open-source licenses (a sheet listing the libraries, with the Apache 2.0 and OFL texts from `res/raw`), app name and version
+- [ ] Delete all data
+- [ ] Snackbars with Undo instead of toasts and "Are you sure?"
+- [ ] Predictive back; no "Press back again to exit"
+- [ ] Open screens survive Android closing the app in the background
+- [ ] Accessibility (labels on icon buttons) and large text
 
 ## Planned: Training types (owner's request, 2026-10-29)
 The app should also serve runners and people who train with bodyweight (calisthenics, outdoors, at home), not only gym lifters.

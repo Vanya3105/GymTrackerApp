@@ -29,8 +29,11 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.MailOutline
+import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.MoveToInbox
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
@@ -301,6 +304,8 @@ fun SettingsScreen(
                 }
             }
         }
+
+        item { AboutGroup() }
     }
 
     pendingBackup?.let { content ->
@@ -409,6 +414,139 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
                 LinkRow(Icons.Rounded.LinkOff, tr("Stop sharing")) {
                     HealthSync.disconnect(context)
                     on = false
+                }
+            }
+        }
+    }
+}
+
+private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/GymTrackerApp/privacy.html"
+private const val FEEDBACK_EMAIL = "evtushenkovanya16@gmail.com"
+
+private fun appVersion(context: android.content.Context): String =
+    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+
+@Composable
+private fun AboutGroup() {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    var showLicenses by remember { mutableStateOf(false) }
+    val version = remember { appVersion(context) }
+
+    fun open(intent: Intent, missing: String) {
+        try {
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, missing, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        SettingsGroup(tr("About")) {
+            LinkRow(Icons.Rounded.MailOutline, tr("Send feedback")) {
+                // The version and phone go along, so a bug report says where it happened.
+                val body = "\n\n—\nGymTracker $version · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")).apply {
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
+                    putExtra(Intent.EXTRA_SUBJECT, "GymTracker feedback")
+                    putExtra(Intent.EXTRA_TEXT, body)
+                }
+                open(intent, tr("No email app on this phone"))
+            }
+            LinkRow(Icons.Rounded.PrivacyTip, tr("Privacy policy")) {
+                open(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_POLICY_URL)), tr("No browser on this phone"))
+            }
+            LinkRow(Icons.Rounded.Description, tr("Open-source licenses")) { showLicenses = true }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("GymTracker", style = AppType.label, color = P.textSecondary)
+        if (version.isNotEmpty()) Text(tr("Version {0}", version), style = AppType.caption, color = P.textTertiary)
+    }
+
+    if (showLicenses) LicensesSheet(onDismiss = { showLicenses = false })
+}
+
+private class OpenSourcePart(val name: String, val author: String, val license: String)
+
+private const val APACHE = "Apache License 2.0"
+private const val OFL = "SIL Open Font License 1.1"
+
+private val OPEN_SOURCE_PARTS = listOf(
+    OpenSourcePart("Inter (font)", "The Inter Project Authors", OFL),
+    OpenSourcePart("Jetpack Compose, Material 3", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Material Icons", "Google", APACHE),
+    OpenSourcePart("AndroidX Core, Activity, Lifecycle, Splash Screen", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Room", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Health Connect client", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Firebase Crashlytics", "Google", APACHE),
+    OpenSourcePart("Kotlin, kotlinx.coroutines", "JetBrains", APACHE),
+)
+
+@Composable
+private fun LicensesSheet(onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    var openText by remember { mutableStateOf<String?>(null) }
+    val texts = remember {
+        mapOf(APACHE to R.raw.license_apache, OFL to R.raw.license_ofl).mapValues { (_, id) ->
+            val raw = runCatching { context.resources.openRawResource(id).bufferedReader().use { it.readText() } }.getOrDefault("")
+            // The files are wrapped for 80-column terminals; joining each paragraph lets it fill the screen.
+            raw.split(Regex("\\n\\s*\\n")).joinToString("\n\n") { para -> para.lines().joinToString(" ") { it.trim() }.trim() }
+        }
+    }
+    AppBottomSheet(onDismiss = onDismiss) {
+        LazyColumn(
+            Modifier.fillMaxHeight(0.85f).navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        ) {
+            item {
+                Text(tr("Open-source licenses"), style = AppType.title, color = P.textPrimary)
+                Text(
+                    tr("GymTracker is built with these open-source parts. Thank you to their authors."),
+                    style = AppType.caption,
+                    color = P.textSecondary,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                )
+            }
+            items(OPEN_SOURCE_PARTS) { part ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(part.name, style = AppType.bodyStrong, color = P.textPrimary)
+                    Text("${part.author} · ${part.license}", style = AppType.caption, color = P.textSecondary)
+                }
+            }
+            item {
+                Text(
+                    tr("License texts"),
+                    style = AppType.overline,
+                    color = P.textSecondary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                )
+            }
+            texts.forEach { (license, text) ->
+                item(key = license) {
+                    val expanded = openText == license
+                    val turn by animateFloatAsState(if (expanded) 180f else 0f, label = "license_chevron")
+                    Column {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .pressable(pressedScale = 0.99f) { openText = if (expanded) null else license }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(license, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+                            Icon(
+                                Icons.Rounded.ExpandMore,
+                                if (expanded) tr("Hide") else tr("Show"),
+                                tint = P.textTertiary,
+                                modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = turn }
+                            )
+                        }
+                        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                            Text(text, style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(bottom = 12.dp))
+                        }
+                    }
                 }
             }
         }
