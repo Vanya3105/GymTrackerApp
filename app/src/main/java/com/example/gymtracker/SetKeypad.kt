@@ -34,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -193,7 +195,9 @@ fun SetValueBox(ref: FieldRef, set: SetEntry, type: ExerciseType, modifier: Modi
             .clip(shape)
             .background(if (editing) P.bgElevated else P.bgControl)
             .border(1.5.dp, border, shape)
-            .pressable(pressedScale = 0.95f) { editor?.open(ref, set, type) },
+            .pressable(pressedScale = 0.95f) { editor?.open(ref, set, type) }
+            // A screen reader would otherwise read a bare "20": say which value it is, with its unit.
+            .semantics { contentDescription = spokenValue(ref.field, text) },
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -203,6 +207,22 @@ fun SetValueBox(ref: FieldRef, set: SetEntry, type: ExerciseType, modifier: Modi
             maxLines = 1
         )
     }
+}
+
+private fun spokenValue(field: SetField, text: String): String {
+    val value = when {
+        text.isEmpty() -> tr("empty")
+        field == SetField.WEIGHT -> "$text ${Units.current.label}"
+        field == SetField.DISTANCE -> "$text ${Units.current.distanceLabel}"
+        else -> text
+    }
+    val name = when (field) {
+        SetField.WEIGHT -> tr("Weight")
+        SetField.DISTANCE -> tr("Distance")
+        SetField.REPS -> tr("Reps")
+        SetField.TIME -> tr("Time")
+    }
+    return tr("{0}: {1}", name, value)
 }
 
 /**

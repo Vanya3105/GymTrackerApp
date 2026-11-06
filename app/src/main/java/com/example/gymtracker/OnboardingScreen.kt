@@ -26,6 +26,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -298,7 +303,8 @@ private fun OptionCard(title: String, detail: String, selected: Boolean, onClick
             .clip(RoundedCornerShape(14.dp))
             .background(if (selected) P.accentSoft else P.bgControl)
             .border(1.5.dp, if (selected) P.accentPrimary else Color.Transparent, RoundedCornerShape(14.dp))
-            .pressable(pressedScale = 0.98f, onClick = onClick)
+            .pressable(pressedScale = 0.98f, role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -324,7 +330,8 @@ private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, on
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (on) P.textPrimary else P.bgControl)
-                    .pressable(pressedScale = 0.94f) { onToggle(value) }
+                    .pressable(pressedScale = 0.94f, role = Role.Checkbox) { onToggle(value) }
+                    .semantics { toggleableState = ToggleableState(on) }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }

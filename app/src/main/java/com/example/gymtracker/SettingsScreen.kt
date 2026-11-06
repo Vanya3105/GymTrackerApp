@@ -60,6 +60,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
@@ -602,7 +605,8 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(bg)
-                    .pressable(pressedScale = 0.94f) { onSelect(value) }
+                    .pressable(pressedScale = 0.94f, role = Role.RadioButton) { onSelect(value) }
+                    .semantics { this.selected = isSel }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }

@@ -90,6 +90,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -400,10 +403,11 @@ fun <T> SegmentedControl(
 ) {
     val P = LocalPalette.current
     val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    // At least 42dp, taller when large text wraps a label ("Kilograms (kg)") onto two lines.
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .heightIn(min = 42.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(P.bgControl)
             .padding(3.dp)
@@ -414,31 +418,42 @@ fun <T> SegmentedControl(
             animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
             label = "segment_indicator"
         )
-        Box(
-            Modifier
-                .offset(x = indicatorOffset)
-                .width(segmentWidth)
-                .fillMaxHeight()
-                .shadow(if (P.isDark) 0.dp else 2.dp, RoundedCornerShape(11.dp), spotColor = P.shadow.copy(alpha = 0.2f))
-                .clip(RoundedCornerShape(11.dp))
-                .background(if (P.isDark) P.borderStrong else P.bgCard)
-        )
-        Row(Modifier.fillMaxSize()) {
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier
+                    .offset(x = indicatorOffset)
+                    .width(segmentWidth)
+                    .fillMaxHeight()
+                    .shadow(if (P.isDark) 0.dp else 2.dp, RoundedCornerShape(11.dp), spotColor = P.shadow.copy(alpha = 0.2f))
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (P.isDark) P.borderStrong else P.bgCard)
+            )
+        }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             options.forEachIndexed { i, (value, label) ->
                 val isSel = i == selectedIndex
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .heightIn(min = 36.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Tab
-                        ) { onSelect(value) },
+                        ) { onSelect(value) }
+                        .semantics { this.selected = isSel }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(label, style = AppType.label, color = if (isSel) P.textPrimary else P.textSecondary, maxLines = 1)
+                    Text(
+                        label,
+                        style = AppType.label,
+                        color = if (isSel) P.textPrimary else P.textSecondary,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -898,6 +913,21 @@ private class SheetScrollGuard : NestedScrollConnection {
         contentScrolled = false
         return if (keep) Velocity(0f, available.y) else Velocity.Zero
     }
+}
+
+/** The phone's text size is set large (about 140% or more): rows with a value at the end stack it under the name instead. */
+@Composable
+fun isLargeText(): Boolean = LocalDensity.current.fontScale >= 1.4f
+
+/**
+ * For text that has to stay on one short line (tab labels): it grows with the phone's text size
+ * only up to [max], since a label broken over two lines ("Progres" / "s") reads worse than a smaller one.
+ */
+@Composable
+fun CappedTextSize(max: Float = 1.3f, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    if (density.fontScale <= max) content()
+    else CompositionLocalProvider(LocalDensity provides Density(density.density, max), content = content)
 }
 
 /**

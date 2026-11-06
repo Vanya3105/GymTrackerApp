@@ -849,6 +849,17 @@ private fun ExerciseCard(
             ) {
                 Icon(Icons.Rounded.DragIndicator, tr("Drag to reorder"), tint = if (isDragging) P.accentPrimary else P.textTertiary)
             }
+            val restPill = @Composable {
+                Box {
+                    var restOpen by remember { mutableStateOf(false) }
+                    Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
+                    DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
+                        RestChooser(tr("Rest between sets"), exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
+                    }
+                }
+            }
+            // With large text the pill would squeeze the name to a few letters a line.
+            val pillUnderName = isLargeText() && !collapsed
             ExerciseThumb(
                 exercise.name,
                 Modifier.padding(end = 10.dp).clip(RoundedCornerShape(10.dp)).pressable(pressedScale = 0.95f, onClick = onOpenDetails),
@@ -868,7 +879,7 @@ private fun ExerciseCard(
                         shown(exercise.name),
                         style = AppType.headline,
                         color = P.textPrimary,
-                        maxLines = if (collapsed) 1 else 2,
+                        maxLines = if (collapsed) 1 else if (isLargeText()) 3 else 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -888,15 +899,11 @@ private fun ExerciseCard(
                     exercise.target?.let { add(tr("Plan {0}", it.label)) }
                     records.bestSet?.let { add(tr("Best {0}", formatSet(it, exercise.type))) }
                 }.joinToString(" · ")
-                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Two lines when open: the plan ("Plan 3 × 8–12") was the part cut off.
+                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = if (collapsed) 1 else 2, overflow = TextOverflow.Ellipsis)
+                if (pillUnderName) Box(Modifier.padding(top = 6.dp)) { restPill() }
             }
-            Box {
-                var restOpen by remember { mutableStateOf(false) }
-                Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
-                DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
-                    RestChooser(tr("Rest between sets"), exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
-                }
-            }
+            if (!pillUnderName) restPill()
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, tr("Exercise options"), { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {

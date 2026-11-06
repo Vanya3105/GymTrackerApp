@@ -876,6 +876,9 @@ internal object HebrewText {
         m["Set deleted"] = "הסט נמחק"
         m["No camera app on this phone"] = "אין אפליקציית מצלמה בטלפון"
         m["Legs and core"] = "רגליים ובטן"
+        m["Weight"] = "משקל"
+        m["{0}: {1}"] = "{0}: {1}"
+        m["empty"] = "ריק"
     }
 
     private fun names1(m: HashMap<String, String>) {

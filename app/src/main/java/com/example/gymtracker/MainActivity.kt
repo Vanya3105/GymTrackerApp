@@ -56,6 +56,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -1185,6 +1187,7 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .pressable(pressedScale = 0.92f, role = Role.Tab) { onSelect(tab) }
+                            .semantics { this.selected = isSelected }
                             .padding(vertical = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -1192,14 +1195,17 @@ private fun BottomNavBar(selected: AppTab, onSelect: (AppTab) -> Unit) {
                             Crossfade(isSelected, animationSpec = tween(180), label = "nav_icon_fill") { sel ->
                                 Icon(
                                     if (sel) tab.icon else tab.idleIcon,
-                                    contentDescription = tab.label,
+                                    // The label below names the tab; naming the icon too read it twice.
+                                    contentDescription = null,
                                     tint = iconColor,
                                     modifier = Modifier.size(24.dp).graphicsLayer { scaleX = bounce.value; scaleY = bounce.value }
                                 )
                             }
                         }
                         Spacer(Modifier.height(1.dp))
-                        Text(tab.label, style = AppType.caption, color = labelColor)
+                        CappedTextSize {
+                            Text(tab.label, style = AppType.caption, color = labelColor, maxLines = 1, softWrap = false)
+                        }
                     }
                 }
             }
@@ -1219,7 +1225,12 @@ fun StatusBarScrim() {
 }
 
 @Composable
-private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>, onResume: () -> Unit) {
+private fun ResumeWorkoutBar(splitTitle: String, exercises: List<ExerciseEntry>, onResume: () -> Unit) =
+    // Always on screen above the tabs: at the largest text sizes it would take a fifth of the screen.
+    CappedTextSize(max = 1.5f) { ResumeWorkoutBarContent(splitTitle, exercises, onResume) }
+
+@Composable
+private fun ResumeWorkoutBarContent(splitTitle: String, exercises: List<ExerciseEntry>, onResume: () -> Unit) {
     val P = LocalPalette.current
     val context = LocalContext.current
     val startTime = remember(splitTitle) { LocalStorage.getActiveSessionStartTime(context) }

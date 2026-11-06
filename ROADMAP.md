@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo ✅ → back gesture ✅ → state after Android closes the app ✅ → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
+**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo ✅ → back gesture ✅ → state after Android closes the app ✅ → accessibility and large text ✅. Left: ask for notifications when first needed. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -173,7 +173,7 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Open screens survive Android closing the app in the background: the past workout being edited (by id, with its unsaved edits as JSON), whether the workout is open or minimized, the finish sheet, its photo and duration, the exercise picker. Checked on the emulator with `am kill`, including while the camera was open from the finish sheet
 - [x] Workout photos: the camera writes a full-size photo (`TakePicture` into a FileProvider file, was `TakePicturePreview`, a ~200 px thumbnail) and photos are turned upright from their EXIF orientation (Samsung saves portrait shots sideways plus a note)
 - [x] Fix (owner): on "Your body", Core sat alone under the leg chips without a heading, so it looked like a leg muscle that Skip all / Train all ignored. Now one "Legs and core" group whose shortcut covers Core too
-- [ ] Accessibility (labels on icon buttons) and large text
+- [x] Large text and screen readers. Icon-only buttons already had labels (the "43 icons without one" were decorations beside text). Checked every main screen at 150% and 200% text: tab labels stay on one line (capped at 130%, `CappedTextSize`), the Resume bar at 150%; best lifts and workout cards move the value / rest pill under the name when text is large (`isLargeText`), so names no longer break mid-word ("Deadlif / t"); a card's plan line wraps instead of being cut; the segmented control grows and wraps ("Kilograms (kg)"). TalkBack: set boxes say "Weight: 20 kg" / "Reps: 15", tabs, segments, chips and option cards say which is selected, the tab icon no longer repeats its label
 
 ## Planned: Training types (owner's request, 2026-10-29)
 The app should also serve runners and people who train with bodyweight (calisthenics, outdoors, at home), not only gym lifters.
