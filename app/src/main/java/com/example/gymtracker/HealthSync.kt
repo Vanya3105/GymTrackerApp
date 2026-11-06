@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Date
@@ -88,6 +89,15 @@ object HealthSync {
     fun manageIntent(context: Context): Intent = HealthConnectClient.getHealthConnectManageDataIntent(context, PROVIDER)
 
     /** Turns sharing off and hands every permission back. */
+    /** For deleting all data: waits (briefly) so the revoke isn't lost when the app's process ends. */
+    suspend fun revokeAll(context: Context) {
+        try {
+            withTimeout(3_000) { client(context).permissionController.revokeAllPermissions() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Couldn't revoke permissions", e)
+        }
+    }
+
     fun disconnect(context: Context) {
         LocalStorage.setHealthSyncOn(context, false)
         heartRates.clear()

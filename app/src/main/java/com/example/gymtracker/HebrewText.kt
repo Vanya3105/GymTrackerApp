@@ -861,6 +861,14 @@ internal object HebrewText {
         m["No browser on this phone"] = "אין דפדפן בטלפון"
         m["GymTracker is built with these open-source parts. Thank you to their authors."] = "GymTracker בנויה מרכיבי הקוד הפתוח האלה. תודה ליוצרים שלהם."
         m["License texts"] = "נוסחי הרישיונות"
+        m["Delete all data"] = "מחיקת כל הנתונים"
+        m["Delete all your data?"] = "למחוק את כל הנתונים?"
+        m["Every workout, weigh-in, program, photo and setting on this phone is deleted. The app closes and starts again as new. This can't be undone."] = "כל האימונים, השקילות, התוכניות, התמונות וההגדרות בטלפון הזה יימחקו. האפליקציה תיסגר ותתחיל מחדש כחדשה. אי אפשר לבטל את זה."
+        m["Backups in Google Drive or a folder stay, and so does anything already shared with Health Connect."] = "גיבויים ב-Google Drive או בתיקייה נשארים, וגם מה שכבר שותף עם Health Connect."
+        m["Save a backup file first"] = "קודם לשמור קובץ גיבוי"
+        m["Delete everything"] = "למחוק הכול"
+        m["Deleting…"] = "מוחק…"
+        m["Couldn't delete the data"] = "לא הצלחנו למחוק את הנתונים"
     }
 
     private fun names1(m: HashMap<String, String>) {

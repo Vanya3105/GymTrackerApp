@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data → snackbars with Undo → back gesture → state after Android closes the app → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
+**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo → back gesture → state after Android closes the app → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -166,7 +166,8 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 
 ## Professional polish (branch `pro-polish`)
 - [x] About (end of Profile): Send feedback (email with the app version and phone model filled in), Privacy policy, Open-source licenses (a sheet listing the libraries, with the Apache 2.0 and OFL texts from `res/raw`), app name and version
-- [ ] Delete all data
+- [x] Delete all data (Profile → Advanced): asks first, offers "Save a backup file first", revokes Health Connect access, then Android's own clear-storage (`clearApplicationUserData`), so nothing is left behind; the app closes and opens as new. Drive and folder backups stay
+- [ ] Ask for notifications when first needed, not on the welcome screen
 - [ ] Snackbars with Undo instead of toasts and "Are you sure?"
 - [ ] Predictive back; no "Press back again to exit"
 - [ ] Open screens survive Android closing the app in the background

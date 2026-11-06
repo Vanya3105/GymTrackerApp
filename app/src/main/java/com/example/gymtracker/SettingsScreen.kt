@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LinkOff
@@ -110,6 +111,7 @@ fun SettingsScreen(
             }
         }
     }
+    var confirmDeleteAll by remember { mutableStateOf(false) }
     var otherAppFile by remember { mutableStateOf<String?>(null) }
     val otherAppLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -302,6 +304,7 @@ fun SettingsScreen(
                         onCheckedChange = { crashReports = it; CrashReports.set(context, it) }
                     )
                 }
+                LinkRow(Icons.Rounded.DeleteForever, tr("Delete all data"), danger = true) { confirmDeleteAll = true }
             }
         }
 
@@ -326,6 +329,12 @@ fun SettingsScreen(
                 } else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
             },
             onDismiss = { pendingBackup = null }
+        )
+    }
+    if (confirmDeleteAll) {
+        DeleteAllDialog(
+            onSaveBackup = { exportLauncher.launch("gymtracker_backup.json") },
+            onDismiss = { confirmDeleteAll = false }
         )
     }
     otherAppFile?.let { text ->
@@ -601,8 +610,64 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
     }
 }
 
+/**
+ * Android's own "Clear storage" for the app: files, database, preferences, photos and the
+ * pre-import copies all go, so nothing is left behind the way a hand-written wipe could leave it.
+ * It ends the app's process; the next start is a first start.
+ */
 @Composable
-private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
+private fun DeleteAllDialog(onSaveBackup: () -> Unit, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var deleting by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!deleting) onDismiss() },
+        containerColor = P.bgElevated,
+        title = { Text(tr("Delete all your data?"), style = AppType.headline, color = P.textPrimary) },
+        text = {
+            Column {
+                Text(
+                    tr("Every workout, weigh-in, program, photo and setting on this phone is deleted. The app closes and starts again as new. This can't be undone."),
+                    style = AppType.body,
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    tr("Backups in Google Drive or a folder stay, and so does anything already shared with Health Connect."),
+                    style = AppType.caption,
+                    color = P.textTertiary
+                )
+                Spacer(Modifier.height(14.dp))
+                SecondaryButton(tr("Save a backup file first"), onSaveBackup, Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !deleting,
+                onClick = {
+                    deleting = true
+                    scope.launch {
+                        if (LocalStorage.isHealthSyncOn(context)) HealthSync.revokeAll(context)
+                        // Pending writes would otherwise land after the wipe and bring data back.
+                        withContext(Dispatchers.IO) { LocalStorage.flush(context) }
+                        val am = context.getSystemService(android.app.ActivityManager::class.java)
+                        if (am?.clearApplicationUserData() != true) {
+                            deleting = false
+                            Toast.makeText(context, tr("Couldn't delete the data"), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            ) { Text(if (deleting) tr("Deleting…") else tr("Delete everything"), color = P.dangerText, style = AppType.label) }
+        },
+        dismissButton = {
+            TextButton(enabled = !deleting, onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) }
+        }
+    )
+}
+
+@Composable
+private fun LinkRow(icon: ImageVector, text: String, danger: Boolean = false, onClick: () -> Unit) {
     val P = LocalPalette.current
     Row(
         Modifier
@@ -612,9 +677,9 @@ private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = if (danger) P.dangerText else P.textSecondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+        Text(text, style = AppType.body, color = if (danger) P.dangerText else P.textPrimary, modifier = Modifier.weight(1f))
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
     }
 }
