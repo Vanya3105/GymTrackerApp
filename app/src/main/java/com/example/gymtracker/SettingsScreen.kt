@@ -3,7 +3,6 @@ package com.example.gymtracker
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.text.format.DateUtils as AndroidDateUtils
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
@@ -91,9 +90,9 @@ fun SettingsScreen(
             try {
                 val json = LocalStorage.exportJsonBackupString(context)
                 context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                Toast.makeText(context, tr("Backup saved"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Backup saved"))
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't save the backup"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't save the backup"))
             }
         }
     }
@@ -105,9 +104,9 @@ fun SettingsScreen(
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(content.removePrefix("\uFEFF").trim()) }.getOrNull()
                 if (json != null && StoreCodec.looksLikeBackup(json)) pendingBackup = content
-                else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
+                else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't read that file"))
             }
         }
     }
@@ -118,7 +117,7 @@ fun SettingsScreen(
             try {
                 otherAppFile = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't read that file"))
             }
         }
     }
@@ -318,15 +317,15 @@ fun SettingsScreen(
                 val result = LocalStorage.addBackupJsonString(context, content)
                 if (result != null) {
                     onDataRestored()
-                    Toast.makeText(context, addedMessage(result), Toast.LENGTH_LONG).show()
-                } else Toast.makeText(context, tr("Couldn't add that backup"), Toast.LENGTH_SHORT).show()
+                    AppSnackbar.show(addedMessage(result))
+                } else AppSnackbar.show(tr("Couldn't add that backup"))
             },
             onReplace = {
                 pendingBackup = null
                 if (LocalStorage.importJsonBackupString(context, content)) {
                     onDataRestored()
-                    Toast.makeText(context, tr("Backup restored"), Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
+                    AppSnackbar.show(tr("Backup restored"))
+                } else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
             },
             onDismiss = { pendingBackup = null }
         )
@@ -345,7 +344,7 @@ fun SettingsScreen(
                 otherAppFile = null
                 if (result != null) {
                     onDataRestored()
-                    Toast.makeText(context, addedMessage(result), Toast.LENGTH_LONG).show()
+                    AppSnackbar.show(addedMessage(result))
                 }
             },
             onDismiss = { otherAppFile = null }
@@ -368,7 +367,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, tr("Couldn't open Health Connect"), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("Couldn't open Health Connect"))
         }
     }
 
@@ -377,7 +376,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
             HealthSync.refresh(context)
             if (HealthSync.granted.isEmpty()) {
                 // Android stops showing the dialog after two refusals; access can still be given in Health Connect.
-                Toast.makeText(context, tr("Nothing was allowed. You can allow it in Health Connect."), Toast.LENGTH_LONG).show()
+                AppSnackbar.show(tr("Nothing was allowed. You can allow it in Health Connect."))
                 return@launch
             }
             LocalStorage.setHealthSyncOn(context, true)
@@ -446,7 +445,7 @@ private fun AboutGroup() {
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, missing, Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(missing)
         }
     }
 
@@ -653,8 +652,8 @@ private fun DeleteAllDialog(onSaveBackup: () -> Unit, onDismiss: () -> Unit) {
                         withContext(Dispatchers.IO) { LocalStorage.flush(context) }
                         val am = context.getSystemService(android.app.ActivityManager::class.java)
                         if (am?.clearApplicationUserData() != true) {
-                            deleting = false
-                            Toast.makeText(context, tr("Couldn't delete the data"), Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                            AppSnackbar.show(tr("Couldn't delete the data"))
                         }
                     }
                 }
@@ -802,7 +801,7 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                             adding = true
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) { LocalStorage.addData(context, h.asStoreData()) }
-                                if (result == null) Toast.makeText(context, tr("Couldn't add the workouts"), Toast.LENGTH_SHORT).show()
+                                if (result == null) AppSnackbar.show(tr("Couldn't add the workouts"))
                                 onDone(result)
                             }
                         },
@@ -849,7 +848,7 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                                 scope.launch {
                                     val text = withContext(Dispatchers.IO) { DriveBackup.download(context, f.file) }
                                     downloading = null
-                                    if (text == null) Toast.makeText(context, tr("Couldn't download that backup"), Toast.LENGTH_SHORT).show()
+                                    if (text == null) AppSnackbar.show(tr("Couldn't download that backup"))
                                     else onPick(text)
                                 }
                             }.padding(horizontal = 8.dp, vertical = 12.dp),
@@ -907,7 +906,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
     fun afterSignIn(step: DriveBackup.SignInStep) {
         signingIn = false
         when (step) {
-            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
+            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) AppSnackbar.show(step.message)
             is DriveBackup.SignInStep.NeedsUser -> Unit
             is DriveBackup.SignInStep.Done -> scope.launch {
                 val found = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty()
@@ -931,7 +930,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
             try {
                 AutoBackup.setFolder(context, tree)
             } catch (_: SecurityException) {
-                Toast.makeText(context, tr("That folder can't be used for backups. Try another one."), Toast.LENGTH_LONG).show()
+                AppSnackbar.show(tr("That folder can't be used for backups. Try another one."))
             }
         }
     }
@@ -939,7 +938,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         try {
             pickFolder.launch(null)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, tr("No file picker on this phone"), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("No file picker on this phone"))
         }
     }
     fun restore() {

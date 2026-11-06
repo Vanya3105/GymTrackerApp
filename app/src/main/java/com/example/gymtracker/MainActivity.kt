@@ -13,7 +13,6 @@ import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.animation.PathInterpolator
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -54,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -369,7 +370,7 @@ fun GymTrackerApp(
             if (now - lastBackPress < 2000L) activity.finish()
             else {
                 lastBackPress = now
-                Toast.makeText(context, tr("Press back again to exit"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Press back again to exit"))
             }
         }
     }
@@ -412,7 +413,7 @@ fun GymTrackerApp(
         if (save) {
             val saved = finishActiveWorkout(context, System.currentTimeMillis(), fromWidget = false)
             history = LocalStorage.loadHistory(context)
-            if (saved != null) Toast.makeText(context, tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
+            if (saved != null) AppSnackbar.show(tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)))
         } else {
             LocalStorage.setRestEndTimeMillis(context, 0L, fromWidget = true)
             LocalStorage.saveActiveSession(context, null, emptyList())
@@ -438,7 +439,7 @@ fun GymTrackerApp(
         activeSplit = null
         currentExercises = emptyList()
         if (saved != null) {
-            Toast.makeText(context, tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("{0} saved: {1}", shown(saved.splitTitle), formatDuration(saved.durationSeconds)))
         }
     }
 
@@ -463,22 +464,41 @@ fun GymTrackerApp(
             history = LocalStorage.loadHistory(context)
             if (activeSplit != null) currentExercises = LocalStorage.loadActiveSession(context)?.second ?: currentExercises
             exerciseInfoVersion++
-            Toast.makeText(context, tr("Merged into {0}", into), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("Merged into {0}", into))
         } else {
-            Toast.makeText(context, tr("Couldn't merge those exercises"), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("Couldn't merge those exercises"))
         }
         return ok
     }
 
-    fun deletePastWorkout(id: Long) {
+    // Deleting happens at once and offers Undo, instead of asking first.
+    fun deletePastWorkout(workout: CompletedWorkout) {
         haptics.tick()
-        LocalStorage.deleteWorkoutFromHistory(context, id)
+        LocalStorage.deleteWorkoutFromHistory(context, workout.id)
         history = LocalStorage.loadHistory(context)
+        AppSnackbar.show(tr("{0} deleted", workoutTitle(workout.splitTitle)), tr("Undo")) {
+            LocalStorage.restoreWorkout(context, workout)
+            history = LocalStorage.loadHistory(context)
+        }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    fun deleteWeighIn(id: Long) {
+        val entry = weightHistory.find { it.id == id } ?: return
+        weightHistory = LocalStorage.deleteWeightLog(context, id)
+        userProfile = LocalStorage.loadUserProfile(context)
+        AppSnackbar.show(tr("Weigh-in deleted"), tr("Undo")) {
+            weightHistory = LocalStorage.restoreWeightLog(context, entry)
+            userProfile = LocalStorage.loadUserProfile(context)
+        }
+    }
+
+    // What the tab bar (and the Resume bar) take at the bottom, so messages sit just above them.
+    var rootHeight by remember { mutableIntStateOf(0) }
+    var tabsHeight by remember { mutableIntStateOf(0) }
+
+    Box(Modifier.fillMaxSize().onSizeChanged { rootHeight = it.height }) {
         Column(Modifier.fillMaxSize()) {
-            TabHost(selected = selectedTab, modifier = Modifier.weight(1f)) { tab ->
+            TabHost(selected = selectedTab, modifier = Modifier.weight(1f).onSizeChanged { tabsHeight = it.height }) { tab ->
                 when (tab) {
                     AppTab.TODAY -> HomeScreen(
                         splits = splits,
@@ -507,7 +527,7 @@ fun GymTrackerApp(
                             weightHistory = LocalStorage.addWeightLog(context, kg)
                             userProfile = LocalStorage.loadUserProfile(context)
                         },
-                        onDeleteWeight = { id -> weightHistory = LocalStorage.deleteWeightLog(context, id) },
+                        onDeleteWeight = { id -> deleteWeighIn(id) },
                         onOpenExercise = { haptics.tick(); openExercise = it },
                         onMergeExercises = { from, into -> mergeExercises(from, into) }
                     )
@@ -591,7 +611,11 @@ fun GymTrackerApp(
                             onReorderExercises = { from, to -> currentExercises = currentExercises.moved(from, to) },
                             onAddExercise = { _, _ -> },
                             onRemoveExercisePermanently = { exName ->
-                                currentExercises = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
+                                val before = currentExercises
+                                currentExercises = before.filterNot { it.name.equals(exName, ignoreCase = true) }
+                                AppSnackbar.show(tr("{0} removed", shown(exName)), tr("Undo")) {
+                                    if (editingPastWorkout?.id == editing.id) currentExercises = withReturned(currentExercises, before, exName)
+                                }
                             },
                             onMinimize = {
                                 editingPastWorkout = null
@@ -644,10 +668,21 @@ fun GymTrackerApp(
                                 if (split.title != QUICK_WORKOUT_TITLE) LocalStorage.addExerciseToSplitTemplate(context, split.title, name, muscle)
                             },
                             onRemoveExercisePermanently = { exName ->
-                                if (split.title != QUICK_WORKOUT_TITLE) LocalStorage.removeExerciseFromSplitTemplate(context, split.title, exName)
-                                val updated = currentExercises.filterNot { it.name.equals(exName, ignoreCase = true) }
+                                val day = if (split.title != QUICK_WORKOUT_TITLE) LocalStorage.daySnapshot(context, split.title) else null
+                                if (day != null) LocalStorage.removeExerciseFromSplitTemplate(context, split.title, exName)
+                                val before = currentExercises
+                                val updated = before.filterNot { it.name.equals(exName, ignoreCase = true) }
                                 currentExercises = updated
                                 LocalStorage.saveActiveSession(context, split.title, updated)
+                                // Says where it's gone from, which the old confirmation explained.
+                                val text = if (day != null) tr("{0} removed from {1}", shown(exName), shown(split.title)) else tr("{0} removed", shown(exName))
+                                AppSnackbar.show(text, tr("Undo")) {
+                                    if (day != null) LocalStorage.restoreDay(context, day)
+                                    if (activeSplit?.title == split.title && editingPastWorkout == null) {
+                                        currentExercises = withReturned(currentExercises, before, exName)
+                                        LocalStorage.saveActiveSession(context, split.title, currentExercises)
+                                    }
+                                }
                             },
                             onMinimize = { workoutExpanded = false },
                             onDiscardWorkout = {
@@ -904,6 +939,18 @@ fun GymTrackerApp(
                 onDismiss = keepGoing
             )
         }
+
+        val fullScreenPage = workoutVisible || openExercise != null || editingProgramId != null ||
+            buildingSplit != null || showOnboarding || showWelcome || celebration != null
+        val density = LocalDensity.current
+        AppSnackbarHost(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .then(
+                    if (fullScreenPage) Modifier.navigationBarsPadding().padding(bottom = 16.dp)
+                    else Modifier.padding(bottom = with(density) { (rootHeight - tabsHeight).coerceAtLeast(0).toDp() } + 8.dp)
+                )
+        )
     }
 }
 
@@ -1277,6 +1324,15 @@ private fun TabHost(selected: AppTab, modifier: Modifier, content: @Composable (
 }
 
 /** How a workout is named in a sentence: the day's name, or "Empty workout" for one started empty. */
+/** [now] with the exercise named [name] put back where it was in [before] (Undo of a remove). */
+private fun withReturned(now: List<ExerciseEntry>, before: List<ExerciseEntry>, name: String): List<ExerciseEntry> {
+    val idx = before.indexOfFirst { it.name.equals(name, ignoreCase = true) }
+    if (idx < 0 || now.any { it.name.equals(name, ignoreCase = true) }) return now
+    // After the exercise that preceded it, so edits made in the meantime keep their place.
+    val after = before.getOrNull(idx - 1)?.let { prev -> now.indexOfFirst { it.name.equals(prev.name, ignoreCase = true) } } ?: -1
+    return now.toMutableList().apply { add(after + 1, before[idx]) }
+}
+
 private fun workoutTitle(title: String) = if (title == QUICK_WORKOUT_TITLE) tr("Empty workout") else shown(title)
 
 /**

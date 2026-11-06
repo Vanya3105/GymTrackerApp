@@ -869,6 +869,12 @@ internal object HebrewText {
         m["Delete everything"] = "למחוק הכול"
         m["Deleting…"] = "מוחק…"
         m["Couldn't delete the data"] = "לא הצלחנו למחוק את הנתונים"
+        m["Undo"] = "ביטול פעולה"
+        m["{0} deleted"] = "{0} נמחק"
+        m["Weigh-in deleted"] = "השקילה נמחקה"
+        m["{0} removed"] = "{0} הוסר"
+        m["{0} removed from {1}"] = "{0} הוסר מ{1}"
+        m["Set deleted"] = "הסט נמחק"
     }
 
     private fun names1(m: HashMap<String, String>) {

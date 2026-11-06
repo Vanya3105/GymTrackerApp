@@ -130,7 +130,6 @@ fun ActiveWorkoutScreen(
     var confirmDiscard by remember { mutableStateOf(false) }
     // A set ticked while earlier work sets of the same exercise aren't: (card, set, the earlier ones).
     var tickingAhead by remember { mutableStateOf<Triple<Int, Int, List<Int>>?>(null) }
-    var removeCandidate by remember { mutableStateOf<String?>(null) }
     var photoPath by remember { mutableStateOf(initialPhotoPath) }
     var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
     var banner by remember { mutableStateOf<Banner?>(null) }
@@ -447,7 +446,7 @@ fun ActiveWorkoutScreen(
                                 updateAt(exIdx) { it.copy(isSkipped = true, isSuperset = false) }
                             },
                             onOpenDetails = { onOpenExercise(exercise.name) },
-                            onRemove = { removeCandidate = exercise.name }
+                            onRemove = { haptics.tick(); onRemoveExercisePermanently(exercise.name) }
                         )
                     }
                 }
@@ -587,31 +586,6 @@ fun ActiveWorkoutScreen(
         )
     }
 
-
-    removeCandidate?.let { name ->
-        AlertDialog(
-            onDismissRequest = { removeCandidate = null },
-            containerColor = P.bgElevated,
-            title = { Text(tr("Remove {0}?", shown(name)), style = AppType.headline, color = P.textPrimary) },
-            text = {
-                Text(
-                    if (isEditingPastWorkout) tr("It will be removed from this logged workout.")
-                    else if (split.title == QUICK_WORKOUT_TITLE) tr("It will be removed from this workout.")
-                    else tr("It won't show up in future {0} workouts. You can add it back any time.", shown(split.title)),
-                    style = AppType.body,
-                    color = P.textSecondary
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics.tick()
-                    onRemoveExercisePermanently(name)
-                    removeCandidate = null
-                }) { Text(tr("Remove"), color = P.dangerText, style = AppType.label) }
-            },
-            dismissButton = { TextButton(onClick = { removeCandidate = null }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
-        )
-    }
 
     if (confirmDiscard) {
         AlertDialog(
@@ -1026,7 +1000,14 @@ private fun ExerciseCard(
                     onSetRest = { sec -> onSetRest(setIdx, sec) },
                     onDelete = {
                         haptics.tick()
+                        val removed = exercise.sets[setIdx]
                         onUpdate { ex -> ex.copy(sets = ex.sets.filterIndexed { i, _ -> i != setIdx }.mapIndexed { i, s -> s.copy(setNumber = i + 1) }) }
+                        AppSnackbar.show(tr("Set deleted"), tr("Undo")) {
+                            onUpdate { ex ->
+                                val sets = ex.sets.toMutableList().apply { add(setIdx.coerceAtMost(size), removed) }
+                                ex.copy(sets = sets.mapIndexed { i, s -> s.copy(setNumber = i + 1) })
+                            }
+                        }
                     },
                     onToggle = { onToggleSet(setIdx) },
                     haptics = haptics

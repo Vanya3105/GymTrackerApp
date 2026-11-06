@@ -923,7 +923,11 @@ fun AppBottomSheet(
         },
         content = {
             val guard = remember { SheetScrollGuard() }
-            Column(Modifier.nestedScroll(guard), content = content)
+            Box {
+                Column(Modifier.nestedScroll(guard), content = content)
+                // The sheet's window covers the screen's own message spot.
+                AppSnackbarHost(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp))
+            }
         }
     )
 }

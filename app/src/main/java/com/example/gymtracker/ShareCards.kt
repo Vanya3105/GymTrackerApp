@@ -17,7 +17,6 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.provider.MediaStore
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -608,8 +607,8 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
             }
             busy = false
             when {
-                ok == null -> Toast.makeText(context, if (save) tr("Couldn't save the image") else tr("Couldn't create the image"), Toast.LENGTH_SHORT).show()
-                save -> Toast.makeText(context, tr("Saved to Pictures/GymTracker"), Toast.LENGTH_SHORT).show()
+                ok == null -> AppSnackbar.show(if (save) tr("Couldn't save the image") else tr("Couldn't create the image"))
+                save -> AppSnackbar.show(tr("Saved to Pictures/GymTracker"))
                 ok is File -> openShareChooser(context, ok, data.title, background == ShareBackground.CLEAR)
             }
         }
