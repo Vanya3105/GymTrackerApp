@@ -170,6 +170,9 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 Measured on the emulator (release, profile-compiled): cold start ~1 s, workout scroll ~5% slow frames, tabs ~3%, History swipes every frame under 18 ms (the rest is the emulator's GPU); no crashes in the log. Every bottom sheet's first frame costs ~45 ms on the emulator (its own window), the exercise picker ~30 ms more.
 - [x] Plates button on the keypad while typing a bar lift's weight (the calculator was only in the set number's menu; the owner couldn't find it)
 - [x] Hebrew keypad: digits read 1 2 3 left to right (they were mirrored 3 2 1), and the step keys read "−2.5" (were garbled to "2.–")
+- [x] New bests count exercises, not sets: the finish sheet said "9 New bests" over a list of 3, and History "9 PRs", while the celebration and share images said 3. History's badge now counts the card's trophies, so older workouts read right too. Test in `WorkoutLogicTest`
+- [x] Editing a past workout no longer shows coaching for "today"
+- Checked: editing and saving a past workout while another one runs leaves the running one alone
 
 ## Professional polish (branch `pro-polish`)
 - [x] About (end of Profile): Send feedback (email with the app version and phone model filled in), Privacy policy, Open-source licenses (a sheet listing the libraries, with the Apache 2.0 and OFL texts from `res/raw`), app name and version

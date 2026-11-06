@@ -344,6 +344,10 @@ fun WorkoutHistoryCard(
     val photo = rememberPhoto(workout.photoPath)
     val sets = remember(workout.exercises) { workout.exercises.sumOf { ex -> ex.sets.count { !it.isWarmupSet && (it.repCount > 0 || it.isValidWorkSet(ex.type)) } } }
     var menuOpen by remember { mutableStateOf(false) }
+    val rows = summaryRows(workout, allHistory)
+    // Exercises with a new best, as the trophies below and the finish celebration count them. The
+    // saved count (prsHit) counted every record-beating set, so older workouts read "9 PRs" for 3.
+    val bests = rows.count { it.third }
 
     AppCard(modifier = modifier.fillMaxWidth(), onClick = onOpen) {
         Row(verticalAlignment = Alignment.Top) {
@@ -351,8 +355,8 @@ fun WorkoutHistoryCard(
                 Text(shown(workout.splitTitle), style = AppType.headline, color = P.textPrimary)
                 Text(DateUtils.dateTimeOf(workout.displayDate, workout.id), style = AppType.caption, color = P.textSecondary)
             }
-            if (workout.prsHit > 0) {
-                Pill(if (workout.prsHit == 1) tr("1 PR") else tr("{0} PRs", workout.prsHit), icon = Icons.Rounded.EmojiEvents, color = P.warningText, container = P.warningSurface)
+            if (bests > 0) {
+                Pill(if (bests == 1) tr("1 PR") else tr("{0} PRs", bests), icon = Icons.Rounded.EmojiEvents, color = P.warningText, container = P.warningSurface)
             }
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, tr("More"), { menuOpen = true }, size = 34.dp, container = Color.Transparent, tint = P.textSecondary)
@@ -382,7 +386,7 @@ fun WorkoutHistoryCard(
             Pill(tr("{0} sets", sets))
             if (workout.totalVolumeKg > 0) Pill(formatVolume(workout.totalVolumeKg))
         }
-        ExerciseSummary(workout, allHistory)
+        ExerciseSummary(rows)
         // From the watch via Health Connect; keyed on the permissions so it appears once allowed.
         val heart by produceState<HeartRateSummary?>(null, workout.id, HealthSync.granted) {
             value = HealthSync.heartRate(context, workout)
@@ -418,13 +422,12 @@ fun WorkoutHistoryCard(
 
 private const val SUMMARY_ROWS = 4
 
-/** Each exercise with its number of work sets and best set; a trophy where it was a new best. */
+/** Each exercise with its best set and whether it was a new best. */
 @Composable
-private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<CompletedWorkout>) {
-    val P = LocalPalette.current
+private fun summaryRows(workout: CompletedWorkout, allHistory: List<CompletedWorkout>): List<Triple<ExerciseEntry, SetEntry?, Boolean>> {
     val unit = Units.current
     val byExercise = LocalHistoryIndex.current
-    val rows = remember(workout, allHistory, byExercise, unit) {
+    return remember(workout, allHistory, byExercise, unit) {
         workout.exercises.filter { !it.isSkipped }.map { ex ->
             val best = bestSetOf(ex.sets, ex.type)
             // Only earlier workouts that have this exercise: same records, without scanning everything.
@@ -434,6 +437,12 @@ private fun ExerciseSummary(workout: CompletedWorkout, allHistory: List<Complete
             Triple(ex, best, isBest)
         }
     }
+}
+
+/** Each exercise with its number of work sets and best set; a trophy where it was a new best. */
+@Composable
+private fun ExerciseSummary(rows: List<Triple<ExerciseEntry, SetEntry?, Boolean>>) {
+    val P = LocalPalette.current
     if (rows.isEmpty()) return
     Spacer(Modifier.height(12.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(P.bgControl).padding(horizontal = 12.dp, vertical = 8.dp)) {

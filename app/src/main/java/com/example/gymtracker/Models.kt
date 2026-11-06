@@ -212,8 +212,10 @@ fun computeWorkoutStats(exercises: List<ExerciseEntry>, history: List<CompletedW
                 workSets++
                 if (ex.type.countsVolume) volume += s.weightKg * s.repCount
             }
-            if (isSetPersonalRecord(s, records, ex.type)) prs++
         }
+        // New bests count exercises, as the celebration and share images list them: three sets past
+        // the old best are one new best, not three.
+        if (ex.sets.any { isSetPersonalRecord(it, records, ex.type) }) prs++
     }
     return WorkoutStats(workSets, volume.roundToInt(), prs)
 }

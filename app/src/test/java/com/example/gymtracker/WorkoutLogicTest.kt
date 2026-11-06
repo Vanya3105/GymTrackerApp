@@ -103,6 +103,16 @@ class WorkoutLogicTest {
     }
 
     @Test
+    fun computeWorkoutStats_countsExercisesWithANewBest_notSets() {
+        val history = listOf(workout(1, "Push", ExerciseEntry("Bench", sets = listOf(set("60", "8"))), ExerciseEntry("Press", sets = listOf(set("40", "8")))))
+        val today = listOf(
+            ExerciseEntry("Bench", sets = listOf(set("65", "8"), set("65", "8"), set("65", "8"))),
+            ExerciseEntry("Press", sets = listOf(set("45", "8")))
+        )
+        assertEquals(2, computeWorkoutStats(today, history).prCount)
+    }
+
+    @Test
     fun exerciseRecords_useBestEstimated1Rm() {
         val history = listOf(
             workout(2, "Push", ExerciseEntry("Bench", sets = listOf(set("70", "3")))),

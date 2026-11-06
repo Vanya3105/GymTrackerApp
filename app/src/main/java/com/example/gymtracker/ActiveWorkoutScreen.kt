@@ -385,7 +385,8 @@ fun ActiveWorkoutScreen(
                     val tour = if (pos == 0) workoutTour else null
                     val prevTour = if (pos == 0) previousTour else null
                     val unit = Units.current
-                    val suggestion = remember(exercise, history, settings.weightStep, unit) {
+                    // Coaching is about the next session ("190 kg for 8, 6, 7 today…"): it means nothing on a past workout.
+                    val suggestion = if (isEditingPastWorkout) null else remember(exercise, history, settings.weightStep, unit) {
                         suggestNextWeight(split.title, exercise, history, settings.weightStep)
                     }
                     val previousSets = remember(exercise.name, exercise.type, previousSplitWorkout, byExercise) {
