@@ -496,8 +496,11 @@ fun TrainingMaxRow(
             text = {
                 Column {
                     Text(
-                        tr("Your {0} weights are worked out from this. A good start is 90% of your best estimated 1-rep max", programNames) +
-                            (if (best1RmKg > 0f) " (${formatWeightKg(suggestedTrainingMaxKg(best1RmKg))})." else ".") +
+                        // The number in brackets read as the best 1RM itself; it was the 90%.
+                        (if (best1RmKg > 0f) tr(
+                            "Your {0} weights are worked out from this. A good start is {1}, 90% of your best estimated 1-rep max ({2}).",
+                            programNames, formatWeightKg(suggestedTrainingMaxKg(best1RmKg)), formatWeightKg(best1RmKg)
+                        ) else tr("Your {0} weights are worked out from this. A good start is 90% of your best estimated 1-rep max", programNames) + ".") +
                             tr(" Saving starts the program again at week 1."),
                         style = AppType.caption,
                         color = P.textSecondary

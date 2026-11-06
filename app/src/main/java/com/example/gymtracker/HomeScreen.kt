@@ -55,7 +55,10 @@ fun HomeScreen(
     val recovery = remember(history) { computeMuscleRecoveryStatus(history) }
     val upNext = when (activeSplitTitle) {
         QUICK_WORKOUT_TITLE -> WorkoutSplit(QUICK_WORKOUT_TITLE, "Exercises you pick as you go", "")
-        else -> splits.find { it.title == (activeSplitTitle ?: week.recommendedSplit) } ?: splits.first()
+        null -> splits.find { it.title == week.recommendedSplit } ?: splits.first()
+        // A workout from a split that has since been switched for another stays itself: it was shown
+        // as the new split's first day, "In progress", while Resume opened the running one.
+        else -> splits.find { it.title == activeSplitTitle } ?: WorkoutSplit(activeSplitTitle, "", "")
     }
 
     val listState = rememberLazyListState()

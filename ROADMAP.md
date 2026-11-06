@@ -173,6 +173,9 @@ Measured on the emulator (release, profile-compiled): cold start ~1 s, workout s
 - [x] New bests count exercises, not sets: the finish sheet said "9 New bests" over a list of 3, and History "9 PRs", while the celebration and share images said 3. History's badge now counts the card's trophies, so older workouts read right too. Test in `WorkoutLogicTest`
 - [x] Editing a past workout no longer shows coaching for "today"
 - Checked: editing and saving a past workout while another one runs leaves the running one alone
+- [x] Switching split while a workout runs: Today showed the new split's first day as "In progress" (Resume opened the old one); it now shows the running workout under its own name
+- [x] Training max hint said "90% of your best estimated 1-rep max (245 kg)", which read as the 1RM; now "A good start is 245 kg, 90% of your best estimated 1-rep max (272.5 kg)"
+- Checked: 5/3/1 (training max, warm-ups 40/50/60%, week 1 at 65/75/85% rounded to plates, AMRAP note), switching workouts
 
 ## Professional polish (branch `pro-polish`)
 - [x] About (end of Profile): Send feedback (email with the app version and phone model filled in), Privacy policy, Open-source licenses (a sheet listing the libraries, with the Apache 2.0 and OFL texts from `res/raw`), app name and version

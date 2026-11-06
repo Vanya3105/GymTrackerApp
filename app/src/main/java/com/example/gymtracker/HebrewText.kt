@@ -880,6 +880,7 @@ internal object HebrewText {
         m["{0}: {1}"] = "{0}: {1}"
         m["empty"] = "ריק"
         m["Plates"] = "פלטות"
+        m["Your {0} weights are worked out from this. A good start is {1}, 90% of your best estimated 1-rep max ({2})."] = "המשקלים של {0} מחושבים מזה. התחלה טובה היא {1}, ‏90% מה-1RM המשוער הטוב ביותר שלכם ({2})."
         m["Workout notification is off"] = "התראת האימון כבויה"
         m["Turn it on to see your set and rest timer on the lock screen while you train."] = "הפעילו אותה כדי לראות את הסט ואת טיימר המנוחה במסך הנעילה בזמן האימון."
     }
