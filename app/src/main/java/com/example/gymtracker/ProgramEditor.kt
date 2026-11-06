@@ -1,6 +1,5 @@
 package com.example.gymtracker
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -64,7 +63,7 @@ fun ProgramEditorScreen(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    BackHandler(onBack = onBack)
+    val backModifier = rememberPredictiveBack(onBack = onBack)
 
     // Snapshot state: re-reads as the program is saved.
     val program = UserPrograms.all.find { it.id == programId } ?: return
@@ -92,7 +91,7 @@ fun ProgramEditorScreen(
     )
 
     LazyColumn(
-        Modifier.fillMaxSize().background(P.bgPrimary),
+        backModifier.fillMaxSize().background(P.bgPrimary),
         state = listState,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

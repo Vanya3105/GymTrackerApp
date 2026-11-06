@@ -179,7 +179,8 @@ fun ActiveWorkoutScreen(
         showFinish = true
     }
 
-    BackHandler {
+    // Unsaved edits ask first, so the page stays put during that gesture.
+    val backModifier = rememberPredictiveBack(animate = !(isEditingPastWorkout && hasUnsavedEdits)) {
         when {
             isEditingPastWorkout && hasUnsavedEdits -> confirmDiscard = true
             isEditingPastWorkout -> onDiscardWorkout()
@@ -311,7 +312,7 @@ fun ActiveWorkoutScreen(
     BackHandler(enabled = editing != null) { editor.close() }
 
     CompositionLocalProvider(LocalSetEditor provides editor) {
-    Box(Modifier.fillMaxSize()) {
+    Box(backModifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WorkoutTopBar(
                 title = shown(split.title),

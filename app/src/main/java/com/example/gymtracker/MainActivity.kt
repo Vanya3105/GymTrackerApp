@@ -283,7 +283,6 @@ fun GymTrackerApp(
     var currentExercises by remember { mutableStateOf(initialActive?.second ?: emptyList()) }
     // The live workout is either open full-screen or minimized to the "Resume" bar.
     var workoutExpanded by remember { mutableStateOf(initialActive != null) }
-    var lastBackPress by remember { mutableLongStateOf(0L) }
 
     val reloadFromDisk = rememberUpdatedState {
         val latest = LocalStorage.loadActiveSession(context)
@@ -362,17 +361,10 @@ fun GymTrackerApp(
         else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    BackHandler(enabled = !workoutVisible && !showOnboarding) {
-        if (selectedTab != AppTab.TODAY) {
-            selectedTab = AppTab.TODAY
-        } else {
-            val now = System.currentTimeMillis()
-            if (now - lastBackPress < 2000L) activity.finish()
-            else {
-                lastBackPress = now
-                AppSnackbar.show(tr("Press back again to exit"))
-            }
-        }
+    // Other tabs go back to Today. On Today, Android takes back itself: its back-to-home animation
+    // (predictive back) only plays when the app isn't holding the gesture.
+    BackHandler(enabled = !workoutVisible && !showOnboarding && selectedTab != AppTab.TODAY) {
+        selectedTab = AppTab.TODAY
     }
 
     fun startWorkout(split: WorkoutSplit) {

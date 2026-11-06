@@ -459,7 +459,6 @@ internal object HebrewText {
         m["Plates you have"] = "הפלטות שיש לכם"
         m["Popular splits"] = "חלוקות פופולריות"
         m["Pounds (lb)"] = "פאונד (lb)"
-        m["Press back again to exit"] = "לחצו שוב על חזרה כדי לצאת"
         m["Previous"] = "קודם"
         m["Previous month"] = "החודש הקודם"
         m["Previous week"] = "השבוע הקודם"

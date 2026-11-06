@@ -45,6 +45,9 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.DrawModifierNode
 import kotlinx.coroutines.launch
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
+import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -894,6 +897,47 @@ private class SheetScrollGuard : NestedScrollConnection {
         val keep = available.y < 0f || contentScrolled || consumed.y != 0f
         contentScrolled = false
         return if (keep) Velocity(0f, available.y) else Velocity.Zero
+    }
+}
+
+/**
+ * Back for a full-screen page, with Android's predictive back: while the finger is down the page
+ * shrinks towards the swiped edge with rounded corners, showing what is behind it; letting go
+ * closes it, pulling back puts it back. Apply the returned modifier to the page's root.
+ * [animate] false keeps the page still, for a back that asks something first.
+ */
+@Composable
+fun rememberPredictiveBack(enabled: Boolean = true, animate: Boolean = true, onBack: () -> Unit): Modifier {
+    val progress = remember { Animatable(0f) }
+    var fromLeft by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val currentOnBack by rememberUpdatedState(onBack)
+    val currentAnimate by rememberUpdatedState(animate)
+    PredictiveBackHandler(enabled) { events ->
+        try {
+            events.collect { e ->
+                fromLeft = e.swipeEdge == BackEventCompat.EDGE_LEFT
+                if (currentAnimate) progress.snapTo(e.progress)
+            }
+            // The page's own exit animation carries on from where the gesture left it.
+            currentOnBack()
+        } catch (e: CancellationException) {
+            scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+            throw e
+        }
+    }
+    val corner = with(LocalDensity.current) { 28.dp.toPx() }
+    return Modifier.graphicsLayer {
+        val p = progress.value
+        if (p > 0f) {
+            // Material's numbers for a full-screen surface: 90% at the end, a nudge towards the edge.
+            val scale = 1f - 0.1f * p
+            scaleX = scale
+            scaleY = scale
+            translationX = (if (fromLeft) 1f else -1f) * size.width * 0.04f * p
+            shape = RoundedCornerShape(corner * p)
+            clip = true
+        }
     }
 }
 
