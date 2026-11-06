@@ -45,6 +45,9 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.DrawModifierNode
 import kotlinx.coroutines.launch
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
+import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -87,6 +90,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -397,10 +403,11 @@ fun <T> SegmentedControl(
 ) {
     val P = LocalPalette.current
     val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    // At least 42dp, taller when large text wraps a label ("Kilograms (kg)") onto two lines.
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .heightIn(min = 42.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(P.bgControl)
             .padding(3.dp)
@@ -411,31 +418,42 @@ fun <T> SegmentedControl(
             animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
             label = "segment_indicator"
         )
-        Box(
-            Modifier
-                .offset(x = indicatorOffset)
-                .width(segmentWidth)
-                .fillMaxHeight()
-                .shadow(if (P.isDark) 0.dp else 2.dp, RoundedCornerShape(11.dp), spotColor = P.shadow.copy(alpha = 0.2f))
-                .clip(RoundedCornerShape(11.dp))
-                .background(if (P.isDark) P.borderStrong else P.bgCard)
-        )
-        Row(Modifier.fillMaxSize()) {
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier
+                    .offset(x = indicatorOffset)
+                    .width(segmentWidth)
+                    .fillMaxHeight()
+                    .shadow(if (P.isDark) 0.dp else 2.dp, RoundedCornerShape(11.dp), spotColor = P.shadow.copy(alpha = 0.2f))
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (P.isDark) P.borderStrong else P.bgCard)
+            )
+        }
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             options.forEachIndexed { i, (value, label) ->
                 val isSel = i == selectedIndex
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .heightIn(min = 36.dp)
                         .clip(RoundedCornerShape(11.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Tab
-                        ) { onSelect(value) },
+                        ) { onSelect(value) }
+                        .semantics { this.selected = isSel }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(label, style = AppType.label, color = if (isSel) P.textPrimary else P.textSecondary, maxLines = 1)
+                    Text(
+                        label,
+                        style = AppType.label,
+                        color = if (isSel) P.textPrimary else P.textSecondary,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -897,6 +915,62 @@ private class SheetScrollGuard : NestedScrollConnection {
     }
 }
 
+/** The phone's text size is set large (about 140% or more): rows with a value at the end stack it under the name instead. */
+@Composable
+fun isLargeText(): Boolean = LocalDensity.current.fontScale >= 1.4f
+
+/**
+ * For text that has to stay on one short line (tab labels): it grows with the phone's text size
+ * only up to [max], since a label broken over two lines ("Progres" / "s") reads worse than a smaller one.
+ */
+@Composable
+fun CappedTextSize(max: Float = 1.3f, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    if (density.fontScale <= max) content()
+    else CompositionLocalProvider(LocalDensity provides Density(density.density, max), content = content)
+}
+
+/**
+ * Back for a full-screen page, with Android's predictive back: while the finger is down the page
+ * shrinks towards the swiped edge with rounded corners, showing what is behind it; letting go
+ * closes it, pulling back puts it back. Apply the returned modifier to the page's root.
+ * [animate] false keeps the page still, for a back that asks something first.
+ */
+@Composable
+fun rememberPredictiveBack(enabled: Boolean = true, animate: Boolean = true, onBack: () -> Unit): Modifier {
+    val progress = remember { Animatable(0f) }
+    var fromLeft by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    val currentOnBack by rememberUpdatedState(onBack)
+    val currentAnimate by rememberUpdatedState(animate)
+    PredictiveBackHandler(enabled) { events ->
+        try {
+            events.collect { e ->
+                fromLeft = e.swipeEdge == BackEventCompat.EDGE_LEFT
+                if (currentAnimate) progress.snapTo(e.progress)
+            }
+            // The page's own exit animation carries on from where the gesture left it.
+            currentOnBack()
+        } catch (e: CancellationException) {
+            scope.launch { progress.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) }
+            throw e
+        }
+    }
+    val corner = with(LocalDensity.current) { 28.dp.toPx() }
+    return Modifier.graphicsLayer {
+        val p = progress.value
+        if (p > 0f) {
+            // Material's numbers for a full-screen surface: 90% at the end, a nudge towards the edge.
+            val scale = 1f - 0.1f * p
+            scaleX = scale
+            scaleY = scale
+            translationX = (if (fromLeft) 1f else -1f) * size.width * 0.04f * p
+            shape = RoundedCornerShape(corner * p)
+            clip = true
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppBottomSheet(
@@ -923,7 +997,11 @@ fun AppBottomSheet(
         },
         content = {
             val guard = remember { SheetScrollGuard() }
-            Column(Modifier.nestedScroll(guard), content = content)
+            Box {
+                Column(Modifier.nestedScroll(guard), content = content)
+                // The sheet's window covers the screen's own message spot.
+                AppSnackbarHost(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp))
+            }
         }
     )
 }

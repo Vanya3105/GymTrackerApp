@@ -324,6 +324,16 @@ object LocalStorage {
         return loadWeightHistory(context)
     }
 
+    /** Undo of [deleteWeightLog]. A weigh-in that came from Health Connect isn't written back to it. */
+    fun restoreWeightLog(context: Context, entry: WeightLogEntry): List<WeightLogEntry> {
+        editData(context, { d -> d.copy(weights = (d.weights.filter { it.id != entry.id } + entry).sortedByDescending { it.id }) }) {
+            RoomStore.addBodyWeight(it, entry)
+        }
+        if (entry.id !in importedWeightIds(context)) HealthSync.weightLogged(context, entry)
+        if (loadWeightHistory(context).maxByOrNull { it.id }?.id == entry.id) setProfileWeight(context, entry.weightKg)
+        return loadWeightHistory(context)
+    }
+
     fun deleteWeightLog(context: Context, id: Long): List<WeightLogEntry> {
         val wasNewest = loadWeightHistory(context).maxByOrNull { it.id }?.id == id
         editData(context, { d -> d.copy(weights = d.weights.filter { it.id != id }) }) { RoomStore.deleteBodyWeight(it, id) }
@@ -820,6 +830,23 @@ object LocalStorage {
         }
     }
 
+    /** A day's exercise list and targets as they are now, for [restoreDay] (Undo). */
+    class DaySnapshot internal constructor(
+        internal val splitTitle: String,
+        internal val list: List<Pair<String, String>>,
+        internal val targets: Map<String, ExerciseTarget>
+    )
+
+    fun daySnapshot(context: Context, splitTitle: String) =
+        DaySnapshot(splitTitle, loadTemplateForSplit(context, splitTitle), data(context).targets[splitTitle].orEmpty())
+
+    // Not through saveTemplateForSplit: that drops the targets of exercises missing from the list.
+    fun restoreDay(context: Context, day: DaySnapshot) {
+        editData(context, { it.copy(templates = it.templates + (day.splitTitle to day.list), targets = it.targets + (day.splitTitle to day.targets)) }) {
+            RoomStore.saveTemplate(it, day.splitTitle, day.list, day.targets)
+        }
+    }
+
     fun removeExerciseFromSplitTemplate(context: Context, splitTitle: String, name: String) {
         val current = loadTemplateForSplit(context, splitTitle)
         saveTemplateForSplit(context, splitTitle, current.filterNot { it.first.equals(name, ignoreCase = true) })
@@ -895,6 +922,15 @@ object LocalStorage {
             d.copy(history = d.history.map { if (it.id == updatedWorkout.id) updatedWorkout else it })
         }) { RoomStore.insertWorkout(it, updatedWorkout) }
         HealthSync.workoutSaved(context, updatedWorkout)
+        AutoBackup.request(context)
+    }
+
+    /** Undo of [deleteWorkoutFromHistory]: puts the same workout back, leaving any running one alone. */
+    fun restoreWorkout(context: Context, workout: CompletedWorkout) {
+        editData(context, { d ->
+            d.copy(history = (d.history.filter { it.id != workout.id } + workout).sortedByDescending { it.id })
+        }) { RoomStore.insertWorkout(it, workout) }
+        HealthSync.workoutSaved(context, workout)
         AutoBackup.request(context)
     }
 

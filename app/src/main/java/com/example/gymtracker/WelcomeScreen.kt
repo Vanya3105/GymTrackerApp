@@ -2,7 +2,6 @@ package com.example.gymtracker
 
 import android.app.Activity
 import android.text.format.DateUtils
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,7 +53,7 @@ fun WelcomeScreen(activity: Activity, haptics: Haptics, onContinue: () -> Unit, 
             is DriveBackup.SignInStep.NeedsUser -> Unit
             is DriveBackup.SignInStep.Failed -> {
                 signingIn = false
-                if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
+                if (step.message.isNotEmpty()) AppSnackbar.show(step.message)
             }
             is DriveBackup.SignInStep.Done -> scope.launch {
                 val newest = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty().maxByOrNull { it.modifiedMillis }
@@ -83,7 +82,7 @@ fun WelcomeScreen(activity: Activity, haptics: Haptics, onContinue: () -> Unit, 
                 DriveBackup.download(context, file.file)?.let { LocalStorage.importJsonBackupString(context, it) } == true
             }
             restoring = false
-            if (ok) onRestored() else Toast.makeText(context, couldNotRestore, Toast.LENGTH_LONG).show()
+            if (ok) onRestored() else AppSnackbar.show(couldNotRestore)
         }
     }
 

@@ -1,6 +1,5 @@
 package com.example.gymtracker
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -77,7 +76,7 @@ fun ExerciseDetailScreen(
 ) {
     val P = LocalPalette.current
     val context = LocalContext.current
-    BackHandler(onBack = onBack)
+    val backModifier = rememberPredictiveBack(onBack = onBack)
 
     val stats = remember(exerciseName, history) { buildExerciseHistory(exerciseName, history) }
     val info = remember(exerciseName) { ExerciseDatabase.find(exerciseName) }
@@ -94,7 +93,7 @@ fun ExerciseDetailScreen(
     var showRename by remember { mutableStateOf(false) }
 
     LazyColumn(
-        Modifier.fillMaxSize().background(P.bgPrimary),
+        backModifier.fillMaxSize().background(P.bgPrimary),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {

@@ -13,9 +13,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.ExifInterface
 import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
@@ -415,6 +417,23 @@ fun hasNotificationPermission(context: Context): Boolean {
 }
 
 /**
+ * The app's only notification is the running workout's (set and rest on the lock screen), so it asks
+ * when the first workout starts, once: asking on a new install's first screen came before anyone
+ * knew why, and asking every workout after a "Don't allow" nags. Profile links to the setting.
+ */
+object NotificationAsk {
+    private const val PREFS = "gym_tracker_notification_ask"
+    private const val KEY_ASKED = "asked"
+
+    fun shouldAsk(context: Context): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission(context) &&
+            !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ASKED, false)
+
+    fun markAsked(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ASKED, true).apply()
+}
+
+/**
  * Removes the old "Rest timer" and "Logged sets" channels: a card for every set and rest was noise
  * next to the workout's own ongoing notification, which already shows both. Rest's end still buzzes
  * (see [RestAlarmScheduler.triggerRestFinishedAlert]).
@@ -493,9 +512,37 @@ object PhotoStorage {
                     true
                 )
             } else original
-            saveBitmapToInternalStorage(context, scaled)
+            saveBitmapToInternalStorage(context, uprighted(context, uri, scaled))
         } catch (e: Exception) { null }
     }
+
+    /**
+     * Phone cameras (Samsung's among them) often save a portrait photo as landscape pixels plus an
+     * EXIF note to turn it; decoding ignores the note, so the photo would come out sideways.
+     */
+    private fun uprighted(context: Context, uri: Uri, bitmap: Bitmap): Bitmap {
+        val orientation = try {
+            context.contentResolver.openInputStream(uri)?.use {
+                ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (e: Exception) { ExifInterface.ORIENTATION_NORMAL }
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) }
+            else -> return bitmap
+        }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    /** Where the camera app writes a full-size photo; [copyUriToInternalStorage] then shrinks it and it's deleted. */
+    fun newCameraFile(context: Context): File =
+        File(File(context.filesDir, "workout_photos").apply { mkdirs() }, "camera_${System.currentTimeMillis()}.jpg")
 
     /** Only what's already decoded; never touches the disk. */
     fun cached(path: String?): ImageBitmap? = path?.takeIf { it.isNotBlank() }?.let { memoryCache.get(it) }

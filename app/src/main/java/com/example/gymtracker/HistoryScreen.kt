@@ -29,12 +29,10 @@ import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -63,11 +61,10 @@ fun HistoryScreen(
     history: List<CompletedWorkout>,
     userProfile: UserProfile,
     onOpenWorkout: (CompletedWorkout) -> Unit,
-    onDeleteWorkout: (Long) -> Unit
+    onDeleteWorkout: (CompletedWorkout) -> Unit
 ) {
     val P = LocalPalette.current
     var mode by rememberSaveable { mutableStateOf(HistoryMode.WEEK) }
-    var pendingDelete by remember { mutableStateOf<CompletedWorkout?>(null) }
     var photoToView by remember { mutableStateOf<String?>(null) }
 
     val byExercise = remember(history) { historyByExercise(history) }
@@ -95,30 +92,13 @@ fun HistoryScreen(
             label = "history_mode"
         ) { m ->
             when (m) {
-                HistoryMode.WEEK -> WeekView(history, userProfile, onOpenWorkout, { pendingDelete = it }, { photoToView = it })
-                HistoryMode.MONTH -> MonthView(history, onOpenWorkout, { pendingDelete = it }, { photoToView = it })
+                HistoryMode.WEEK -> WeekView(history, userProfile, onOpenWorkout, onDeleteWorkout, { photoToView = it })
+                HistoryMode.MONTH -> MonthView(history, onOpenWorkout, onDeleteWorkout, { photoToView = it })
             }
         }
     }
     }
     TipTourOverlay(tour)
-    }
-
-    pendingDelete?.let { workout ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            containerColor = P.bgElevated,
-            title = { Text(tr("Delete this workout?"), style = AppType.headline, color = P.textPrimary) },
-            text = { Text(tr("{0} on {1} will be removed for good.", shown(workout.splitTitle), DateUtils.shortDayYearOf(workout.displayDate, workout.id)), style = AppType.body, color = P.textSecondary) },
-            confirmButton = {
-                TextButton(onClick = { onDeleteWorkout(workout.id); pendingDelete = null }) {
-                    Text(tr("Delete"), color = P.dangerText, style = AppType.label)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text(tr("Keep"), color = P.textSecondary, style = AppType.label) }
-            }
-        )
     }
 
     photoToView?.let { path ->

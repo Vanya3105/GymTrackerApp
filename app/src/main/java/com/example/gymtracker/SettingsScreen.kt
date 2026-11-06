@@ -3,7 +3,6 @@ package com.example.gymtracker
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.text.format.DateUtils as AndroidDateUtils
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
@@ -29,8 +28,12 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.MailOutline
+import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.MoveToInbox
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
@@ -57,6 +60,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
+import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
@@ -87,9 +97,9 @@ fun SettingsScreen(
             try {
                 val json = LocalStorage.exportJsonBackupString(context)
                 context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                Toast.makeText(context, tr("Backup saved"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Backup saved"))
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't save the backup"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't save the backup"))
             }
         }
     }
@@ -101,11 +111,22 @@ fun SettingsScreen(
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(content.removePrefix("\uFEFF").trim()) }.getOrNull()
                 if (json != null && StoreCodec.looksLikeBackup(json)) pendingBackup = content
-                else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
+                else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't read that file"))
             }
         }
+    }
+    var confirmDeleteAll by remember { mutableStateOf(false) }
+    // Re-read on return from Android's settings, where it's turned on.
+    var notificationsOn by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) notificationsOn = hasNotificationPermission(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     var otherAppFile by remember { mutableStateOf<String?>(null) }
     val otherAppLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -113,7 +134,7 @@ fun SettingsScreen(
             try {
                 otherAppFile = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             } catch (_: Exception) {
-                Toast.makeText(context, tr("Couldn't read that file"), Toast.LENGTH_SHORT).show()
+                AppSnackbar.show(tr("Couldn't read that file"))
             }
         }
     }
@@ -226,6 +247,18 @@ fun SettingsScreen(
                 ToggleRow(tr("Vibration"), tr("Light feedback when you tap"), settings.hapticsEnabled) {
                     onUpdateSettings(settings.copy(hapticsEnabled = it))
                 }
+                if (!notificationsOn) {
+                    LinkRow(Icons.Rounded.NotificationsOff, tr("Workout notification is off")) {
+                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        try { context.startActivity(intent) } catch (_: ActivityNotFoundException) {}
+                    }
+                    Text(
+                        tr("Turn it on to see your set and rest timer on the lock screen while you train."),
+                        style = AppType.caption,
+                        color = P.textTertiary
+                    )
+                }
             }
         }
 
@@ -299,8 +332,11 @@ fun SettingsScreen(
                         onCheckedChange = { crashReports = it; CrashReports.set(context, it) }
                     )
                 }
+                LinkRow(Icons.Rounded.DeleteForever, tr("Delete all data"), danger = true) { confirmDeleteAll = true }
             }
         }
+
+        item { AboutGroup() }
     }
 
     pendingBackup?.let { content ->
@@ -310,17 +346,23 @@ fun SettingsScreen(
                 val result = LocalStorage.addBackupJsonString(context, content)
                 if (result != null) {
                     onDataRestored()
-                    Toast.makeText(context, addedMessage(result), Toast.LENGTH_LONG).show()
-                } else Toast.makeText(context, tr("Couldn't add that backup"), Toast.LENGTH_SHORT).show()
+                    AppSnackbar.show(addedMessage(result))
+                } else AppSnackbar.show(tr("Couldn't add that backup"))
             },
             onReplace = {
                 pendingBackup = null
                 if (LocalStorage.importJsonBackupString(context, content)) {
                     onDataRestored()
-                    Toast.makeText(context, tr("Backup restored"), Toast.LENGTH_SHORT).show()
-                } else Toast.makeText(context, tr("That file isn't a GymTracker backup"), Toast.LENGTH_SHORT).show()
+                    AppSnackbar.show(tr("Backup restored"))
+                } else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
             },
             onDismiss = { pendingBackup = null }
+        )
+    }
+    if (confirmDeleteAll) {
+        DeleteAllDialog(
+            onSaveBackup = { exportLauncher.launch("gymtracker_backup.json") },
+            onDismiss = { confirmDeleteAll = false }
         )
     }
     otherAppFile?.let { text ->
@@ -331,7 +373,7 @@ fun SettingsScreen(
                 otherAppFile = null
                 if (result != null) {
                     onDataRestored()
-                    Toast.makeText(context, addedMessage(result), Toast.LENGTH_LONG).show()
+                    AppSnackbar.show(addedMessage(result))
                 }
             },
             onDismiss = { otherAppFile = null }
@@ -354,7 +396,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
         try {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, tr("Couldn't open Health Connect"), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("Couldn't open Health Connect"))
         }
     }
 
@@ -363,7 +405,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
             HealthSync.refresh(context)
             if (HealthSync.granted.isEmpty()) {
                 // Android stops showing the dialog after two refusals; access can still be given in Health Connect.
-                Toast.makeText(context, tr("Nothing was allowed. You can allow it in Health Connect."), Toast.LENGTH_LONG).show()
+                AppSnackbar.show(tr("Nothing was allowed. You can allow it in Health Connect."))
                 return@launch
             }
             LocalStorage.setHealthSyncOn(context, true)
@@ -415,6 +457,139 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
     }
 }
 
+private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/GymTrackerApp/privacy.html"
+private const val FEEDBACK_EMAIL = "evtushenkovanya16@gmail.com"
+
+private fun appVersion(context: android.content.Context): String =
+    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+
+@Composable
+private fun AboutGroup() {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    var showLicenses by remember { mutableStateOf(false) }
+    val version = remember { appVersion(context) }
+
+    fun open(intent: Intent, missing: String) {
+        try {
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            AppSnackbar.show(missing)
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        SettingsGroup(tr("About")) {
+            LinkRow(Icons.Rounded.MailOutline, tr("Send feedback")) {
+                // The version and phone go along, so a bug report says where it happened.
+                val body = "\n\n—\nGymTracker $version · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")).apply {
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
+                    putExtra(Intent.EXTRA_SUBJECT, "GymTracker feedback")
+                    putExtra(Intent.EXTRA_TEXT, body)
+                }
+                open(intent, tr("No email app on this phone"))
+            }
+            LinkRow(Icons.Rounded.PrivacyTip, tr("Privacy policy")) {
+                open(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_POLICY_URL)), tr("No browser on this phone"))
+            }
+            LinkRow(Icons.Rounded.Description, tr("Open-source licenses")) { showLicenses = true }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("GymTracker", style = AppType.label, color = P.textSecondary)
+        if (version.isNotEmpty()) Text(tr("Version {0}", version), style = AppType.caption, color = P.textTertiary)
+    }
+
+    if (showLicenses) LicensesSheet(onDismiss = { showLicenses = false })
+}
+
+private class OpenSourcePart(val name: String, val author: String, val license: String)
+
+private const val APACHE = "Apache License 2.0"
+private const val OFL = "SIL Open Font License 1.1"
+
+private val OPEN_SOURCE_PARTS = listOf(
+    OpenSourcePart("Inter (font)", "The Inter Project Authors", OFL),
+    OpenSourcePart("Jetpack Compose, Material 3", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Material Icons", "Google", APACHE),
+    OpenSourcePart("AndroidX Core, Activity, Lifecycle, Splash Screen", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Room", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Health Connect client", "The Android Open Source Project", APACHE),
+    OpenSourcePart("Firebase Crashlytics", "Google", APACHE),
+    OpenSourcePart("Kotlin, kotlinx.coroutines", "JetBrains", APACHE),
+)
+
+@Composable
+private fun LicensesSheet(onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    var openText by remember { mutableStateOf<String?>(null) }
+    val texts = remember {
+        mapOf(APACHE to R.raw.license_apache, OFL to R.raw.license_ofl).mapValues { (_, id) ->
+            val raw = runCatching { context.resources.openRawResource(id).bufferedReader().use { it.readText() } }.getOrDefault("")
+            // The files are wrapped for 80-column terminals; joining each paragraph lets it fill the screen.
+            raw.split(Regex("\\n\\s*\\n")).joinToString("\n\n") { para -> para.lines().joinToString(" ") { it.trim() }.trim() }
+        }
+    }
+    AppBottomSheet(onDismiss = onDismiss) {
+        LazyColumn(
+            Modifier.fillMaxHeight(0.85f).navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)
+        ) {
+            item {
+                Text(tr("Open-source licenses"), style = AppType.title, color = P.textPrimary)
+                Text(
+                    tr("GymTracker is built with these open-source parts. Thank you to their authors."),
+                    style = AppType.caption,
+                    color = P.textSecondary,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                )
+            }
+            items(OPEN_SOURCE_PARTS) { part ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(part.name, style = AppType.bodyStrong, color = P.textPrimary)
+                    Text("${part.author} · ${part.license}", style = AppType.caption, color = P.textSecondary)
+                }
+            }
+            item {
+                Text(
+                    tr("License texts"),
+                    style = AppType.overline,
+                    color = P.textSecondary,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                )
+            }
+            texts.forEach { (license, text) ->
+                item(key = license) {
+                    val expanded = openText == license
+                    val turn by animateFloatAsState(if (expanded) 180f else 0f, label = "license_chevron")
+                    Column {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .pressable(pressedScale = 0.99f) { openText = if (expanded) null else license }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(license, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+                            Icon(
+                                Icons.Rounded.ExpandMore,
+                                if (expanded) tr("Hide") else tr("Show"),
+                                tint = P.textTertiary,
+                                modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = turn }
+                            )
+                        }
+                        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                            Text(text, style = AppType.caption, color = P.textSecondary, modifier = Modifier.padding(bottom = 12.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SharedRow(label: String, shared: Boolean) {
     val P = LocalPalette.current
@@ -456,15 +631,72 @@ fun <T> ChoiceChips(options: List<Pair<T, String>>, selected: T, onSelect: (T) -
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(bg)
-                    .pressable(pressedScale = 0.94f) { onSelect(value) }
+                    .pressable(pressedScale = 0.94f, role = Role.RadioButton) { onSelect(value) }
+                    .semantics { this.selected = isSel }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }
     }
 }
 
+/**
+ * Android's own "Clear storage" for the app: files, database, preferences, photos and the
+ * pre-import copies all go, so nothing is left behind the way a hand-written wipe could leave it.
+ * It ends the app's process; the next start is a first start.
+ */
 @Composable
-private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
+private fun DeleteAllDialog(onSaveBackup: () -> Unit, onDismiss: () -> Unit) {
+    val P = LocalPalette.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var deleting by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!deleting) onDismiss() },
+        containerColor = P.bgElevated,
+        title = { Text(tr("Delete all your data?"), style = AppType.headline, color = P.textPrimary) },
+        text = {
+            Column {
+                Text(
+                    tr("Every workout, weigh-in, program, photo and setting on this phone is deleted. The app closes and starts again as new. This can't be undone."),
+                    style = AppType.body,
+                    color = P.textSecondary
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    tr("Backups in Google Drive or a folder stay, and so does anything already shared with Health Connect."),
+                    style = AppType.caption,
+                    color = P.textTertiary
+                )
+                Spacer(Modifier.height(14.dp))
+                SecondaryButton(tr("Save a backup file first"), onSaveBackup, Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !deleting,
+                onClick = {
+                    deleting = true
+                    scope.launch {
+                        if (LocalStorage.isHealthSyncOn(context)) HealthSync.revokeAll(context)
+                        // Pending writes would otherwise land after the wipe and bring data back.
+                        withContext(Dispatchers.IO) { LocalStorage.flush(context) }
+                        val am = context.getSystemService(android.app.ActivityManager::class.java)
+                        if (am?.clearApplicationUserData() != true) {
+                            onDismiss()
+                            AppSnackbar.show(tr("Couldn't delete the data"))
+                        }
+                    }
+                }
+            ) { Text(if (deleting) tr("Deleting…") else tr("Delete everything"), color = P.dangerText, style = AppType.label) }
+        },
+        dismissButton = {
+            TextButton(enabled = !deleting, onClick = onDismiss) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) }
+        }
+    )
+}
+
+@Composable
+private fun LinkRow(icon: ImageVector, text: String, danger: Boolean = false, onClick: () -> Unit) {
     val P = LocalPalette.current
     Row(
         Modifier
@@ -474,9 +706,9 @@ private fun LinkRow(icon: ImageVector, text: String, onClick: () -> Unit) {
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = P.textSecondary, modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = if (danger) P.dangerText else P.textSecondary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, style = AppType.body, color = P.textPrimary, modifier = Modifier.weight(1f))
+        Text(text, style = AppType.body, color = if (danger) P.dangerText else P.textPrimary, modifier = Modifier.weight(1f))
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = P.textTertiary, modifier = Modifier.size(20.dp))
     }
 }
@@ -599,7 +831,7 @@ private fun OtherAppImportSheet(text: String, defaultUnit: WeightUnit, onDone: (
                             adding = true
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) { LocalStorage.addData(context, h.asStoreData()) }
-                                if (result == null) Toast.makeText(context, tr("Couldn't add the workouts"), Toast.LENGTH_SHORT).show()
+                                if (result == null) AppSnackbar.show(tr("Couldn't add the workouts"))
                                 onDone(result)
                             }
                         },
@@ -646,7 +878,7 @@ private fun DriveRestoreSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                                 scope.launch {
                                     val text = withContext(Dispatchers.IO) { DriveBackup.download(context, f.file) }
                                     downloading = null
-                                    if (text == null) Toast.makeText(context, tr("Couldn't download that backup"), Toast.LENGTH_SHORT).show()
+                                    if (text == null) AppSnackbar.show(tr("Couldn't download that backup"))
                                     else onPick(text)
                                 }
                             }.padding(horizontal = 8.dp, vertical = 12.dp),
@@ -704,7 +936,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
     fun afterSignIn(step: DriveBackup.SignInStep) {
         signingIn = false
         when (step) {
-            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) Toast.makeText(context, step.message, Toast.LENGTH_LONG).show()
+            is DriveBackup.SignInStep.Failed -> if (step.message.isNotEmpty()) AppSnackbar.show(step.message)
             is DriveBackup.SignInStep.NeedsUser -> Unit
             is DriveBackup.SignInStep.Done -> scope.launch {
                 val found = withContext(Dispatchers.IO) { DriveBackup.listBackups(context) }.orEmpty()
@@ -728,7 +960,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
             try {
                 AutoBackup.setFolder(context, tree)
             } catch (_: SecurityException) {
-                Toast.makeText(context, tr("That folder can't be used for backups. Try another one."), Toast.LENGTH_LONG).show()
+                AppSnackbar.show(tr("That folder can't be used for backups. Try another one."))
             }
         }
     }
@@ -736,7 +968,7 @@ private fun BackupsSection(onRestoreContent: (String) -> Unit, onRestoreFile: ()
         try {
             pickFolder.launch(null)
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, tr("No file picker on this phone"), Toast.LENGTH_SHORT).show()
+            AppSnackbar.show(tr("No file picker on this phone"))
         }
     }
     fun restore() {

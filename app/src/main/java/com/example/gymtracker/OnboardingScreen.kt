@@ -26,6 +26,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -298,7 +303,8 @@ private fun OptionCard(title: String, detail: String, selected: Boolean, onClick
             .clip(RoundedCornerShape(14.dp))
             .background(if (selected) P.accentSoft else P.bgControl)
             .border(1.5.dp, if (selected) P.accentPrimary else Color.Transparent, RoundedCornerShape(14.dp))
-            .pressable(pressedScale = 0.98f, onClick = onClick)
+            .pressable(pressedScale = 0.98f, role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -324,7 +330,8 @@ private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, on
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (on) P.textPrimary else P.bgControl)
-                    .pressable(pressedScale = 0.94f) { onToggle(value) }
+                    .pressable(pressedScale = 0.94f, role = Role.Checkbox) { onToggle(value) }
+                    .semantics { toggleableState = ToggleableState(on) }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }
@@ -332,32 +339,29 @@ private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, on
 }
 
 /**
- * Every muscle group as a chip, on when trained. The upper body, legs and core come in groups,
- * each with a shortcut to turn the whole group off or on (skipping legs is common).
+ * Every muscle group as a chip, on when trained, in two groups (upper body; legs and core), each
+ * with a shortcut to turn the whole group off or on (skipping legs is common). Core used to sit
+ * alone under the legs without a heading, so it read as a leg muscle their shortcut ignored.
  */
 @Composable
 private fun MuscleGroupToggles(skip: Set<String>, onChange: (Set<String>) -> Unit) {
     val P = LocalPalette.current
     val groups = listOf(
         tr("Upper body") to listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Forearms"),
-        tr("Legs") to listOf("Quads", "Hamstrings", "Glutes", "Calves"),
-        "" to listOf("Core")
+        tr("Legs and core") to listOf("Quads", "Hamstrings", "Glutes", "Calves", "Core")
     )
     groups.forEach { (title, muscles) ->
         val allOff = muscles.all { it in skip }
-        // A group of one (core) is just its chip, without a heading repeating its name.
-        if (muscles.size > 1) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
-                Text(
-                    if (allOff) tr("Train all") else tr("Skip all"),
-                    style = AppType.label,
-                    color = P.accentPrimary,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onChange(if (allOff) skip - muscles.toSet() else skip + muscles) }.padding(8.dp)
-                )
-            }
-            Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+            Text(
+                if (allOff) tr("Train all") else tr("Skip all"),
+                style = AppType.label,
+                color = P.accentPrimary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onChange(if (allOff) skip - muscles.toSet() else skip + muscles) }.padding(8.dp)
+            )
         }
+        Spacer(Modifier.height(4.dp))
         ToggleChips(muscles.map { it to shown(it) }, muscles.filter { it !in skip }.toSet()) { m ->
             onChange(if (m in skip) skip - m else skip + m)
         }

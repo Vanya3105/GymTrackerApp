@@ -101,11 +101,13 @@ fun ProgressScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             ExerciseThumb(lift.name, Modifier.padding(end = 12.dp), size = 40.dp, showEmpty = false)
+                            val stacked = isLargeText()
                             Column(Modifier.weight(1f)) {
                                 Text(shown(lift.name), style = AppType.bodyStrong, color = P.textPrimary)
                                 Text(tr("Best set {0}", lift.bestSet?.let { formatSet(it, lift.type) } ?: "—"), style = AppType.caption, color = P.textSecondary)
+                                if (stacked) Text("${lift.headline} · ${lift.headlineLabel}", style = AppType.caption, color = P.textPrimary)
                             }
-                            Column(horizontalAlignment = Alignment.End) {
+                            if (!stacked) Column(horizontalAlignment = Alignment.End) {
                                 Text(lift.headline, style = AppType.number, color = P.textPrimary)
                                 Text(lift.headlineLabel, style = AppType.caption, color = P.textTertiary)
                             }

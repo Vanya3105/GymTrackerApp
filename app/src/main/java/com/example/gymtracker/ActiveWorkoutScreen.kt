@@ -71,6 +71,11 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.core.content.FileProvider
+import android.net.Uri
+import java.io.File
+import android.content.ActivityNotFoundException
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -125,14 +130,14 @@ fun ActiveWorkoutScreen(
     val startTimeMillis = remember { LocalStorage.getActiveSessionStartTime(context) }
 
     // An empty workout has nothing to show until something is picked.
-    var showPicker by remember { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
-    var showFinish by remember { mutableStateOf(false) }
+    // Saveable: Android may close the app while the camera or gallery is open from the finish sheet.
+    var showPicker by rememberSaveable { mutableStateOf(!isEditingPastWorkout && exercises.isEmpty()) }
+    var showFinish by rememberSaveable { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     // A set ticked while earlier work sets of the same exercise aren't: (card, set, the earlier ones).
     var tickingAhead by remember { mutableStateOf<Triple<Int, Int, List<Int>>?>(null) }
-    var removeCandidate by remember { mutableStateOf<String?>(null) }
-    var photoPath by remember { mutableStateOf(initialPhotoPath) }
-    var finalDuration by remember { mutableLongStateOf(initialDurationSeconds) }
+    var photoPath by rememberSaveable { mutableStateOf(initialPhotoPath) }
+    var finalDuration by rememberSaveable { mutableLongStateOf(initialDurationSeconds) }
     var banner by remember { mutableStateOf<Banner?>(null) }
     val editor = remember { SetEditor() }
     LaunchedEffect(banner) {
@@ -142,8 +147,13 @@ fun ActiveWorkoutScreen(
         }
     }
 
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
-        bmp?.let { PhotoStorage.saveBitmapToInternalStorage(context, it)?.let { path -> photoPath = path } }
+    // A full-size photo into our own file (TakePicturePreview only returns a thumbnail).
+    var cameraFile by rememberSaveable { mutableStateOf<String?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val file = cameraFile?.let(::File)
+        if (taken && file != null) PhotoStorage.copyUriToInternalStorage(context, Uri.fromFile(file))?.let { photoPath = it }
+        file?.delete()
+        cameraFile = null
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { PhotoStorage.copyUriToInternalStorage(context, it)?.let { path -> photoPath = path } }
@@ -180,7 +190,8 @@ fun ActiveWorkoutScreen(
         showFinish = true
     }
 
-    BackHandler {
+    // Unsaved edits ask first, so the page stays put during that gesture.
+    val backModifier = rememberPredictiveBack(animate = !(isEditingPastWorkout && hasUnsavedEdits)) {
         when {
             isEditingPastWorkout && hasUnsavedEdits -> confirmDiscard = true
             isEditingPastWorkout -> onDiscardWorkout()
@@ -312,7 +323,7 @@ fun ActiveWorkoutScreen(
     BackHandler(enabled = editing != null) { editor.close() }
 
     CompositionLocalProvider(LocalSetEditor provides editor) {
-    Box(Modifier.fillMaxSize()) {
+    Box(backModifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             WorkoutTopBar(
                 title = shown(split.title),
@@ -447,7 +458,7 @@ fun ActiveWorkoutScreen(
                                 updateAt(exIdx) { it.copy(isSkipped = true, isSuperset = false) }
                             },
                             onOpenDetails = { onOpenExercise(exercise.name) },
-                            onRemove = { removeCandidate = exercise.name }
+                            onRemove = { haptics.tick(); onRemoveExercisePermanently(exercise.name) }
                         )
                     }
                 }
@@ -588,31 +599,6 @@ fun ActiveWorkoutScreen(
     }
 
 
-    removeCandidate?.let { name ->
-        AlertDialog(
-            onDismissRequest = { removeCandidate = null },
-            containerColor = P.bgElevated,
-            title = { Text(tr("Remove {0}?", shown(name)), style = AppType.headline, color = P.textPrimary) },
-            text = {
-                Text(
-                    if (isEditingPastWorkout) tr("It will be removed from this logged workout.")
-                    else if (split.title == QUICK_WORKOUT_TITLE) tr("It will be removed from this workout.")
-                    else tr("It won't show up in future {0} workouts. You can add it back any time.", shown(split.title)),
-                    style = AppType.body,
-                    color = P.textSecondary
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptics.tick()
-                    onRemoveExercisePermanently(name)
-                    removeCandidate = null
-                }) { Text(tr("Remove"), color = P.dangerText, style = AppType.label) }
-            },
-            dismissButton = { TextButton(onClick = { removeCandidate = null }) { Text(tr("Cancel"), color = P.textSecondary, style = AppType.label) } }
-        )
-    }
-
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
@@ -679,7 +665,16 @@ fun ActiveWorkoutScreen(
                 showFinish = false
             },
             onClearPhoto = { photoPath = null },
-            onCamera = { cameraLauncher.launch(null) },
+            onCamera = {
+                val file = PhotoStorage.newCameraFile(context)
+                cameraFile = file.absolutePath
+                try {
+                    cameraLauncher.launch(FileProvider.getUriForFile(context, "${context.packageName}.provider", file))
+                } catch (_: ActivityNotFoundException) {
+                    cameraFile = null
+                    AppSnackbar.show(tr("No camera app on this phone"))
+                }
+            },
             onGallery = { galleryLauncher.launch("image/*") },
             onSave = {
                 showFinish = false
@@ -854,6 +849,17 @@ private fun ExerciseCard(
             ) {
                 Icon(Icons.Rounded.DragIndicator, tr("Drag to reorder"), tint = if (isDragging) P.accentPrimary else P.textTertiary)
             }
+            val restPill = @Composable {
+                Box {
+                    var restOpen by remember { mutableStateOf(false) }
+                    Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
+                    DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
+                        RestChooser(tr("Rest between sets"), exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
+                    }
+                }
+            }
+            // With large text the pill would squeeze the name to a few letters a line.
+            val pillUnderName = isLargeText() && !collapsed
             ExerciseThumb(
                 exercise.name,
                 Modifier.padding(end = 10.dp).clip(RoundedCornerShape(10.dp)).pressable(pressedScale = 0.95f, onClick = onOpenDetails),
@@ -873,7 +879,7 @@ private fun ExerciseCard(
                         shown(exercise.name),
                         style = AppType.headline,
                         color = P.textPrimary,
-                        maxLines = if (collapsed) 1 else 2,
+                        maxLines = if (collapsed) 1 else if (isLargeText()) 3 else 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -893,15 +899,11 @@ private fun ExerciseCard(
                     exercise.target?.let { add(tr("Plan {0}", it.label)) }
                     records.bestSet?.let { add(tr("Best {0}", formatSet(it, exercise.type))) }
                 }.joinToString(" · ")
-                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Two lines when open: the plan ("Plan 3 × 8–12") was the part cut off.
+                if (sub.isNotEmpty()) Text(sub, style = AppType.caption, color = P.textSecondary, maxLines = if (collapsed) 1 else 2, overflow = TextOverflow.Ellipsis)
+                if (pillUnderName) Box(Modifier.padding(top = 6.dp)) { restPill() }
             }
-            Box {
-                var restOpen by remember { mutableStateOf(false) }
-                Pill(formatRestShort(exercise.restSeconds), icon = Icons.Rounded.Timer, modifier = Modifier.clip(RoundedCornerShape(50)).pressable { restOpen = true })
-                DropdownMenu(expanded = restOpen, onDismissRequest = { restOpen = false }, containerColor = P.bgElevated) {
-                    RestChooser(tr("Rest between sets"), exercise.restSeconds) { restOpen = false; onSetExerciseRest(it) }
-                }
-            }
+            if (!pillUnderName) restPill()
             Box {
                 CircleIconButton(Icons.Rounded.MoreVert, tr("Exercise options"), { menuOpen = true }, size = 36.dp, container = Color.Transparent, tint = P.textSecondary)
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = P.bgElevated) {
@@ -1026,7 +1028,14 @@ private fun ExerciseCard(
                     onSetRest = { sec -> onSetRest(setIdx, sec) },
                     onDelete = {
                         haptics.tick()
+                        val removed = exercise.sets[setIdx]
                         onUpdate { ex -> ex.copy(sets = ex.sets.filterIndexed { i, _ -> i != setIdx }.mapIndexed { i, s -> s.copy(setNumber = i + 1) }) }
+                        AppSnackbar.show(tr("Set deleted"), tr("Undo")) {
+                            onUpdate { ex ->
+                                val sets = ex.sets.toMutableList().apply { add(setIdx.coerceAtMost(size), removed) }
+                                ex.copy(sets = sets.mapIndexed { i, s -> s.copy(setNumber = i + 1) })
+                            }
+                        }
                     },
                     onToggle = { onToggleSet(setIdx) },
                     haptics = haptics
