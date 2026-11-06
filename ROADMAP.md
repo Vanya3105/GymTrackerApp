@@ -9,6 +9,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
+**Polish 2** (branch `polish-2`, see that section): looking for bugs and stutters after v3.8.0, at the owner's request. Next: ask the owner where it stutters on the phone; go through less-used features as a new user would (programs, split builder, import, widgets, editing past workouts).
+
 **Professional polish** (branch `pro-polish`) is tested on the owner's phone and merged (2026-11-06): About, delete all data, snackbars with Undo, predictive back, state kept when Android closes the app, full-size upright photos, large text and screen readers, notifications asked at the first workout, Core in the legs group. Released as v3.8.0 on GitHub (2026-11-07). Left for later: the watch doesn't show Hebrew on the owner's watch (check it has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
@@ -163,6 +165,11 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Fixed Inter weights instead of the variable font (`res/font/inter_*.ttf`, made with fontTools; see `licenses/Inter-files.txt`): measuring a text 0.79 → 0.58 ms, a screen's recomposition 1.6 → 1.0 ms, drawing a frame 10.3 → 6.7 ms on tab switches. The share images use the same files
 - [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
 - The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
+
+## Polish 2 (branch `polish-2`, after v3.8.0)
+Measured on the emulator (release, profile-compiled): cold start ~1 s, workout scroll ~5% slow frames, tabs ~3%, History swipes every frame under 18 ms (the rest is the emulator's GPU); no crashes in the log. Every bottom sheet's first frame costs ~45 ms on the emulator (its own window), the exercise picker ~30 ms more.
+- [x] Plates button on the keypad while typing a bar lift's weight (the calculator was only in the set number's menu; the owner couldn't find it)
+- [x] Hebrew keypad: digits read 1 2 3 left to right (they were mirrored 3 2 1), and the step keys read "−2.5" (were garbled to "2.–")
 
 ## Professional polish (branch `pro-polish`)
 - [x] About (end of Profile): Send feedback (email with the app version and phone model filled in), Privacy policy, Open-source licenses (a sheet listing the libraries, with the Apache 2.0 and OFL texts from `res/raw`), app name and version
