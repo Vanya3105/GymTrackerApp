@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo ✅ → back gesture ✅ → state after Android closes the app → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
+**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo ✅ → back gesture ✅ → state after Android closes the app ✅ → accessibility and large text. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
@@ -170,7 +170,8 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [ ] Ask for notifications when first needed, not on the welcome screen
 - [x] Snackbars (`Snackbars.kt`, `AppSnackbar.show`) instead of Android toasts everywhere: the app's own look, above the tab bar or the screen's bottom, inside bottom sheets too (newest host shows), swipe to dismiss, read out by TalkBack, Android's accessibility timeout respected. Undo instead of "Are you sure?" for deleting a past workout, a weigh-in, a set, and removing an exercise from a workout (the day's list and targets come back too). Tests: `UndoTest`
 - [x] Predictive back on (`enableOnBackInvokedCallback`): back on Today leaves with Android's back-to-home animation (no "Press back again to exit"); other tabs go back to Today; the workout, exercise page and program editor shrink towards the swiped edge while the finger is down (`rememberPredictiveBack` in Components.kt), and spring back if the swipe is cancelled. The Android 15 emulator needs `settings put global enable_back_animation 1` to show it
-- [ ] Open screens survive Android closing the app in the background
+- [x] Open screens survive Android closing the app in the background: the past workout being edited (by id, with its unsaved edits as JSON), whether the workout is open or minimized, the finish sheet, its photo and duration, the exercise picker. Checked on the emulator with `am kill`, including while the camera was open from the finish sheet
+- [x] Workout photos: the camera writes a full-size photo (`TakePicture` into a FileProvider file, was `TakePicturePreview`, a ~200 px thumbnail) and photos are turned upright from their EXIF orientation (Samsung saves portrait shots sideways plus a note)
 - [ ] Accessibility (labels on icon buttons) and large text
 
 ## Planned: Training types (owner's request, 2026-10-29)

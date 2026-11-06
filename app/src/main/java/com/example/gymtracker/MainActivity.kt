@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -263,7 +264,13 @@ fun GymTrackerApp(
     // Only on a new phone; saved so it survives the restart when the language changes.
     var showWelcome by rememberSaveable { mutableStateOf(!userProfile.hasCompletedOnboarding) }
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
-    var editingPastWorkout by remember { mutableStateOf<CompletedWorkout?>(null) }
+    // Saved by id: after Android closes the app in the background it reopens on the same workout.
+    var editingPastWorkout by rememberSaveable(
+        saver = Saver<MutableState<CompletedWorkout?>, Long>(
+            save = { it.value?.id },
+            restore = { id -> mutableStateOf(LocalStorage.loadHistory(context).find { it.id == id }) }
+        )
+    ) { mutableStateOf(null) }
     // Exercise detail screen, shown over everything else (including a running workout).
     var openExercise by rememberSaveable { mutableStateOf<String?>(null) }
     var editingProgramId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -280,9 +287,18 @@ fun GymTrackerApp(
     var activeSplit by remember {
         mutableStateOf(initialActive?.let { (title, _) -> splits.find { it.title == title } ?: WorkoutSplit(title, "", "01") })
     }
-    var currentExercises by remember { mutableStateOf(initialActive?.second ?: emptyList()) }
+    // A past workout's edits are only on disk once saved, so they're kept with the screen's state.
+    var editDraft by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentExercises by remember {
+        val draft = editDraft?.takeIf { editingPastWorkout != null }
+        val restored = draft?.let { runCatching { StoreCodec.deserializeExercises(org.json.JSONArray(it)) }.getOrNull() }
+        mutableStateOf(restored ?: initialActive?.second ?: emptyList())
+    }
+    LaunchedEffect(currentExercises, editingPastWorkout) {
+        editDraft = if (editingPastWorkout != null) StoreCodec.serializeExercises(currentExercises).toString() else null
+    }
     // The live workout is either open full-screen or minimized to the "Resume" bar.
-    var workoutExpanded by remember { mutableStateOf(initialActive != null) }
+    var workoutExpanded by rememberSaveable { mutableStateOf(initialActive != null) }
 
     val reloadFromDisk = rememberUpdatedState {
         val latest = LocalStorage.loadActiveSession(context)
