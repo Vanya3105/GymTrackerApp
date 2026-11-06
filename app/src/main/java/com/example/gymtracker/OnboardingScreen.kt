@@ -332,32 +332,29 @@ private fun <T> ToggleChips(options: List<Pair<T, String>>, selected: Set<T>, on
 }
 
 /**
- * Every muscle group as a chip, on when trained. The upper body, legs and core come in groups,
- * each with a shortcut to turn the whole group off or on (skipping legs is common).
+ * Every muscle group as a chip, on when trained, in two groups (upper body; legs and core), each
+ * with a shortcut to turn the whole group off or on (skipping legs is common). Core used to sit
+ * alone under the legs without a heading, so it read as a leg muscle their shortcut ignored.
  */
 @Composable
 private fun MuscleGroupToggles(skip: Set<String>, onChange: (Set<String>) -> Unit) {
     val P = LocalPalette.current
     val groups = listOf(
         tr("Upper body") to listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Forearms"),
-        tr("Legs") to listOf("Quads", "Hamstrings", "Glutes", "Calves"),
-        "" to listOf("Core")
+        tr("Legs and core") to listOf("Quads", "Hamstrings", "Glutes", "Calves", "Core")
     )
     groups.forEach { (title, muscles) ->
         val allOff = muscles.all { it in skip }
-        // A group of one (core) is just its chip, without a heading repeating its name.
-        if (muscles.size > 1) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
-                Text(
-                    if (allOff) tr("Train all") else tr("Skip all"),
-                    style = AppType.label,
-                    color = P.accentPrimary,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onChange(if (allOff) skip - muscles.toSet() else skip + muscles) }.padding(8.dp)
-                )
-            }
-            Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = AppType.label, color = P.textSecondary, modifier = Modifier.weight(1f))
+            Text(
+                if (allOff) tr("Train all") else tr("Skip all"),
+                style = AppType.label,
+                color = P.accentPrimary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).pressable { onChange(if (allOff) skip - muscles.toSet() else skip + muscles) }.padding(8.dp)
+            )
         }
+        Spacer(Modifier.height(4.dp))
         ToggleChips(muscles.map { it to shown(it) }, muscles.filter { it !in skip }.toSet()) { m ->
             onChange(if (m in skip) skip - m else skip + m)
         }

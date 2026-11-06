@@ -172,6 +172,7 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Predictive back on (`enableOnBackInvokedCallback`): back on Today leaves with Android's back-to-home animation (no "Press back again to exit"); other tabs go back to Today; the workout, exercise page and program editor shrink towards the swiped edge while the finger is down (`rememberPredictiveBack` in Components.kt), and spring back if the swipe is cancelled. The Android 15 emulator needs `settings put global enable_back_animation 1` to show it
 - [x] Open screens survive Android closing the app in the background: the past workout being edited (by id, with its unsaved edits as JSON), whether the workout is open or minimized, the finish sheet, its photo and duration, the exercise picker. Checked on the emulator with `am kill`, including while the camera was open from the finish sheet
 - [x] Workout photos: the camera writes a full-size photo (`TakePicture` into a FileProvider file, was `TakePicturePreview`, a ~200 px thumbnail) and photos are turned upright from their EXIF orientation (Samsung saves portrait shots sideways plus a note)
+- [x] Fix (owner): on "Your body", Core sat alone under the leg chips without a heading, so it looked like a leg muscle that Skip all / Train all ignored. Now one "Legs and core" group whose shortcut covers Core too
 - [ ] Accessibility (labels on icon buttons) and large text
 
 ## Planned: Training types (owner's request, 2026-10-29)
