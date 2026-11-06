@@ -117,15 +117,9 @@ fun GymTrackerRoot(activity: Activity) {
     val context = LocalContext.current
     val view = LocalView.current
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
         removeOldAlertChannels(context)
         CrashReports.apply(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
     }
 
     var settings by remember { mutableStateOf(LocalStorage.loadSettings(context)) }
@@ -385,6 +379,16 @@ fun GymTrackerApp(
         selectedTab = AppTab.TODAY
     }
 
+    // Allowed: the running workout's notification can show straight away.
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) LockScreenWorkoutController.sync(context)
+    }
+    fun askForNotificationsOnce() {
+        if (!NotificationAsk.shouldAsk(context)) return
+        NotificationAsk.markAsked(context)
+        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     fun startWorkout(split: WorkoutSplit) {
         haptics.confirm()
         val running = activeSplit
@@ -401,6 +405,7 @@ fun GymTrackerApp(
         currentExercises = entries
         workoutExpanded = true
         LocalStorage.saveActiveSession(context, split.title, entries)
+        askForNotificationsOnce()
     }
 
     /** Starts with no exercises; the workout screen opens the exercise picker. */
@@ -416,6 +421,7 @@ fun GymTrackerApp(
         currentExercises = emptyList()
         workoutExpanded = true
         LocalStorage.saveActiveSession(context, QUICK_WORKOUT_TITLE, emptyList())
+        askForNotificationsOnce()
     }
 
     /** Ends the running workout (saved, or thrown away) and starts [next] in its place. */

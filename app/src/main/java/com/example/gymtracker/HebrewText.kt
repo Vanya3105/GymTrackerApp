@@ -879,6 +879,8 @@ internal object HebrewText {
         m["Weight"] = "משקל"
         m["{0}: {1}"] = "{0}: {1}"
         m["empty"] = "ריק"
+        m["Workout notification is off"] = "התראת האימון כבויה"
+        m["Turn it on to see your set and rest timer on the lock screen while you train."] = "הפעילו אותה כדי לראות את הסט ואת טיימר המנוחה במסך הנעילה בזמן האימון."
     }
 
     private fun names1(m: HashMap<String, String>) {

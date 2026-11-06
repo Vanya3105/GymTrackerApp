@@ -60,6 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -114,6 +118,16 @@ fun SettingsScreen(
         }
     }
     var confirmDeleteAll by remember { mutableStateOf(false) }
+    // Re-read on return from Android's settings, where it's turned on.
+    var notificationsOn by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) notificationsOn = hasNotificationPermission(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var otherAppFile by remember { mutableStateOf<String?>(null) }
     val otherAppLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -232,6 +246,18 @@ fun SettingsScreen(
                 }
                 ToggleRow(tr("Vibration"), tr("Light feedback when you tap"), settings.hapticsEnabled) {
                     onUpdateSettings(settings.copy(hapticsEnabled = it))
+                }
+                if (!notificationsOn) {
+                    LinkRow(Icons.Rounded.NotificationsOff, tr("Workout notification is off")) {
+                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        try { context.startActivity(intent) } catch (_: ActivityNotFoundException) {}
+                    }
+                    Text(
+                        tr("Turn it on to see your set and rest timer on the lock screen while you train."),
+                        style = AppType.caption,
+                        color = P.textTertiary
+                    )
                 }
             }
         }

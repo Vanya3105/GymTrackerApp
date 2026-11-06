@@ -417,6 +417,23 @@ fun hasNotificationPermission(context: Context): Boolean {
 }
 
 /**
+ * The app's only notification is the running workout's (set and rest on the lock screen), so it asks
+ * when the first workout starts, once: asking on a new install's first screen came before anyone
+ * knew why, and asking every workout after a "Don't allow" nags. Profile links to the setting.
+ */
+object NotificationAsk {
+    private const val PREFS = "gym_tracker_notification_ask"
+    private const val KEY_ASKED = "asked"
+
+    fun shouldAsk(context: Context): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission(context) &&
+            !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ASKED, false)
+
+    fun markAsked(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ASKED, true).apply()
+}
+
+/**
  * Removes the old "Rest timer" and "Logged sets" channels: a card for every set and rest was noise
  * next to the workout's own ongoing notification, which already shows both. Rest's end still buzzes
  * (see [RestAlarmScheduler.triggerRestFinishedAlert]).
