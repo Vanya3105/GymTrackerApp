@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Professional polish** (branch `pro-polish`, 2026-11-06): the owner asked what keeps the app from feeling professional; working through it one step at a time, each tested on the phone. Order: About section ✅ → delete all data ✅ → snackbars with Undo ✅ → back gesture ✅ → state after Android closes the app ✅ → accessibility and large text ✅. See the section below. Everything before this is merged and released as v3.7.0. The owner said the watch doesn't show Hebrew on their watch; left for later (check the watch has 3.7.0 first).
+**Professional polish** (branch `pro-polish`) is tested on the owner's phone and merged (2026-11-06): About, delete all data, snackbars with Undo, predictive back, state kept when Android closes the app, full-size upright photos, large text and screen readers, notifications asked at the first workout, Core in the legs group. Not released yet (master is ahead of v3.7.0). Left for later: the watch doesn't show Hebrew on the owner's watch (check it has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
