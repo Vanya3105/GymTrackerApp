@@ -8,6 +8,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
@@ -238,7 +245,9 @@ fun SetKeypad(
     onKey: (Char) -> Unit,
     onStep: (up: Boolean) -> Unit,
     onNext: () -> Unit,
-    onDone: () -> Unit
+    onDone: () -> Unit,
+    /** Bar lifts' weight only: opens the plate calculator, which was hidden in the set number's menu. */
+    onPlates: (() -> Unit)? = null
 ) {
     val P = LocalPalette.current
     val decimal = field == SetField.WEIGHT || field == SetField.DISTANCE
@@ -253,6 +262,20 @@ fun SetKeypad(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = AppType.caption, color = P.textSecondary, maxLines = 1, modifier = Modifier.weight(1f).padding(start = 6.dp))
+            if (onPlates != null) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(P.bgControl)
+                        .pressable(pressedScale = 0.95f, onClick = onPlates)
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.FitnessCenter, null, tint = P.textSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr("Plates"), style = AppType.label, color = P.textPrimary)
+                }
+            }
             Text(
                 tr("Done"),
                 style = AppType.label,
@@ -262,21 +285,27 @@ fun SetKeypad(
         }
         val gap = 6.dp
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-            Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                listOf("123", "456", "789").forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) { row.forEach { c -> DigitKey(c.toString()) { onKey(c) } } }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    if (decimal) DigitKey(".") { onKey('.') } else Box(Modifier.weight(1f))
-                    DigitKey("0") { onKey('0') }
-                    Key(onClick = { onKey(KEY_BACKSPACE) }) {
-                        Icon(Icons.AutoMirrored.Rounded.Backspace, tr("Delete"), tint = P.textSecondary, modifier = Modifier.size(22.dp))
+            // Digits read 1 2 3 left to right in Hebrew too, like every phone and calculator keypad
+            // (right to left, they came out 3 2 1).
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    listOf("123", "456", "789").forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) { row.forEach { c -> DigitKey(c.toString()) { onKey(c) } } }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                        if (decimal) DigitKey(".") { onKey('.') } else Box(Modifier.weight(1f))
+                        DigitKey("0") { onKey('0') }
+                        Key(onClick = { onKey(KEY_BACKSPACE) }) {
+                            Icon(Icons.AutoMirrored.Rounded.Backspace, tr("Delete"), tint = P.textSecondary, modifier = Modifier.size(22.dp))
+                        }
                     }
                 }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
-                Row { Key(onClick = { onStep(false) }) { Text("−$stepText", style = AppType.label, color = P.textPrimary, maxLines = 1) } }
-                Row { Key(onClick = { onStep(true) }) { Text("+$stepText", style = AppType.label, color = P.textPrimary, maxLines = 1) } }
+                // Left to right: in Hebrew "−2.5" was reordered to "2.5−" and cut to "2.–".
+                val stepStyle = AppType.label.copy(textDirection = TextDirection.Ltr)
+                Row { Key(onClick = { onStep(false) }) { Text("−$stepText", style = stepStyle, color = P.textPrimary, maxLines = 1) } }
+                Row { Key(onClick = { onStep(true) }) { Text("+$stepText", style = stepStyle, color = P.textPrimary, maxLines = 1) } }
                 Row {
                     Box(
                         Modifier

@@ -385,7 +385,8 @@ fun ActiveWorkoutScreen(
                     val tour = if (pos == 0) workoutTour else null
                     val prevTour = if (pos == 0) previousTour else null
                     val unit = Units.current
-                    val suggestion = remember(exercise, history, settings.weightStep, unit) {
+                    // Coaching is about the next session ("190 kg for 8, 6, 7 today…"): it means nothing on a past workout.
+                    val suggestion = if (isEditingPastWorkout) null else remember(exercise, history, settings.weightStep, unit) {
                         suggestNextWeight(split.title, exercise, history, settings.weightStep)
                     }
                     val previousSets = remember(exercise.name, exercise.type, previousSplitWorkout, byExercise) {
@@ -493,6 +494,17 @@ fun ActiveWorkoutScreen(
 
             // Kept while it slides away, so it doesn't go blank mid-animation.
             var shownRef by remember { mutableStateOf<FieldRef?>(null) }
+            var platesFor by remember { mutableStateOf<FieldRef?>(null) }
+            platesFor?.let { ref ->
+                val set = exercises.getOrNull(ref.exIdx)?.sets?.getOrNull(ref.setIdx)
+                if (set == null) platesFor = null
+                else PlateCalculatorSheet(
+                    storedKg = set.weight,
+                    step = settings.weightStep,
+                    onChange = { w -> updateAt(ref.exIdx) { ex -> ex.copy(sets = ex.sets.toMutableList().also { it[ref.setIdx] = it[ref.setIdx].copy(weight = w) }) } },
+                    onDismiss = { platesFor = null }
+                )
+            }
             if (editing != null) shownRef = editing
             AnimatedVisibility(
                 visible = editing != null,
@@ -539,7 +551,10 @@ fun ActiveWorkoutScreen(
                             haptics.tick()
                             next?.let { editor.open(it, exercise.sets[it.setIdx], exercise.type) }
                         },
-                        onDone = { haptics.tick(); editor.close() }
+                        onDone = { haptics.tick(); editor.close() },
+                        onPlates = if (ref.field == SetField.WEIGHT && usesPlates(exercise.name, exercise.type)) {
+                            { haptics.tick(); editor.close(); platesFor = ref }
+                        } else null
                     )
                 }
             }

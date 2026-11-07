@@ -66,8 +66,8 @@ fun SplitBuilderScreen(
     val context = LocalContext.current
     var step by remember { mutableIntStateOf(0) }
     var dayCount by remember { mutableIntStateOf(3) }
-    var layout by remember { mutableStateOf<QuickLayout?>(QuickLayout.PPL) }
-    var days by remember { mutableStateOf(QuickLayout.PPL.fill(3).map { it.toBuilderDay() }) }
+    var layout by remember { mutableStateOf<QuickLayout?>(QuickLayout.suggestedFor(3)) }
+    var days by remember { mutableStateOf(QuickLayout.suggestedFor(3).fill(3).map { it.toBuilderDay() }) }
     // Set once a day is changed by hand, so changing the day count no longer refills every day.
     var touched by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf(initialName) }
@@ -277,7 +277,7 @@ private fun ColumnScope.DaysStep(dayCount: Int, haptics: Haptics, onChange: (Int
     }
     Spacer(Modifier.height(24.dp))
     Text(
-        tr("Most people on {0} {1} run: {2}", dayCount, if (dayCount == 1) tr("day") else tr("days"), shown(QuickLayout.suggestedFor(dayCount).label)),
+        tr("A good start on {0} {1}: {2}", dayCount, if (dayCount == 1) tr("day") else tr("days"), shown(QuickLayout.suggestedFor(dayCount).label)),
         style = AppType.caption,
         color = P.textTertiary,
         modifier = Modifier.align(Alignment.CenterHorizontally)
