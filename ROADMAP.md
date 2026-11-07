@@ -11,6 +11,8 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 **Polish 2** (branch `polish-2`) is tested on the owner's phone and merged (2026-11-07): Plates button on the keypad, Hebrew keypad, new bests counted per exercise, the running workout named after a split change, clearer training max hint, split builder suggestions. Not released yet (master is ahead of v3.8.0).
 
+**Kilonaut** (branch `kilonaut`): the app is renamed, tested on the owner's phone and merged (2026-11-07). Not released yet: next is a release (3.9.0) with polish 2 and the rename; the owner updates the Google consent screen (name and the new website links).
+
 **Professional polish** (branch `pro-polish`) is tested on the owner's phone and merged (2026-11-06): About, delete all data, snackbars with Undo, predictive back, state kept when Android closes the app, full-size upright photos, large text and screen readers, notifications asked at the first workout, Core in the legs group. Released as v3.8.0 on GitHub (2026-11-07). Left for later: the watch doesn't show Hebrew on the owner's watch (check it has 3.7.0 first).
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
