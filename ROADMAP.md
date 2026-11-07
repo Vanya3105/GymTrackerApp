@@ -168,6 +168,14 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] Tabs stay composed after their first visit (`TabHost` in `MainActivity.kt`; hidden tabs aren't measured, placed or drawn): switching back no longer rebuilds the screen. Return visits: worst frames 214/201/163 → 70/42/41 ms, total app work 3.2 → 1.8 s; each tab also keeps its scroll position. The incoming tab still fades and slides in
 - The workout cards' data (records, coaching, Previous column) costs ~0.3 ms per card even with 300 workouts, so it wasn't touched. Emulator scroll comparisons swing 2× between runs of the same build (the emulator's GPU), so scroll-only changes need the phone to judge
 
+## Widgets 2 (branch `widgets-2`, owner's request 2026-11-07: "nice and cool on any wallpaper, dark or light", settings screen professional)
+- [x] Light and dark built into every widget: the workout widget's colours are day/night pairs (`setColorInt`, Android 12+), the drawn widgets carry a light and a dark picture (`gym_canvas_widget_daynight`, picked by values / values-night), so Auto switches with the phone without the app running. Was: picked once when drawn, stayed light all evening
+- [x] New colour choice "Wallpaper" (Material You, Android 12+)
+- [x] See-through below 40%: text dark or light from the wallpaper's colour hints, with a soft shadow on the drawn widgets
+- [x] Recovery lines: no "0 sets", "A while ago" after two weeks (was "374d ago")
+- [x] Settings screen: what the widget is for, a live preview over a light / dark / photo wallpaper and in light or dark mode, Colours (Auto / Wallpaper / Light / Dark) with a line saying what each does, Background, a See-through slider (solid → clear), what it shows with a hint per option, Reset, Close, and how to come back to it
+- [ ] Widget picker previews for light and dark; workout widget's see-through text
+
 ## Polish 2 (branch `polish-2`, after v3.8.0)
 Measured on the emulator (release, profile-compiled): cold start ~1 s, workout scroll ~5% slow frames, tabs ~3%, History swipes every frame under 18 ms (the rest is the emulator's GPU); no crashes in the log. Every bottom sheet's first frame costs ~45 ms on the emulator (its own window), the exercise picker ~30 ms more.
 - [x] Plates button on the keypad while typing a bar lift's weight (the calculator was only in the set number's menu; the owner couldn't find it)

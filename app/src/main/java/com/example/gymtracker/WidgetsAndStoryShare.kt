@@ -863,9 +863,18 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
                 canvas.drawRoundRect(fill, barH / 2, barH / 2, fillPaint(color))
 
                 if (showSets || showHours) {
+                    // "0 sets · 368d ago" read as noise: no count when nothing was done this week,
+                    // and anything past two weeks is just "a while ago".
                     val details = listOfNotNull(
-                        if (showSets) tr("{0} sets", item.weeklyWorkingSets) else null,
-                        if (showHours) item.hoursSinceTrained?.let { if (it < 1) tr("Just now") else if (it < 48) tr("{0}h ago", it) else tr("{0}d ago", it / 24) } ?: tr("Not yet") else null
+                        if (showSets && item.weeklyWorkingSets > 0) tr("{0} sets", item.weeklyWorkingSets) else null,
+                        if (showHours) item.hoursSinceTrained?.let {
+                            when {
+                                it < 1 -> tr("Just now")
+                                it < 48 -> tr("{0}h ago", it)
+                                it < 24 * 14 -> tr("{0}d ago", it / 24)
+                                else -> tr("A while ago")
+                            }
+                        } ?: tr("Not yet") else null
                     ).joinToString(" · ")
                     val detailPaint = sides.start(textPaint(p.textTertiary.toArgb(), 10.5f * s, REGULAR))
                     canvas.drawText(detailPaint.ellipsize(details, cellW), sides.x(start), barTop + barH + 13 * s, detailPaint)
