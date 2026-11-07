@@ -50,7 +50,7 @@ class AutoBackupTest {
     fun writesTheSameFileAsSaveBackup_andSkipsWhenNothingChanged() {
         val folder = FakeFolder()
         assertTrue(AutoBackup.run(context, folder, force = false, nowMillis = at("2026-10-29 18:30")))
-        val name = "gymtracker-backup-2026-10-29-1830.json"
+        val name = "kilonaut-backup-2026-10-29-1830.json"
         assertEquals(listOf(name), folder.files.keys.toList())
         val written = JSONObject(String(folder.files.getValue(name)))
         assertTrue(StoreCodec.looksLikeBackup(written))
@@ -60,7 +60,7 @@ class AutoBackupTest {
         assertFalse(AutoBackup.run(context, folder, force = false, nowMillis = at("2026-10-29 19:00")))
         // "Back up now" writes anyway; the same day keeps only the newest.
         assertTrue(AutoBackup.run(context, folder, force = true, nowMillis = at("2026-10-29 19:05")))
-        assertEquals(listOf("gymtracker-backup-2026-10-29-1905.json"), folder.files.keys.toList())
+        assertEquals(listOf("kilonaut-backup-2026-10-29-1905.json"), folder.files.keys.toList())
 
         LocalStorage.addWeightLog(context, 79.5f)
         assertTrue(AutoBackup.run(context, folder, force = false, nowMillis = at("2026-10-30 07:00")))
@@ -83,7 +83,7 @@ class AutoBackupTest {
 
     @Test
     fun keepsSevenDays_thenOnePerWeekForFourWeeks() {
-        fun name(day: String, time: String = "1200") = "gymtracker-backup-$day-$time.json"
+        fun name(day: String, time: String = "1200") = "kilonaut-backup-$day-$time.json"
         val days = (1..31).map { String.format(Locale.US, "2026-10-%02d", it) } +
             (1..30).map { String.format(Locale.US, "2026-09-%02d", it) }
         val names = days.map { name(it) } + name("2026-10-31", "0800") + "notes.txt" + "gymtracker_backup.json"
@@ -98,6 +98,16 @@ class AutoBackupTest {
         // Then the newest of each of the 4 weeks before: Oct 24 (Sat, week of Oct 19), Oct 18, Oct 11, Oct 4.
         listOf("2026-10-24", "2026-10-18", "2026-10-11", "2026-10-04").forEach { assertTrue(it, name(it) in kept) }
         assertEquals(7 + 4 + 2, kept.size)
+    }
+
+    @Test
+    fun backupsFromBeforeTheRename_areStillRotated() {
+        // Written as GymTracker; the newest of the day under either name is kept.
+        val names = listOf("gymtracker-backup-2026-10-31-0800.json", "kilonaut-backup-2026-10-31-0900.json") +
+            (1..20).map { String.format(Locale.US, "gymtracker-backup-2026-09-%02d-1200.json", it) }
+        val deleted = AutoBackup.backupsToDelete(names).toSet()
+        assertTrue("gymtracker-backup-2026-10-31-0800.json" in deleted)
+        assertTrue("kilonaut-backup-2026-10-31-0900.json" !in deleted)
     }
 
     @Test

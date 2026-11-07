@@ -111,7 +111,7 @@ fun SettingsScreen(
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val json = runCatching { JSONObject(content.removePrefix("\uFEFF").trim()) }.getOrNull()
                 if (json != null && StoreCodec.looksLikeBackup(json)) pendingBackup = content
-                else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
+                else AppSnackbar.show(tr("That file isn't a Kilonaut backup"))
             } catch (_: Exception) {
                 AppSnackbar.show(tr("Couldn't read that file"))
             }
@@ -204,7 +204,7 @@ fun SettingsScreen(
                 BackupsSection(
                     onRestoreContent = { pendingBackup = it },
                     onRestoreFile = { importLauncher.launch(arrayOf("application/json", "*/*")) },
-                    onSaveFile = { exportLauncher.launch("gymtracker_backup.json") }
+                    onSaveFile = { exportLauncher.launch("kilonaut_backup.json") }
                 )
             }
         }
@@ -354,14 +354,14 @@ fun SettingsScreen(
                 if (LocalStorage.importJsonBackupString(context, content)) {
                     onDataRestored()
                     AppSnackbar.show(tr("Backup restored"))
-                } else AppSnackbar.show(tr("That file isn't a GymTracker backup"))
+                } else AppSnackbar.show(tr("That file isn't a Kilonaut backup"))
             },
             onDismiss = { pendingBackup = null }
         )
     }
     if (confirmDeleteAll) {
         DeleteAllDialog(
-            onSaveBackup = { exportLauncher.launch("gymtracker_backup.json") },
+            onSaveBackup = { exportLauncher.launch("kilonaut_backup.json") },
             onDismiss = { confirmDeleteAll = false }
         )
     }
@@ -457,7 +457,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
     }
 }
 
-private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/GymTrackerApp/privacy.html"
+private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/Kilonaut/privacy.html"
 private const val FEEDBACK_EMAIL = "evtushenkovanya16@gmail.com"
 
 private fun appVersion(context: android.content.Context): String =
@@ -482,10 +482,10 @@ private fun AboutGroup() {
         SettingsGroup(tr("About")) {
             LinkRow(Icons.Rounded.MailOutline, tr("Send feedback")) {
                 // The version and phone go along, so a bug report says where it happened.
-                val body = "\n\n—\nGymTracker $version · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                val body = "\n\n—\nKilonaut $version · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
                 val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")).apply {
                     putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
-                    putExtra(Intent.EXTRA_SUBJECT, "GymTracker feedback")
+                    putExtra(Intent.EXTRA_SUBJECT, "Kilonaut feedback")
                     putExtra(Intent.EXTRA_TEXT, body)
                 }
                 open(intent, tr("No email app on this phone"))
@@ -496,7 +496,7 @@ private fun AboutGroup() {
             LinkRow(Icons.Rounded.Description, tr("Open-source licenses")) { showLicenses = true }
         }
         Spacer(Modifier.height(16.dp))
-        Text("GymTracker", style = AppType.label, color = P.textSecondary)
+        Text("Kilonaut", style = AppType.label, color = P.textSecondary)
         if (version.isNotEmpty()) Text(tr("Version {0}", version), style = AppType.caption, color = P.textTertiary)
     }
 
@@ -539,7 +539,7 @@ private fun LicensesSheet(onDismiss: () -> Unit) {
             item {
                 Text(tr("Open-source licenses"), style = AppType.title, color = P.textPrimary)
                 Text(
-                    tr("GymTracker is built with these open-source parts. Thank you to their authors."),
+                    tr("Kilonaut is built with these open-source parts. Thank you to their authors."),
                     style = AppType.caption,
                     color = P.textSecondary,
                     modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)

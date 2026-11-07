@@ -46,7 +46,10 @@ object AutoBackup {
     internal const val KEY_LAST_SUCCESS = "last_success_millis"
     internal const val KEY_LAST_HASH = "last_hash"
     internal const val KEY_ERROR = "error"
-    internal const val FILE_PREFIX = "gymtracker-backup-"
+    internal const val FILE_PREFIX = "kilonaut-backup-"
+    /** Names backups had before the app was renamed: still ours to rotate and restore. */
+    internal val OLD_FILE_PREFIXES = listOf("gymtracker-backup-")
+    internal val ALL_FILE_PREFIXES = listOf(FILE_PREFIX) + OLD_FILE_PREFIXES
     private const val KEEP_DAYS = 7
     private const val KEEP_WEEKS = 4
 
@@ -178,7 +181,7 @@ object AutoBackup {
      * aren't ours (other names) are never touched.
      */
     internal fun backupsToDelete(names: List<String>): List<String> {
-        val pattern = Regex("^${Regex.escape(FILE_PREFIX)}(\\d{4}-\\d{2}-\\d{2})-(\\d{4})")
+        val pattern = Regex("^(?:${ALL_FILE_PREFIXES.joinToString("|") { Regex.escape(it) }})(\\d{4}-\\d{2}-\\d{2})-(\\d{4})")
         val ours = names.mapNotNull { name ->
             pattern.find(name)?.let { m ->
                 runCatching { LocalDate.parse(m.groupValues[1]) }.getOrNull()?.let { Triple(name, it, m.groupValues[2]) }

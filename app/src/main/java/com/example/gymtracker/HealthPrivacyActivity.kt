@@ -53,12 +53,12 @@ private fun HealthPrivacyScreen(onDone: () -> Unit) {
         Text(tr("Your health data"), style = AppType.display, color = P.textPrimary)
         Spacer(Modifier.height(16.dp))
         listOf(
-            tr("GymTracker works offline. It has no account and no server, and it never sends your data anywhere."),
-            tr("When you connect Health Connect, GymTracker:"),
+            tr("Kilonaut works offline. It has no account and no server, and it never sends your data anywhere."),
+            tr("When you connect Health Connect, Kilonaut:"),
             tr("• writes each workout you finish (name, start and end time, your sets as text) and the body weights you log, so they show up in apps like Samsung Health and Google Fit;"),
             tr("• reads body weights from other apps and scales into your weight log;"),
             tr("• reads the heart rate recorded during a workout, to show its average and maximum in your history."),
-            tr("Nothing else is read. What GymTracker reads stays on this phone and is only used for those screens."),
+            tr("Nothing else is read. What Kilonaut reads stays on this phone and is only used for those screens."),
             tr("You can stop at any time in Profile → Health Connect, or change what's shared in Health Connect's own settings. Data already written stays in Health Connect until you delete it there.")
         ).forEach {
             Text(it, style = AppType.body, color = P.textSecondary)
