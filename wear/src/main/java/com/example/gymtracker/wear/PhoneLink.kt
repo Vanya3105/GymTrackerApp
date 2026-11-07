@@ -79,7 +79,7 @@ class PhoneLink(context: Context) {
         sendPath(WatchLink.START_WORKOUT, title.toByteArray(Charsets.UTF_8))
     }
 
-    /** Opens GymTracker on the phone, e.g. to start or save a workout. */
+    /** Opens Kilonaut on the phone, e.g. to start or save a workout. */
     fun openOnPhone() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(WatchLink.OPEN_PHONE_APP_URI)).addCategory(Intent.CATEGORY_BROWSABLE)
         RemoteActivityHelper(appCtx, ContextCompat.getMainExecutor(appCtx)).startRemoteActivity(intent)

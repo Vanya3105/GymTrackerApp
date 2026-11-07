@@ -525,7 +525,7 @@ object LocalStorage {
     }
 
     /**
-     * Adds a GymTracker backup to what's here instead of replacing it ([combineData]); settings,
+     * Adds a Kilonaut backup to what's here instead of replacing it ([combineData]); settings,
      * profile and the running workout stay as they are. Null if [jsonContent] isn't a backup.
      */
     fun addBackupJsonString(context: Context, jsonContent: String): CombineResult? {

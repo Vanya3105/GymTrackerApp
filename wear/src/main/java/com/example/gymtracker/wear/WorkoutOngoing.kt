@@ -16,7 +16,7 @@ import androidx.wear.ongoing.Status
 import com.example.gymtracker.watchlink.WatchState
 
 /**
- * While a workout runs on the phone, an ongoing activity puts GymTracker on the watch face
+ * While a workout runs on the phone, an ongoing activity puts Kilonaut on the watch face
  * (and at the top of the recents list): one tap returns to the app, and rests count down there.
  */
 object WorkoutOngoing {

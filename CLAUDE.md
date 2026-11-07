@@ -1,4 +1,6 @@
-# GymTracker — notes for Claude
+# Kilonaut (formerly GymTracker) — notes for Claude
+
+The app is called **Kilonaut** (renamed from GymTracker on 2026-11-07). Use Kilonaut in anything people see. Internal names keep `gymtracker` on purpose and must not be renamed: the `applicationId` `com.vanyaevtushenko.gymtracker` (a new one would be a different app: data and Google sign-in lost), the Kotlin package, `gymtracker.db`, prefs names, the watch link paths (`/gymtracker/...`, `gymtracker://open`), theme names. Backups are written as `kilonaut-backup-*`; `gymtracker-backup-*` files are still recognised (`AutoBackup.OLD_FILE_PREFIXES`).
 
 **At the start of every session, read `ROADMAP.md` and continue from its "Next up" section.**
 When the user says "continue", that is what they mean.

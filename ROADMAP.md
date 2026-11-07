@@ -15,7 +15,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
-**App name (undecided):** the owner asked for a name that isn't taken and is easy for search engines and AI assistants to find. Recommended **Kilonaut** (no results anywhere online on 2026-10-29; kilonaut.app looked unregistered, kilonaut.com is registered by someone). Owner to check Play Store / trademarks and decide; renaming keeps the `applicationId`.
+**App name: Kilonaut** (owner, 2026-11-07; unused online on 2026-10-29 and again 2026-11-07, similar names exist: KiloAI, Kilo). Renamed on branch `kilonaut`: app and watch names, every text people see, share images, Pictures/Kilonaut, backup files (`kilonaut-backup-*`, old names still rotated and restored), website and privacy policy ("formerly GymTracker"). The `applicationId` and internal names stay. Owner: rename the app on the Google OAuth consent screen (what Google sign-in shows).
 
 ---
 

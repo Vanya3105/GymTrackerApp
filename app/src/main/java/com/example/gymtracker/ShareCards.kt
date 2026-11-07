@@ -339,7 +339,7 @@ private fun drawOverline(canvas: Canvas, ink: Ink, text: String, y: Float, color
 /** The small mark at the bottom: present, not loud. */
 private fun drawBrand(canvas: Canvas, ink: Ink) {
     val paint = ink.type(ink.faint, 34f, 600)
-    val label = "GymTracker"
+    val label = "Kilonaut"
     val width = 28f + 16f + paint.measureText(label)
     val x = (W - width) / 2
     val y = 1720f
@@ -608,7 +608,7 @@ private fun ShareWorkoutSheet(data: ShareData, onDismiss: () -> Unit) {
             busy = false
             when {
                 ok == null -> AppSnackbar.show(if (save) tr("Couldn't save the image") else tr("Couldn't create the image"))
-                save -> AppSnackbar.show(tr("Saved to Pictures/GymTracker"))
+                save -> AppSnackbar.show(tr("Saved to Pictures/Kilonaut"))
                 ok is File -> openShareChooser(context, ok, data.title, background == ShareBackground.CLEAR)
             }
         }
@@ -710,7 +710,7 @@ private fun openShareChooser(context: Context, file: File, title: String, png: B
     val send = Intent(Intent.ACTION_SEND).apply {
         type = if (png) "image/png" else "image/jpeg"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, tr("{0} done. Logged with GymTracker.", title))
+        putExtra(Intent.EXTRA_TEXT, tr("{0} done. Logged with Kilonaut.", title))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(send, tr("Share workout")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -719,10 +719,10 @@ private fun openShareChooser(context: Context, file: File, title: String, png: B
 private fun saveToPictures(context: Context, bmp: Bitmap, png: Boolean) {
     val resolver = context.contentResolver
     val values = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, "GymTracker ${SimpleDateFormat("yyyy-MM-dd HHmmss", Locale.US).format(Date())}.${if (png) "png" else "jpg"}")
+        put(MediaStore.Images.Media.DISPLAY_NAME, "Kilonaut ${SimpleDateFormat("yyyy-MM-dd HHmmss", Locale.US).format(Date())}.${if (png) "png" else "jpg"}")
         put(MediaStore.Images.Media.MIME_TYPE, if (png) "image/png" else "image/jpeg")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/GymTracker")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Kilonaut")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
     }

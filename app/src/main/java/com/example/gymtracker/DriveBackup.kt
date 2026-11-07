@@ -214,7 +214,8 @@ internal class DriveFolder(private val token: String) : BackupFolder {
     override fun list(): List<BackupFile> = listDetailed().map { it.file }
 
     fun listDetailed(): List<DriveBackup.DriveBackupFile> {
-        val q = URLEncoder.encode("name contains '${AutoBackup.FILE_PREFIX}' and trashed = false", "UTF-8")
+        val names = AutoBackup.ALL_FILE_PREFIXES.joinToString(" or ") { "name contains '$it'" }
+        val q = URLEncoder.encode("($names) and trashed = false", "UTF-8")
         val json = JSONObject(
             call("GET", "$api?spaces=appDataFolder&pageSize=200&orderBy=modifiedTime%20desc&q=$q&fields=files(id,name,modifiedTime,size)")
         )

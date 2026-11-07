@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">GymTracker</string>
+    <string name="app_name">Kilonaut</string>
     <string name="widget_label_workout">אימון</string>
     <string name="widget_label_recovery">התאוששות</string>
     <string name="widget_label_weekly">השבוע</string>

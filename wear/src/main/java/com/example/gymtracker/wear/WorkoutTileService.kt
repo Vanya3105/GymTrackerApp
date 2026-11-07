@@ -33,7 +33,7 @@ private const val WHITE = 0xFFFFFFFF.toInt()
 private const val BLACK = 0xFF000000.toInt()
 
 /**
- * The GymTracker tile: the current set, the rest end time, or the day that's up next with a
+ * The Kilonaut tile: the current set, the rest end time, or the day that's up next with a
  * chip that starts it.
  * Reads the last state the phone published (the Data Layer keeps it), so it works offline too.
  */
@@ -77,7 +77,7 @@ private fun tileLayout(context: Context, state: WatchState?, device: DeviceParam
     val upNext = state?.days?.firstOrNull()?.takeIf { !state.active }
     val (label, title, detail) = when {
         upNext != null -> Triple(t("Up next"), state.dayLabel(0), t("Tap Start to begin"))
-        state == null || !state.active -> Triple("GymTracker", t("No workout"), t("Start one on your phone"))
+        state == null || !state.active -> Triple("Kilonaut", t("No workout"), t("Start one on your phone"))
         state.restEndsAtMillis > now -> Triple(
             state.workoutName, t("Resting"),
             t("Until {0}", DateFormat.getTimeFormat(context).format(Date(state.restEndsAtMillis))) +

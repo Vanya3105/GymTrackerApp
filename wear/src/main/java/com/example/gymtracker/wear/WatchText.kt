@@ -26,7 +26,7 @@ object WatchText {
         "Phone not connected" to "הטלפון לא מחובר",
         "Waiting for phone…" to "ממתין לטלפון…",
         "Connecting…" to "מתחבר…",
-        "Keep your phone nearby with GymTracker installed" to "שמרו את הטלפון קרוב, עם GymTracker מותקנת",
+        "Keep your phone nearby with Kilonaut installed" to "שמרו את הטלפון קרוב, עם Kilonaut מותקנת",
         "No workout" to "אין אימון",
         "Start one on your phone" to "התחילו אחד בטלפון",
         "Check your phone" to "הסתכלו בטלפון",

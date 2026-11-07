@@ -210,7 +210,7 @@ internal fun WatchScreen(
             when {
                 state == null -> Message(
                     if (phoneConnected) t("Connecting…") else t("Phone not connected"),
-                    t("Keep your phone nearby with GymTracker installed")
+                    t("Keep your phone nearby with Kilonaut installed")
                 )
                 !state.active && saved != null -> SavedScreen(saved) { dismissedSaved = saved.finishedAtMillis }
                 !state.active && state.days.isNotEmpty() -> StartScreen(state.days, state.days.indices.map(state::dayLabel), note, onStart, onOpenOnPhone)

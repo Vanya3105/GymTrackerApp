@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GymTracker"
+rootProject.name = "Kilonaut"
 include(":app")
 include(":wear")
 include(":watchlink")

@@ -1,4 +1,4 @@
-# GymTracker for Android
+# Kilonaut for Android
 
 A simple, offline workout log. Pick your split, follow the suggested weights, and log sets from the app, your home screen or your lock screen.
 
