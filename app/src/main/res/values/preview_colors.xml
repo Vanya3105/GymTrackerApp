@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget-picker previews: light here, dark in values-night, like the widgets themselves. -->
+<resources>
+    <color name="preview_accent">#E5501B</color>
+    <color name="preview_text_tertiary">#9F9FA8</color>
+    <color name="preview_text_primary">#18181B</color>
+    <color name="preview_warning">#B7791F</color>
+    <color name="preview_text_secondary">#5F5F68</color>
+    <color name="preview_danger">#C8453A</color>
+    <color name="preview_success">#2E9A62</color>
+    <color name="preview_control">#ECECEF</color>
+    <color name="preview_on_accent">#FFFFFF</color>
+    <color name="preview_dot_off">#D4D4D8</color>
+    <color name="preview_tile">#FDEEE7</color>
+    <color name="preview_card">#FFFFFF</color>
+</resources>

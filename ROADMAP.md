@@ -174,7 +174,7 @@ Measured with Perfetto system traces and frame stats on the emulator (release bu
 - [x] See-through below 40%: text dark or light from the wallpaper's colour hints, with a soft shadow on the drawn widgets
 - [x] Recovery lines: no "0 sets", "A while ago" after two weeks (was "374d ago")
 - [x] Settings screen: what the widget is for, a live preview over a light / dark / photo wallpaper and in light or dark mode, Colours (Auto / Wallpaper / Light / Dark) with a line saying what each does, Background, a See-through slider (solid → clear), what it shows with a hint per option, Reset, Close, and how to come back to it
-- [ ] Widget picker previews for light and dark; workout widget's see-through text
+- [x] Widget picker previews follow light / dark (`preview_colors.xml` in values and values-night; were always dark), and the recovery preview shows three rows instead of half a card. The workout widget's text also picks dark or light from the wallpaper when see-through (no shadow: RemoteViews can't set one)
 
 ## Polish 2 (branch `polish-2`, after v3.8.0)
 Measured on the emulator (release, profile-compiled): cold start ~1 s, workout scroll ~5% slow frames, tabs ~3%, History swipes every frame under 18 ms (the rest is the emulator's GPU); no crashes in the log. Every bottom sheet's first frame costs ~45 ms on the emulator (its own window), the exercise picker ~30 ms more.

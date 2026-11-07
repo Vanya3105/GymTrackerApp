@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="preview_accent">#FF7A4D</color>
+    <color name="preview_text_tertiary">#6E6C74</color>
+    <color name="preview_text_primary">#F3F2F0</color>
+    <color name="preview_warning">#EDB95C</color>
+    <color name="preview_text_secondary">#A3A1A8</color>
+    <color name="preview_danger">#FF8078</color>
+    <color name="preview_success">#63D29C</color>
+    <color name="preview_control">#2A2A2F</color>
+    <color name="preview_on_accent">#1C0C05</color>
+    <color name="preview_dot_off">#3B3B42</color>
+    <color name="preview_tile">#3A2219</color>
+    <color name="preview_card">#1B1B1E</color>
+</resources>

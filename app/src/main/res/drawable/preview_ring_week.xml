@@ -2,6 +2,6 @@
 <!-- Inset by half the stroke so the ring isn't clipped at the edges of its view. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="3dp">
     <shape android:shape="oval">
-        <stroke android:width="6dp" android:color="#FF7A4D" />
+        <stroke android:width="6dp" android:color="@color/preview_accent" />
     </shape>
 </inset>
