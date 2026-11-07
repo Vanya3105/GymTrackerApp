@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A light and a dark drawing of the widget; the launcher shows the one for the phone's mode
+     (visibility from values / values-night), so it switches without the app redrawing it. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/canvas_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/canvas_widget_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/app_name"
+        android:scaleType="fitCenter"
+        android:visibility="@integer/widget_day_visibility" />
+
+    <ImageView
+        android:id="@+id/canvas_widget_image_night"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/app_name"
+        android:scaleType="fitCenter"
+        android:visibility="@integer/widget_night_visibility" />
+
+</FrameLayout>

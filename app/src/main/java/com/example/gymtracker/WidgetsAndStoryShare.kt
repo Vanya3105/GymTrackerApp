@@ -4,11 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.WallpaperColors
+import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -26,6 +29,7 @@ import com.example.gymtracker.watchlink.SetKind
 import com.example.gymtracker.watchlink.WatchState
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
+import androidx.annotation.RequiresApi
 import java.util.Calendar
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -39,12 +43,20 @@ private val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NOR
 private val REGULAR: Typeface = Typeface.create("sans-serif", Typeface.NORMAL)
 private val BOLD: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
 
+/** Set while drawing a see-through widget: text gets a soft shadow to stand off the wallpaper. */
+private val clearText: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }
+
 private fun textPaint(color: Int, size: Float, typeface: Typeface = MEDIUM, align: Paint.Align = Paint.Align.LEFT) =
     Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = color
         textSize = size
         this.typeface = typeface
         textAlign = align
+        if (clearText.get() == true) {
+            // Dark shadow under light text, a light glow under dark text.
+            val light = Color.luminance(color) > 0.5f
+            setShadowLayer(size * 0.12f, 0f, size * 0.03f, if (light) 0x8C000000.toInt() else 0x99FFFFFF.toInt())
+        }
     }
 
 private fun fillPaint(color: Int, alpha: Int = 255) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -75,10 +87,85 @@ private fun Paint.ellipsize(text: String, maxWidth: Float): String {
 /** Palette that follows the in-app theme setting (System/Light/Dark). */
 private fun appPalette(context: Context): GymPalette = paletteFor(context, LocalStorage.loadSettings(context).themeChoice)
 
-private fun widgetPalette(context: Context, settings: WidgetSettings): GymPalette = when (settings.theme) {
-    THEME_LIGHT -> LightPalette
-    THEME_DARK -> DarkPalette
-    else -> appPalette(context)
+/**
+ * A widget's light-mode and dark-mode palettes. Both go into the widget and the phone shows the
+ * one that matches its mode, so Auto switches the moment the phone does; it used to pick one when
+ * the widget was drawn and stayed light all evening until the app next refreshed it.
+ */
+internal fun widgetPalettes(context: Context, settings: WidgetSettings): Pair<GymPalette, GymPalette> {
+    if (isClear(settings)) return clearPalette(context).let { it to it }
+    return when (settings.theme) {
+        THEME_LIGHT -> LightPalette to LightPalette
+        THEME_DARK -> DarkPalette to DarkPalette
+        WIDGET_THEME_WALLPAPER -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            wallpaperPalette(context, dark = false) to wallpaperPalette(context, dark = true)
+        } else LightPalette to DarkPalette
+        else -> LightPalette to DarkPalette
+    }
+}
+
+internal fun isNightMode(context: Context) =
+    (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+/** The one palette for what can't switch by itself: Android before 12, previews. */
+private fun widgetPalette(context: Context, settings: WidgetSettings, night: Boolean = isNightMode(context)): GymPalette =
+    widgetPalettes(context, settings).let { if (night) it.second else it.first }
+
+/** Below this the background barely shows, so text has to suit the wallpaper instead. */
+private const val CLEAR_BELOW_PERCENT = 40
+
+internal fun isClear(settings: WidgetSettings) = settings.opacityPercent < CLEAR_BELOW_PERCENT
+
+/**
+ * See-through widgets take dark text over a light wallpaper and light text over a dark one, from
+ * what Android reports about the wallpaper; white text over a pale photo was unreadable.
+ */
+private fun clearPalette(context: Context): GymPalette {
+    val darkText = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        try {
+            val colors = WallpaperManager.getInstance(context).getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+            colors != null && (colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0
+        } catch (_: Exception) { false }
+    } else false
+    return if (darkText) LightPalette else DarkPalette
+}
+
+/** Material You: the phone's colours, taken from the wallpaper (the tones Android's own widgets use). */
+@RequiresApi(Build.VERSION_CODES.S)
+private fun wallpaperPalette(context: Context, dark: Boolean): GymPalette {
+    fun c(id: Int) = androidx.compose.ui.graphics.Color(context.getColor(id))
+    val base = if (dark) DarkPalette else LightPalette
+    return if (dark) base.copy(
+        bgPrimary = c(android.R.color.system_neutral1_900),
+        bgCard = c(android.R.color.system_neutral1_900),
+        bgElevated = c(android.R.color.system_neutral1_800),
+        bgControl = c(android.R.color.system_neutral2_800),
+        textPrimary = c(android.R.color.system_neutral1_50),
+        textSecondary = c(android.R.color.system_neutral2_200),
+        textTertiary = c(android.R.color.system_neutral2_400),
+        borderSubtle = c(android.R.color.system_neutral2_800),
+        borderStrong = c(android.R.color.system_neutral2_600),
+        accentPrimary = c(android.R.color.system_accent1_200),
+        onAccentPrimary = c(android.R.color.system_accent1_800),
+        accentSoft = c(android.R.color.system_accent2_800),
+        accentSecondary = c(android.R.color.system_accent3_200),
+        accentSecondarySoft = c(android.R.color.system_accent3_800)
+    ) else base.copy(
+        bgPrimary = c(android.R.color.system_neutral1_50),
+        bgCard = c(android.R.color.system_neutral1_10),
+        bgElevated = c(android.R.color.system_neutral1_50),
+        bgControl = c(android.R.color.system_neutral2_100),
+        textPrimary = c(android.R.color.system_neutral1_900),
+        textSecondary = c(android.R.color.system_neutral2_700),
+        textTertiary = c(android.R.color.system_neutral2_500),
+        borderSubtle = c(android.R.color.system_neutral2_100),
+        borderStrong = c(android.R.color.system_neutral2_300),
+        accentPrimary = c(android.R.color.system_accent1_600),
+        onAccentPrimary = c(android.R.color.system_accent1_0),
+        accentSoft = c(android.R.color.system_accent2_100),
+        accentSecondary = c(android.R.color.system_accent3_600),
+        accentSecondarySoft = c(android.R.color.system_accent3_100)
+    )
 }
 
 private fun widgetBackground(p: GymPalette, settings: WidgetSettings): Int =
@@ -269,35 +356,39 @@ fun buildWorkoutWidgetViews(
     forLockScreen: Boolean = false
 ): RemoteViews {
     val p = widgetPalette(context, settings)
+    val (day, night) = widgetPalettes(context, settings)
     val views = RemoteViews(context.packageName, R.layout.gym_widget)
-    val primary = p.textPrimary.toArgb()
-    val secondary = p.textSecondary.toArgb()
-    val accent = p.accentPrimary.toArgb()
-    val onAccent = p.onAccentPrimary.toArgb()
-    val info = p.accentSecondary.toArgb()
     val tinted = settings.style == WIDGET_STYLE_TINTED
-    val control = (if (tinted) p.bgCard else p.bgControl).toArgb()
+    /** Sets a colour that follows the phone's light / dark mode on its own (Android 12+). */
+    fun color(viewId: Int, method: String, pick: (GymPalette) -> androidx.compose.ui.graphics.Color) {
+        val d = pick(day).toArgb()
+        val n = pick(night).toArgb()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && d != n) views.setColorInt(viewId, method, d, n)
+        else views.setInt(viewId, method, pick(p).toArgb())
+    }
+    fun tint(viewId: Int, pick: (GymPalette) -> androidx.compose.ui.graphics.Color) = color(viewId, "setColorFilter", pick)
+    fun text(viewId: Int, pick: (GymPalette) -> androidx.compose.ui.graphics.Color) = color(viewId, "setTextColor", pick)
 
-    views.setInt(R.id.widget_bg_image, "setColorFilter", widgetBackground(p, settings))
+    tint(R.id.widget_bg_image) { if (tinted) it.accentSoft else it.bgCard }
     views.setInt(R.id.widget_bg_image, "setImageAlpha", if (forLockScreen) 255 else alpha255(settings.opacityPercent))
-    views.setInt(R.id.widget_tile_bg, "setColorFilter", (if (tinted) p.bgCard else p.accentSoft).toArgb())
-    views.setInt(R.id.widget_tile_icon, "setColorFilter", accent)
-    listOf(R.id.widget_weight_pill_bg, R.id.widget_reps_pill_bg).forEach { views.setInt(it, "setColorFilter", control) }
-    views.setInt(R.id.widget_done_pill_bg, "setColorFilter", accent)
-    views.setInt(R.id.widget_done_icon, "setColorFilter", onAccent)
-    views.setInt(R.id.widget_action_bg, "setColorFilter", accent)
-    views.setInt(R.id.widget_action_icon, "setColorFilter", onAccent)
-    views.setTextColor(R.id.widget_action_text, onAccent)
-    views.setInt(R.id.widget_btn_weight_minus, "setColorFilter", secondary)
-    views.setInt(R.id.widget_btn_reps_minus, "setColorFilter", secondary)
-    views.setInt(R.id.widget_btn_weight_plus, "setColorFilter", accent)
-    views.setInt(R.id.widget_btn_reps_plus, "setColorFilter", accent)
-    views.setTextColor(R.id.widget_split_title, primary)
-    views.setTextColor(R.id.widget_subtitle, secondary)
-    views.setTextColor(R.id.widget_header_value, secondary)
-    views.setTextColor(R.id.widget_weight_value, primary)
-    views.setTextColor(R.id.widget_reps_value, primary)
-    views.setTextColor(R.id.widget_rest_chronometer, info)
+    tint(R.id.widget_tile_bg) { if (tinted) it.bgCard else it.accentSoft }
+    tint(R.id.widget_tile_icon) { it.accentPrimary }
+    listOf(R.id.widget_weight_pill_bg, R.id.widget_reps_pill_bg).forEach { id -> tint(id) { if (tinted) it.bgCard else it.bgControl } }
+    tint(R.id.widget_done_pill_bg) { it.accentPrimary }
+    tint(R.id.widget_done_icon) { it.onAccentPrimary }
+    tint(R.id.widget_action_bg) { it.accentPrimary }
+    tint(R.id.widget_action_icon) { it.onAccentPrimary }
+    text(R.id.widget_action_text) { it.onAccentPrimary }
+    tint(R.id.widget_btn_weight_minus) { it.textSecondary }
+    tint(R.id.widget_btn_reps_minus) { it.textSecondary }
+    tint(R.id.widget_btn_weight_plus) { it.accentPrimary }
+    tint(R.id.widget_btn_reps_plus) { it.accentPrimary }
+    text(R.id.widget_split_title) { it.textPrimary }
+    text(R.id.widget_subtitle) { it.textSecondary }
+    text(R.id.widget_header_value) { it.textSecondary }
+    text(R.id.widget_weight_value) { it.textPrimary }
+    text(R.id.widget_reps_value) { it.textPrimary }
+    text(R.id.widget_rest_chronometer) { it.accentSecondary }
     // A narrow widget has room for a two-line title but not for the +/- boxes.
     views.setInt(R.id.widget_split_title, "setMaxLines", if (compact) 2 else 1)
 
@@ -305,9 +396,9 @@ fun buildWorkoutWidgetViews(
     val live = readLiveSession(context)
     val openApp = openAppPendingIntent(context, 0)
 
-    fun status(text: String, color: Int) {
-        views.setTextViewText(R.id.widget_status_label, text)
-        views.setTextColor(R.id.widget_status_label, color)
+    fun status(label: String, pick: (GymPalette) -> androidx.compose.ui.graphics.Color) {
+        views.setTextViewText(R.id.widget_status_label, label)
+        text(R.id.widget_status_label, pick)
     }
     fun subtitle(text: String?) {
         views.setTextViewText(R.id.widget_subtitle, text.orEmpty())
@@ -337,7 +428,7 @@ fun buildWorkoutWidgetViews(
                     compact -> next.label
                     else -> "${shown(live.splitName)} · ${next.label}"
                 },
-                if (live.isResting) info else accent
+                if (live.isResting) { pal -> pal.accentSecondary } else { pal -> pal.accentPrimary }
             )
             views.setTextViewText(R.id.widget_split_title, shown(next.exerciseName))
             if (live.isResting) {
@@ -371,7 +462,7 @@ fun buildWorkoutWidgetViews(
                 action(tr("Done"), R.drawable.ic_widget_check, widgetActionPendingIntent(context, GymWidgetProvider.ACTION_COMPLETE_SET, requestCodeBase + 4))
             }
         } else {
-            status(tr("{0} · done", shown(live.splitName)), p.successText.toArgb())
+            status(tr("{0} · done", shown(live.splitName))) { it.successText }
             headerValue(null)
             views.setTextViewText(R.id.widget_split_title, tr("All sets done"))
             subtitle(tr("Open the app to save your workout"))
@@ -381,7 +472,7 @@ fun buildWorkoutWidgetViews(
         val profile = LocalStorage.loadUserProfile(context)
         val week = computeWeekSummary(LocalStorage.loadHistory(context), 0, profile.splitProgram)
         val split = programFor(profile.splitProgram).splits.find { it.title == week.recommendedSplit }
-        status(tr("Up next"), accent)
+        status(tr("Up next")) { it.accentPrimary }
         headerValue(if (WIDGET_OPTION_WEEKLY in settings.options) "${week.completedCoreSplits.size}/${week.weeklyGoal}" else null)
         views.setTextViewText(R.id.widget_split_title, shown(week.recommendedSplit))
         subtitle(split?.let { daySubtitle(it, profile) })
@@ -601,7 +692,8 @@ private fun widgetSizeDp(manager: AppWidgetManager, widgetId: Int, defaultW: Int
 /** Pixels per dp for a widget bitmap, capped so the bitmap stays within RemoteViews' memory budget. */
 private fun bitmapScale(context: Context, wDp: Int, hDp: Int): Float {
     val density = context.resources.displayMetrics.density
-    val maxScale = sqrt(2_500_000f / (wDp * hDp).coerceAtLeast(1))
+    // Two drawings (light and dark) share RemoteViews' bitmap budget (about 1.5 screens).
+    val maxScale = sqrt(1_200_000f / (wDp * hDp).coerceAtLeast(1))
     return min(density, maxScale)
 }
 
@@ -617,16 +709,34 @@ private fun refreshCanvasWidgets(
     } catch (_: Exception) {}
 }
 
-private fun pushCanvasWidget(context: Context, manager: AppWidgetManager, widgetId: Int, bitmap: Bitmap, requestCode: Int) {
-    val views = RemoteViews(context.packageName, R.layout.gym_canvas_widget)
-    views.setImageViewBitmap(R.id.canvas_widget_image, bitmap)
+/** One drawing when light and dark look the same, else both, for the launcher to pick from. */
+private fun pushCanvasWidget(
+    context: Context,
+    manager: AppWidgetManager,
+    widgetId: Int,
+    settings: WidgetSettings,
+    requestCode: Int,
+    render: (night: Boolean) -> Bitmap
+) {
+    val (day, night) = widgetPalettes(context, settings)
+    val views = if (day == night) {
+        RemoteViews(context.packageName, R.layout.gym_canvas_widget).apply {
+            setImageViewBitmap(R.id.canvas_widget_image, render(isNightMode(context)))
+        }
+    } else {
+        RemoteViews(context.packageName, R.layout.gym_canvas_widget_daynight).apply {
+            setImageViewBitmap(R.id.canvas_widget_image, render(false))
+            setImageViewBitmap(R.id.canvas_widget_image_night, render(true))
+        }
+    }
     views.setOnClickPendingIntent(R.id.canvas_widget_root, openAppPendingIntent(context, requestCode))
     manager.updateAppWidget(widgetId, views)
 }
 
 /** Draws the rounded card background shared by both canvas widgets. Returns the palette used. */
-private fun drawWidgetCard(canvas: Canvas, context: Context, settings: WidgetSettings, w: Float, h: Float, s: Float): GymPalette {
-    val p = widgetPalette(context, settings)
+private fun drawWidgetCard(canvas: Canvas, context: Context, settings: WidgetSettings, w: Float, h: Float, s: Float, night: Boolean): GymPalette {
+    val p = widgetPalette(context, settings, night)
+    clearText.set(isClear(settings))
     val rect = RectF(0f, 0f, w, h)
     canvas.drawRoundRect(rect, 24 * s, 24 * s, fillPaint(widgetBackground(p, settings), alpha255(settings.opacityPercent)))
     if (settings.opacityPercent >= 30) {
@@ -688,20 +798,20 @@ class MuscleFatigueWidgetProvider : AppWidgetProvider() {
         fun update(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val (wDp, hDp) = widgetSizeDp(manager, widgetId, 300, 140)
             val settings = LocalStorage.loadWidgetSettings(context, widgetId, WIDGET_KIND_RECOVERY)
-            pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 301)
+            pushCanvasWidget(context, manager, widgetId, settings, 301) { night -> render(context, settings, wDp, hDp, night) }
         }
 
         /**
          * The least rested muscles first, as rows of name, percent and a bar, in as many columns
          * and rows as the widget's size allows.
          */
-        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
+        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int, night: Boolean = isNightMode(context)): Bitmap {
             val s = bitmapScale(context, wDp, hDp)
             val w = wDp * s
             val h = hDp * s
             val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
-            val p = drawWidgetCard(canvas, context, settings, w, h, s)
+            val p = drawWidgetCard(canvas, context, settings, w, h, s, night)
             val sides = Sides(w)
             val pad = 16 * s
 
@@ -785,20 +895,20 @@ class SquarePulseWidgetProvider : AppWidgetProvider() {
         fun update(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val (wDp, hDp) = widgetSizeDp(manager, widgetId, 160, 160)
             val settings = LocalStorage.loadWidgetSettings(context, widgetId, WIDGET_KIND_WEEKLY)
-            pushCanvasWidget(context, manager, widgetId, render(context, settings, wDp, hDp), 302)
+            pushCanvasWidget(context, manager, widgetId, settings, 302) { night -> render(context, settings, wDp, hDp, night) }
         }
 
         /**
          * This week's workouts against the goal as a ring, the days trained as a strip (as on
          * Today), and what's next. Square sizes stack them; wide sizes put the ring beside the rest.
          */
-        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int): Bitmap {
+        fun render(context: Context, settings: WidgetSettings, wDp: Int, hDp: Int, night: Boolean = isNightMode(context)): Bitmap {
             val s = bitmapScale(context, wDp, hDp)
             val w = wDp * s
             val h = hDp * s
             val bmp = Bitmap.createBitmap(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
-            val p = drawWidgetCard(canvas, context, settings, w, h, s)
+            val p = drawWidgetCard(canvas, context, settings, w, h, s, night)
             val sides = Sides(w)
             val pad = 16 * s
 

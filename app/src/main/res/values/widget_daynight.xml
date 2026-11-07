@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- android:visibility from a resource is the enum's index: 0 visible, 1 invisible, 2 gone
+         (not View.GONE's 8, which crashed the launcher's inflater). -->
+    <integer name="widget_day_visibility">0</integer>
+    <integer name="widget_night_visibility">2</integer>
+</resources>

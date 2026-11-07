@@ -118,6 +118,8 @@ const val WIDGET_KIND_WEEKLY = "WEEKLY"
 
 const val WIDGET_STYLE_STANDARD = "STANDARD"
 const val WIDGET_STYLE_TINTED = "TINTED"
+/** Widget theme from the wallpaper's colours (Android 12+); light and dark like the phone. */
+const val WIDGET_THEME_WALLPAPER = "WALLPAPER"
 
 /** Per-widget-instance look & content. [options] holds the on/off toggles listed in [widgetOptionLabels]. */
 @Immutable
