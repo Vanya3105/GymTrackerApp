@@ -15,7 +15,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 **Big direction from the owner (2026-10-29), not started, no code yet:** make the app for runners and for bodyweight / calisthenics / outside-the-gym training too, not only the gym. See "Planned: Training types" below. Talk it through with the owner before building.
 
-**App name: Kilonaut** (owner, 2026-11-07; unused online on 2026-10-29 and again 2026-11-07, similar names exist: KiloAI, Kilo). Renamed on branch `kilonaut`: app and watch names, every text people see, share images, Pictures/Kilonaut, backup files (`kilonaut-backup-*`, old names still rotated and restored), website and privacy policy ("formerly GymTracker"). The `applicationId` and internal names stay. Owner: rename the app on the Google OAuth consent screen (what Google sign-in shows).
+**App name: Kilonaut** (owner, 2026-11-07; unused online on 2026-10-29 and again 2026-11-07, similar names exist: KiloAI, Kilo). Renamed on branch `kilonaut`: app and watch names, every text people see, share images, Pictures/Kilonaut, backup files (`kilonaut-backup-*`, old names still rotated and restored), website and privacy policy ("formerly GymTracker"). The `applicationId` and internal names stay. GitHub repository renamed to `Vanya3105/Kilonaut` (old links forward; the website moved to vanya3105.github.io/Kilonaut/). Owner: on the Google OAuth consent screen, rename the app and paste the new privacy policy and home page links.
 
 ---
 
@@ -310,7 +310,7 @@ Owner's choices (2026-10-31): translate everything, exercise names and guides in
 - [x] Android OAuth client for the upload key's SHA-1: Google sign-in works in self-signed release builds (owner, 2026-10-31)
 - [ ] Android OAuth client for the Play App Signing key once the app exists in Play Console (Test and release → App integrity); Play installs are signed with that key, not the upload key
 - [x] Privacy policy and a small home page in `docs/` (`privacy.html`, `index.html`) for GitHub Pages: data stays on the phone, no servers/ads/analytics; Drive backup (drive.appdata + email, how to delete the hidden data), folder/file backups and imports, Android device backup, Health Connect (what it writes and reads, the not-for-advertising statement), watch sync, camera, sharing, deletion, contact (2026-10-31)
-- [x] Published with GitHub Pages from `master` /docs (2026-10-31): `https://vanya3105.github.io/GymTrackerApp/privacy.html`, home `https://vanya3105.github.io/GymTrackerApp/`
+- [x] Published with GitHub Pages from `master` /docs (2026-10-31): `https://vanya3105.github.io/Kilonaut/privacy.html`, home `https://vanya3105.github.io/Kilonaut/` (moved from /GymTrackerApp/ when the repository was renamed to Kilonaut, 2026-11-07)
 - [ ] Owner: put both links on the consent screen (Branding), then Audience → Publish app
 - [ ] Store listing: name, short and full description, icon, feature graphic, screenshots, content rating, data safety form
 - [ ] OAuth consent screen to In production

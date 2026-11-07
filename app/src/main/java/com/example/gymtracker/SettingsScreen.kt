@@ -457,7 +457,7 @@ private fun HealthConnectGroup(onImported: () -> Unit) {
     }
 }
 
-private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/GymTrackerApp/privacy.html"
+private const val PRIVACY_POLICY_URL = "https://vanya3105.github.io/Kilonaut/privacy.html"
 private const val FEEDBACK_EMAIL = "evtushenkovanya16@gmail.com"
 
 private fun appVersion(context: android.content.Context): String =
