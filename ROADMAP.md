@@ -9,7 +9,7 @@ Goal: make GymTracker comparable to Strong / Hevy / JEFIT while staying offline-
 
 ## Next up
 
-**Polish 2** (branch `polish-2`, see that section): looking for bugs and stutters after v3.8.0, at the owner's request. Next: ask the owner where it stutters on the phone; go through less-used features as a new user would (programs, split builder, import, widgets, editing past workouts).
+**Polish 2** (branch `polish-2`) is tested on the owner's phone and merged (2026-11-07): Plates button on the keypad, Hebrew keypad, new bests counted per exercise, the running workout named after a split change, clearer training max hint, split builder suggestions. Not released yet (master is ahead of v3.8.0).
 
 **Professional polish** (branch `pro-polish`) is tested on the owner's phone and merged (2026-11-06): About, delete all data, snackbars with Undo, predictive back, state kept when Android closes the app, full-size upright photos, large text and screen readers, notifications asked at the first workout, Core in the legs group. Released as v3.8.0 on GitHub (2026-11-07). Left for later: the watch doesn't show Hebrew on the owner's watch (check it has 3.7.0 first).
 
