@@ -146,12 +146,14 @@ enum class QuickLayout(val label: String, val days: List<LayoutDay>) {
     fun fill(dayCount: Int): List<LayoutDay> = List(dayCount) { days[it % days.size] }
 
     companion object {
-        /** What most people run on that many days. */
+        /**
+         * A good start for that many days: each muscle about twice a week, as the plans built from
+         * setup's answers do (Schoenfeld 2016). It suggested PPL for 3 and a bro split for 5, which
+         * train each muscle once, contradicting the app's own plans.
+         */
         fun suggestedFor(dayCount: Int): QuickLayout = when (dayCount) {
-            1, 2 -> FULL_BODY
-            3 -> PPL
-            4 -> UPPER_LOWER
-            5 -> BRO
+            1, 2, 3 -> FULL_BODY
+            4, 5 -> UPPER_LOWER
             else -> PPL
         }
     }
